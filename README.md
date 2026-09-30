@@ -2,6 +2,10 @@
 
 One agent skill for reference-style footage editing and video creation. It consolidates BRAG's creative workflow, motion-design recipes, reference analysis, sound, and render review into one plan and one set of instructions.
 
+## Product scope
+
+Read [PRD.md](PRD.md) for the private-beta MVP. The toolkit includes broader capabilities for later use; its examples do not enable those features in the beta.
+
 ## Start
 
 Requirements: Python 3.10+, FFmpeg/FFprobe. For motion composition: Node22+, pinned Hyperframes and a browser. Copy `skills/video-studio` to your agent's supported skills folder, or ask Claude Code in this repository to read `CLAUDE.md`. Do not install the upstream packs too.
