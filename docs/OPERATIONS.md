@@ -37,6 +37,7 @@ Sessions last 30 days. Sign-out revokes the current session. A new invitation ca
 | Combined uploads | 500 MiB |
 | Text PRD | 15 MiB; PDF, Markdown, or plain text |
 | Reference | 100 MiB, 180 seconds; uploaded or direct public video URL |
+| Public page capture | 55 MB reserved download budget, at most 4 concurrent downloads, 8 MB per resource and 500 requests; failed transfers conservatively consume their reservation |
 | Product recording | 300 seconds |
 | Running/queued jobs per tester | 1 deployed; configurable |
 | New jobs per tester per day | 3 deployed; also lifetime invitation allowance |
@@ -73,6 +74,8 @@ npm run build
 node --env-file=.env.local --import tsx --test tests/backend-database.test.ts
 # Enable STUDIO_STORAGE_INTEGRATION=1 for the private Blob and worker-route test.
 node --env-file=.env.local --import tsx --test tests/backend-storage.test.ts
+# Enable STUDIO_INGEST_INTEGRATION=1 for local media/browser/network failures.
+npx tsx --test worker/ingest.test.ts
 npx tsx worker/smoke-render.ts --out .worker-smoke
 ```
 
