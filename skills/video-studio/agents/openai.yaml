@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Studio"
+  short_description: "Create and edit videos from references and footage"
+  default_prompt: "Use $video-studio to edit my footage in the style of this reference or create a product video from my brief."

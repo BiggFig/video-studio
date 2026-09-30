@@ -1,0 +1,911 @@
+[
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "anime-cel",
+    "source_path": ".claude/skills/anime-cel/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "blender-product-film",
+    "source_path": ".claude/skills/blender-product-film/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "captions-overlay",
+    "source_path": ".claude/skills/captions-overlay/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "crayon-storybook",
+    "source_path": ".claude/skills/crayon-storybook/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "cut-the-curve",
+    "source_path": ".claude/skills/cut-the-curve/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Selected carrier/directional seam treatment on shared timeline",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "embedded-captions",
+    "source_path": ".claude/skills/embedded-captions/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "faceless-explainer",
+    "source_path": ".claude/skills/faceless-explainer/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "ffmpeg",
+    "source_path": ".claude/skills/ffmpeg/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "figma",
+    "source_path": ".claude/skills/figma/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Use supplied exports/screenshots; Figma connector adapter not bundled",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "frontend-design",
+    "source_path": ".claude/skills/frontend-design/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Frame design, typography, hierarchy; excludes unrelated website construction",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "general-video",
+    "source_path": ".claude/skills/general-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes",
+    "source_path": ".claude/skills/hyperframes/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "One primary compositor; separate upstream router not included",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-animation",
+    "source_path": ".claude/skills/hyperframes-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-audio",
+    "source_path": ".claude/skills/hyperframes-audio/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated audio-and-assets.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-cli",
+    "source_path": ".claude/skills/hyperframes-cli/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-core",
+    "source_path": ".claude/skills/hyperframes-core/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-creative",
+    "source_path": ".claude/skills/hyperframes-creative/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-keyframes",
+    "source_path": ".claude/skills/hyperframes-keyframes/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Paused seekable timeline and registered composition IDs",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-registry",
+    "source_path": ".claude/skills/hyperframes-registry/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "hyperframes-studio",
+    "source_path": ".claude/skills/hyperframes-studio/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "media-use",
+    "source_path": ".claude/skills/media-use/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated audio-and-assets.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "motion-doctrine",
+    "source_path": ".claude/skills/motion-doctrine/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Purposeful motion and optional directional continuity without forcing it on cuts",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "motion-graphics",
+    "source_path": ".claude/skills/motion-graphics/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "music-to-video",
+    "source_path": ".claude/skills/music-to-video/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated audio-and-assets.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "oversized-cursor",
+    "source_path": ".claude/skills/oversized-cursor/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Intentional cursor with accurate UI targets, not default oversized cursor",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "painted-animation",
+    "source_path": ".claude/skills/painted-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "paper-cutout",
+    "source_path": ".claude/skills/paper-cutout/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "pixel-art",
+    "source_path": ".claude/skills/pixel-art/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "pr-to-video",
+    "source_path": ".claude/skills/pr-to-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "product-launch-video",
+    "source_path": ".claude/skills/product-launch-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "remotion-to-hyperframes",
+    "source_path": ".claude/skills/remotion-to-hyperframes/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Preserve primary renderer or prerender intermediates; no automatic migration adapter",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "seam-craft",
+    "source_path": ".claude/skills/seam-craft/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Opaque stage and verified overlap compositing",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "slideshow",
+    "source_path": ".claude/skills/slideshow/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "talking-head-recut",
+    "source_path": ".claude/skills/talking-head-recut/SKILL.md",
+    "unified_reference": "references/reference-editing.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated reference-editing.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "video-clone",
+    "source_path": ".claude/skills/video-clone/SKILL.md",
+    "unified_reference": "references/reference-editing.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated reference-editing.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "edenfunf/reelmimic",
+    "original_capability": "whiteboard",
+    "source_path": ".claude/skills/whiteboard/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "embedded-captions",
+    "source_path": "skills/embedded-captions/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "general-video",
+    "source_path": "skills/general-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "hyperframes-animation",
+    "source_path": "skills/hyperframes-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "hyperframes-cli",
+    "source_path": "skills/hyperframes-cli/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "hyperframes-core",
+    "source_path": "skills/hyperframes-core/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated rendering.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "hyperframes-creative",
+    "source_path": "skills/hyperframes-creative/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "hyperframes-keyframes",
+    "source_path": "skills/hyperframes-keyframes/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Paused seekable timeline and registered composition IDs",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "music-to-video",
+    "source_path": "skills/music-to-video/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated audio-and-assets.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "product-launch-video",
+    "source_path": "skills/product-launch-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "heygen-com/hyperframes",
+    "original_capability": "talking-head-recut",
+    "source_path": "skills/talking-head-recut/SKILL.md",
+    "unified_reference": "references/reference-editing.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated reference-editing.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ad-video-skills",
+    "original_capability": "ad-creative-video",
+    "source_path": "skills/ad-creative-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ad-video-skills",
+    "original_capability": "launch-video",
+    "source_path": "skills/launch-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ad-video-skills",
+    "original_capability": "testimonial-video",
+    "source_path": "skills/testimonial-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/data-animation-skills",
+    "original_capability": "animated-infographic",
+    "source_path": "skills/animated-infographic/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/data-animation-skills",
+    "original_capability": "chart-animation",
+    "source_path": "skills/chart-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/data-animation-skills",
+    "original_capability": "presentation-video",
+    "source_path": "skills/presentation-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ecommerce-video-skills",
+    "original_capability": "photo-slideshow",
+    "source_path": "skills/photo-slideshow/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ecommerce-video-skills",
+    "original_capability": "product-demo-video",
+    "source_path": "skills/product-demo-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/ecommerce-video-skills",
+    "original_capability": "promo-video",
+    "source_path": "skills/promo-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/explainer-video-skills",
+    "original_capability": "diagram-animation",
+    "source_path": "skills/diagram-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/explainer-video-skills",
+    "original_capability": "explainer-video",
+    "source_path": "skills/explainer-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/explainer-video-skills",
+    "original_capability": "isometric-animation",
+    "source_path": "skills/isometric-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/explainer-video-skills",
+    "original_capability": "whiteboard-animation",
+    "source_path": "skills/whiteboard-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/explainer-video-skills",
+    "original_capability": "wrapped-video",
+    "source_path": "skills/wrapped-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/freelance-motion-skills",
+    "original_capability": "brand-motion-guidelines",
+    "source_path": "skills/brand-motion-guidelines/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Shared visual and motion tokens",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/freelance-motion-skills",
+    "original_capability": "client-revisions",
+    "source_path": "skills/client-revisions/SKILL.md",
+    "unified_reference": "references/quality-and-delivery.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Targeted feedback and repair of the existing plan/project",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/freelance-motion-skills",
+    "original_capability": "creative-brief",
+    "source_path": "skills/creative-brief/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Viewer, goal, evidence, asset constraints, exact scene brief",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/freelance-motion-skills",
+    "original_capability": "motion-pricing",
+    "source_path": "skills/motion-pricing/SKILL.md",
+    "unified_reference": "references/hosting.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Cost/budget measurement only; freelance rate setting excluded",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/freelance-motion-skills",
+    "original_capability": "video-delivery-specs",
+    "source_path": "skills/video-delivery-specs/SKILL.md",
+    "unified_reference": "references/quality-and-delivery.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Actual export specs, assets, editable project, review evidence",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/generative-illustration-skills",
+    "original_capability": "generative-illustration",
+    "source_path": "skills/generative-illustration/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "conceptual review only; no source text/code redistributed",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/javascript-animation-skills",
+    "original_capability": "javascript-animation",
+    "source_path": "skills/javascript-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/javascript-animation-skills",
+    "original_capability": "soundtrack",
+    "source_path": "skills/soundtrack/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/kinetic-typography-skills",
+    "original_capability": "kinetic-typography",
+    "source_path": "skills/kinetic-typography/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/manim-skills",
+    "original_capability": "manim",
+    "source_path": "skills/manim/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "iart-ai/map-animation-skills",
+    "original_capability": "map-animation",
+    "source_path": "skills/map-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "after-effects",
+    "source_path": "skills/after-effects/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Optional user-supplied AE-rendered intermediates; no native AE adapter bundled",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "animation-principles",
+    "source_path": "skills/animation-principles/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "beat-sync-editing",
+    "source_path": "skills/beat-sync-editing/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Selected visual accents to actual beat/onset timing",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "color-motion",
+    "source_path": "skills/color-motion/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Shared palette and purposeful color change",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "logo-animation",
+    "source_path": "skills/logo-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "motion-art-direction",
+    "source_path": "skills/motion-art-direction/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "One visual grammar and attention hierarchy",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "motion-background",
+    "source_path": "skills/motion-background/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Restrained background motion, no distraction from content",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "remotion-video",
+    "source_path": "skills/remotion-video/SKILL.md",
+    "unified_reference": "references/rendering.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Retain existing Remotion project as primary after dependency/license resolution",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/motion-design-skills",
+    "original_capability": "shot-composition",
+    "source_path": "skills/shot-composition/SKILL.md",
+    "unified_reference": "references/reference-editing.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Subject-safe framing and reference composition",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/text-message-video-skills",
+    "original_capability": "text-message-animation",
+    "source_path": "skills/text-message-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/tiktok-video-skills",
+    "original_capability": "caption-animation",
+    "source_path": "skills/caption-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/tiktok-video-skills",
+    "original_capability": "countdown-video",
+    "source_path": "skills/countdown-video/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/tiktok-video-skills",
+    "original_capability": "lower-thirds",
+    "source_path": "skills/lower-thirds/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/tiktok-video-skills",
+    "original_capability": "short-form-video",
+    "source_path": "skills/short-form-video/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "60fps-animation",
+    "source_path": "skills/60fps-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Frame-driven motion at agreed fps rather than time-based loops",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "accessible-animation",
+    "source_path": "skills/accessible-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Legibility, contrast, stable text, restrained flashes; web reduced-motion policy",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "ascii-animation",
+    "source_path": "skills/ascii-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Excluded by default; optional explicitly requested creative-code text treatment",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "glassmorphism",
+    "source_path": "skills/glassmorphism/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Optional translucent layers with verified text contrast",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "gsap-web",
+    "source_path": "skills/gsap-web/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "lottie-animation",
+    "source_path": "skills/lottie-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "micro-interaction",
+    "source_path": "skills/micro-interaction/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "page-transition-animation",
+    "source_path": "skills/page-transition-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/web-animation-skills",
+    "original_capability": "svg-animation",
+    "source_path": "skills/svg-animation/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/webgl-animation-skills",
+    "original_capability": "particle-system",
+    "source_path": "skills/particle-system/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "Seeded deterministic particles derived from frame time",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "iart-ai/webgl-animation-skills",
+    "original_capability": "shader-glsl",
+    "source_path": "skills/shader-glsl/SKILL.md",
+    "unified_reference": "references/advanced-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated advanced-formats.md for construction and validation",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "iart-ai/webgl-animation-skills",
+    "original_capability": "threejs-animation",
+    "source_path": "skills/threejs-animation/SKILL.md",
+    "unified_reference": "references/motion-and-captions.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated motion-and-captions.md for construction and validation",
+    "availability": "Optional adapter; installed dependencies and smoke render required"
+  },
+  {
+    "source": "iart-ai/youtube-video-skills",
+    "original_capability": "audiogram",
+    "source_path": "skills/audiogram/SKILL.md",
+    "unified_reference": "references/audio-and-assets.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated audio-and-assets.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "iart-ai/youtube-video-skills",
+    "original_capability": "youtube-intro-outro",
+    "source_path": "skills/youtube-intro-outro/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "latent-spaces/brag",
+    "original_capability": "brag",
+    "source_path": "skills/brag/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  },
+  {
+    "source": "latent-spaces/brag",
+    "original_capability": "brag-slim",
+    "source_path": "skills/brag-slim/SKILL.md",
+    "unified_reference": "references/story-and-formats.md",
+    "integration": "recipe synthesis; dependencies checked per job",
+    "use_case": "See consolidated story-and-formats.md for construction and validation",
+    "availability": "Unified instruction recipe; supporting tooling/provider requirements apply"
+  }
+]

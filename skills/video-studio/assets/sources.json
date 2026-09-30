@@ -1,0 +1,176 @@
+{
+  "reviewed_on": "2026-09-30",
+  "sources": [
+    {
+      "repository": "criscatalyst/outliers-skill",
+      "url": "https://github.com/criscatalyst/outliers-skill",
+      "revision": "948ef3e39d3230b6f4d233899f2ce6d923eba0e1",
+      "license": null,
+      "integration": "conceptual review only; no text/code redistributed"
+    },
+    {
+      "repository": "edenfunf/reelmimic",
+      "url": "https://github.com/edenfunf/reelmimic",
+      "revision": "d2a050c32cfc13e07ba1274b86abb70b8c1ebd15",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "heygen-com/hyperframes",
+      "url": "https://github.com/heygen-com/hyperframes",
+      "revision": "d1a5a05609a1c53996cb96c1ae2c9a57d09313aa",
+      "license": "Apache-2.0",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/ad-video-skills",
+      "url": "https://github.com/iart-ai/ad-video-skills",
+      "revision": "0de0f2a1c1f42a98103fc0ec436509276428372c",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/data-animation-skills",
+      "url": "https://github.com/iart-ai/data-animation-skills",
+      "revision": "8ce2709c3992490251e8a991535b1945f01c6865",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/ecommerce-video-skills",
+      "url": "https://github.com/iart-ai/ecommerce-video-skills",
+      "revision": "2bd0dd19c9b2df5230f5d8f7453861b9681e49b4",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/explainer-video-skills",
+      "url": "https://github.com/iart-ai/explainer-video-skills",
+      "revision": "3e2d411b725d9a72939cf8e5eb81579e751373e7",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/freelance-motion-skills",
+      "url": "https://github.com/iart-ai/freelance-motion-skills",
+      "revision": "d85c2b484693d0387333c778d9c95230fa1856ce",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/generative-illustration-skills",
+      "url": "https://github.com/iart-ai/generative-illustration-skills",
+      "revision": "e7d62437c875fc8ad5eff6e90fe0e25b30e43933",
+      "license": null,
+      "integration": "conceptual review only; no text/code redistributed"
+    },
+    {
+      "repository": "iart-ai/javascript-animation-skills",
+      "url": "https://github.com/iart-ai/javascript-animation-skills",
+      "revision": "f7d0882a313249cbd43f0e4e9e209b1622870253",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/kinetic-typography-skills",
+      "url": "https://github.com/iart-ai/kinetic-typography-skills",
+      "revision": "fccc94bd325d824235ee9e715e65abde57b6513a",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/manim-skills",
+      "url": "https://github.com/iart-ai/manim-skills",
+      "revision": "a15833c44de5108a3ee68f178a1fca126aa7c6d8",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/map-animation-skills",
+      "url": "https://github.com/iart-ai/map-animation-skills",
+      "revision": "390ca98bbcf2ea88a430a69c0dcbf423e43d075d",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/motion-design-skills",
+      "url": "https://github.com/iart-ai/motion-design-skills",
+      "revision": "3c129f769d90a1328c209c386492333c9ac62312",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/text-message-video-skills",
+      "url": "https://github.com/iart-ai/text-message-video-skills",
+      "revision": "3a800e1e9b9635fa196a07b0143c80f7e9648558",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/tiktok-video-skills",
+      "url": "https://github.com/iart-ai/tiktok-video-skills",
+      "revision": "2a775336b5a638cbf8a61dbd785f9a1b649be016",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/web-animation-skills",
+      "url": "https://github.com/iart-ai/web-animation-skills",
+      "revision": "b6dba3eb759726845a44163ff0bad70dd9e7fbb6",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/webgl-animation-skills",
+      "url": "https://github.com/iart-ai/webgl-animation-skills",
+      "revision": "50697d659fbf70152f48f9f8aadf1efe78bbdde1",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "iart-ai/youtube-video-skills",
+      "url": "https://github.com/iart-ai/youtube-video-skills",
+      "revision": "f3df381d65abe5078f5ed410bbc3ed72e7cb92bd",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "kevinbadi/claude-motion-skills",
+      "url": "https://github.com/kevinbadi/claude-motion-skills",
+      "revision": "91834c6b5d8c756373834e8d22eaec3b28344ec9",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "latent-spaces/brag",
+      "url": "https://github.com/latent-spaces/brag",
+      "revision": "d06a77f90fa37b9fd36ce69744875314a14a40fb",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    },
+    {
+      "repository": "pipeline-gist",
+      "url": "https://gist.github.com/jleesubai-sys/e72229efc4fef3252570da5a1436e5ee",
+      "revision": "ed53e9add5744efa3933f44b4c1150aa9284dfbe",
+      "license": null,
+      "integration": "conceptual review only; no text/code redistributed"
+    },
+    {
+      "repository": "pouyashahrdami/mimic-mcp",
+      "url": "https://github.com/pouyashahrdami/mimic-mcp",
+      "revision": "9dca836c78ac06d0a244364d878d7c9dfb44ca16",
+      "license": "MIT",
+      "integration": "original synthesis with attribution"
+    }
+  ],
+  "provider_documentation": [
+    {
+      "url": "https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps",
+      "checked_on": "2026-09-30"
+    },
+    {
+      "url": "https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert",
+      "checked_on": "2026-09-30"
+    }
+  ]
+}

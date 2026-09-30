@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "job_id": "example",
+  "mode": "edit",
+  "renderer": "hyperframes",
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration_frames": 150
+  },
+  "assets": [
+    {
+      "id": "raw",
+      "path": "assets/raw.mp4",
+      "kind": "video",
+      "duration_seconds": 12,
+      "has_audio": true,
+      "usage": "output",
+      "rights": "user-supplied"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "s1",
+      "start_frame": 0,
+      "duration_frames": 150,
+      "asset_id": "raw",
+      "source_in_seconds": 2,
+      "playback_rate": 1,
+      "preserve_audio": true,
+      "fit": "contain",
+      "purpose": "complete opening thought",
+      "reference_technique": "tight opening frame",
+      "effects": []
+    }
+  ],
+  "captions": [],
+  "audio": []
+}
