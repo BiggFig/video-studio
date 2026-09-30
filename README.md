@@ -4,16 +4,18 @@ One agent skill for reference-style footage editing and video creation. It conso
 
 ## Product scope
 
-Read [PRD.md](PRD.md) for the private-beta MVP. The toolkit includes broader capabilities for later use; its examples do not enable those features in the beta.
+Read [PRD.md](PRD.md) for the private-beta MVP: software launch and feature-demo videos from a product URL, or a PRD with assets. General footage editing is deferred to [ROADMAP.md](ROADMAP.md). The toolkit includes broader capabilities; its examples do not enable those features in the beta.
 
 ## Start
 
 Requirements: Python 3.10+, FFmpeg/FFprobe. For motion composition: Node22+, pinned Hyperframes and a browser. Copy `skills/video-studio` to your agent's supported skills folder, or ask Claude Code in this repository to read `CLAUDE.md`. Do not install the upstream packs too.
 
-Example requests:
+MVP examples:
+- “Turn this product URL into a launch video using real product visuals, on-screen copy, music, and SFX.”
+- “Turn this PRD and these screenshots into a feature demo.”
+
+Broader toolkit example, deferred from the SaaS MVP:
 - “Edit assets/raw.mp4 like assets/reference.mp4. Keep my voice and add captions.”
-- “Turn this product URL and these screenshots into a 20-second launch video.”
-- “Turn this PRD and supplied images into a narrated explainer.”
 
 The skill performs intake → analysis → plan → composition → render/review → delivery. It chooses relevant reference chapters internally. All jobs use the same timeline/asset/output contract.
 
