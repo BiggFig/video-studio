@@ -32,7 +32,16 @@ export interface Plan {
 }
 export interface Finding { severity: "critical" | "major" | "minor"; sceneId?: string; timeSeconds?: number; message: string; repair?: "shorten_copy" | "simplify_copy" | "change_asset" | "extend_hold" }
 export interface QC { status: "passed" | "needs_review"; passed: boolean; checks: Record<string,{passed:boolean;performed:boolean;evidence:string}>; technical: Record<string, unknown>; visual: unknown; audio: unknown; findings: Finding[]; repairs: string[]; evidence: string[] }
-export interface Ledger { modelCalls: number; inputTokens: number; outputTokens: number; reservedInputTokens: number; reservedOutputTokens: number; audioGenerations: number; asrSeconds: number; providerRequests: { provider: string; operation: string; requestId: string | null; units: number; unit: string; model?:string; songId?:string|null }[]; audio: Record<string, { status: "reserved" | "completed"; path: string; hash: string }> }
+export interface AudioFailure {
+  attempt: number; httpStatus: number; code: string | null; type: string | null; requestId: string | null;
+  classification: "rate_limit" | "quota" | "access" | "unknown"; receivedAt: number; retryAfterMs: number | null;
+}
+export interface AudioAttempts { attempts: number; requestHash: string; failures: AudioFailure[] }
+export type AudioLedgerEntry =
+  | ({ status: "reserved" | "completed"; path: string; hash: string } & Partial<AudioAttempts>)
+  | ({ status: "retry_wait"; path: string; hash: ""; nextAttemptAt: number } & AudioAttempts)
+  | ({ status: "rejected"; path: string; hash: "" } & AudioAttempts);
+export interface Ledger { modelCalls: number; inputTokens: number; outputTokens: number; reservedInputTokens: number; reservedOutputTokens: number; audioGenerations: number; asrSeconds: number; providerRequests: { provider: string; operation: string; requestId: string | null; units: number; unit: string; model?:string; songId?:string|null }[]; audio: Record<string, AudioLedgerEntry> }
 export interface PipelineResult { videoPath: string; posterPath: string; quality: QC; durationSeconds: number; width: number; height: number; costUsd: number | null; versions: Record<string, string> }
 export interface Hooks { persist(paths: string[]): Promise<void>; state(status: JobStatus, checkpoint?: Record<string, unknown>): Promise<void>; complete(result: PipelineResult): Promise<void> }
 export class PipelineError extends Error {
