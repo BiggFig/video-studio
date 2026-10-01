@@ -54,6 +54,8 @@ Sessions last 30 days. Sign-out revokes the current session. A new invitation ca
 
 These are resource limits, not a dollar-cost guarantee. Provider request IDs, actual token/audio/ASR usage, worker timings, and output locations are retained. `cost_usd` remains null until provider and compute invoices are reconciled; it must never be presented as zero. Do not publish a measured cost estimate until representative jobs and billing have been reconciled.
 
+Use the [operator measurement workflow](JOB-MEASUREMENTS.md) to record invoice-backed costs for every attempt and attributed publishability reviews. Its default commands are offline, unknown components keep the total unknown, and an optional explicit reconciliation can fill a terminal job's cost and retain review evidence without changing its readiness. Operator judgments remain distinct from tester feedback.
+
 ## Recovery and cleanup
 
 Workers heartbeat every 25 seconds; leases expire after 180 seconds. Queue claims lock rows, enforce global and per-user concurrency, and reject callbacks from old leases. A recovered attempt stops its predecessor sandbox, restores stored artifacts, and reuses completed audio with checksum verification. A reserved audio request whose result was lost is held for review rather than charged again automatically.

@@ -1,10 +1,10 @@
 export const MIN_EXECUTION_SECONDS = 60;
 export const MAX_EXECUTION_SECONDS = 1800;
 
-/** These values are written by the dispatcher, never by a worker callback. */
+/** These values are written by trusted server/operator code, never a worker callback. */
 export const SERVER_CHECKPOINT_FIELDS = [
   "sandboxName", "snapshotId", "runtimeVersion", "runtimeBundleHash", "runtimeHash", "runtimeId",
-  "executionStartedAt", "deadlineAt",
+  "executionStartedAt", "deadlineAt", "operatorMeasurements",
 ] as const;
 
 export function hasServerCheckpointField(checkpoint: Record<string, unknown>) {
