@@ -4,7 +4,7 @@ export const MAX_EXECUTION_SECONDS = 1800;
 /** These values are written by trusted server/operator code, never a worker callback. */
 export const SERVER_CHECKPOINT_FIELDS = [
   "sandboxName", "snapshotId", "runtimeVersion", "runtimeBundleHash", "runtimeHash", "runtimeId",
-  "executionStartedAt", "deadlineAt", "operatorMeasurements",
+  "executionStartedAt", "deadlineAt", "operatorMeasurements", "operatorStartupRecovery",
 ] as const;
 
 export function hasServerCheckpointField(checkpoint: Record<string, unknown>) {

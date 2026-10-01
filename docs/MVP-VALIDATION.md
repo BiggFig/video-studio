@@ -2,7 +2,9 @@
 
 ## Release status
 
-The web application and infrastructure are deployed. Public entry is replacing invitation-only access at the user's request, with separate private browser workspaces. **The full video-generation acceptance gate has not passed.** `BETA_ACCEPTING_JOBS=false` prevents paid customer work until the remaining checks are complete. Dedicated Claude and ElevenLabs credentials have been stored in encrypted project settings and verified against the actual providers. Public studio access does not certify hosted generation or finished-video delivery.
+The web application and infrastructure are deployed with public entry and separate private browser workspaces. **The full video-generation acceptance gate has not passed.** Production generation was explicitly enabled at the owner's request on October 1; preview and development remain paused. Dedicated Claude and ElevenLabs credentials are stored in encrypted project settings and verified against the actual providers. Public studio access and an enabled submission button do not certify hosted generation or finished-video delivery.
+
+The first production submission exposed a worker-allocation defect: the Sandbox API rejected the IPv6 CIDR `::1/128` with HTTP 400 before starting compute. The network policy now uses the supported IPv4 deny ranges, while application-level IPv6 destination validation remains intact. An allocation with the corrected policy successfully started the existing snapshot and was stopped; it contained no source upload or provider work. Six regression tests cover the policy and safe startup diagnostics. The default suite now passes 107 tests, with 12 opt-in cases skipped. Startup recovery retains the original runtime, deadline, submission and allowance; an operator recovery audit is protected from worker callbacks.
 
 ## Checks performed
 

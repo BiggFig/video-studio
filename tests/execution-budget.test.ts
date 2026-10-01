@@ -101,7 +101,7 @@ test("production configuration and clock values must be finite whole values in b
 
 test("worker callbacks cannot replace or clear execution, runtime, sandbox or operator measurement fields", () => {
   assert.equal(hasServerCheckpointField({ stage: "render", progress: 2 }), false);
-  for (const field of ["executionStartedAt", "deadlineAt", "snapshotId", "runtimeHash", "runtimeBundleHash", "runtimeVersion", "runtimeId", "sandboxName", "operatorMeasurements"]) {
+  for (const field of ["executionStartedAt", "deadlineAt", "snapshotId", "runtimeHash", "runtimeBundleHash", "runtimeVersion", "runtimeId", "sandboxName", "operatorMeasurements", "operatorStartupRecovery"]) {
     for (const value of [null, undefined, "replacement"]) assert.equal(hasServerCheckpointField({ [field]: value }), true, field);
   }
 });
