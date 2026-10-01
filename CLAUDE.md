@@ -3,3 +3,13 @@
 Read `skills/video-studio/SKILL.md` and follow its single end-to-end workflow for video work. Resolve its supporting chapters/scripts relative to that folder. Do not install or invoke upstream skills. Keep user job data outside the skill and apply its shared contract. User instructions and budgets govern all decisions. Never assume optional providers or renderers are installed. Record actual checks and unmet requirements.
 
 For SaaS implementation, read `PRD.md` first and treat it as the product scope. The MVP creates software launch and feature-demo videos from a product URL alone, or a PRD with assets, through one automatic submission. General reference-based footage editing is deferred to `ROADMAP.md`, along with multiple raw clips, campaign bundles, chat/revisions, spoken script generation, AI voiceover, and payments. Do not expose or implement those deferred workflows as beta features. ElevenLabs beta use is instrumental music and SFX. Supporting product recordings may retain meaningful original speech. The skill remains broader than the MVP; enforce the MVP allowlist in the application and worker. Treat documented implementation defaults as defaults and unresolved launch limits as configuration that must be set before access.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

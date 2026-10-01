@@ -1,7 +1,8 @@
 # Video Studio: Software Launch Video MVP PRD
 
-Status: updated MVP scope for a free private beta  
-Updated: September 30, 2026  
+Status: MVP scope with public studio access; generation pending hosted verification
+
+Updated: October 1, 2026
 Owner: Noah Figley
 
 ## 1. Product goal
@@ -37,7 +38,7 @@ The customer supplies the product context. The system makes the creative decisio
 - ElevenLabs instrumental music and sound effects.
 - Automatic composition, rendering, quality checks, and bounded repairs.
 - One finished MP4 per job, with preview and download.
-- Private access for invited beta testers.
+- Public studio entry without an invitation, with private browser-session workspaces.
 - Internal retention of the editable composition and job records.
 
 ### Excluded
@@ -46,7 +47,7 @@ The customer supplies the product context. The system makes the creative decisio
 - Multiple campaign deliverables or automatically rewritten ad variants.
 - New spoken scripts, AI voiceover, voice replacement, or AI presenters.
 - User-facing storyboard approval, chat, free-text creative prompting, or revisions.
-- A timeline editor, publishing, scheduling, billing, or public signup.
+- A timeline editor, publishing, scheduling, billing, or an account-registration form.
 - User B-roll libraries, reference discovery, or content planning.
 
 An internally generated scene plan and on-screen copy are required to compose the video. They do not add a spoken-script or voiceover feature to the MVP.
@@ -223,14 +224,14 @@ Do not set unmeasured delivery-speed or per-video cost promises. Set rollout tar
 
 ## 11. Release model and remaining settings
 
-Free private beta for invited testers. No checkout, paid plan, or public signup in the first release.
+Free beta with public studio entry. The owner removed the invitation requirement on October 1, 2026. Opening the studio creates an isolated browser session; existing authenticated users keep their own workspace. No checkout, paid plan, or signup form in the first release. Generation remains separately gated until hosted acceptance passes.
 
 Before opening access, configure and document:
 
 - Input file-count, upload-size, source-duration, and reference-download limits.
 - Per-job model/audio/compute budget, timeout, repair count, and concurrency.
 - Upload, output, and project retention periods, deletion behavior, and any export expiry.
-- Invitation mechanism and per-tester usage allowance.
+- Browser-session access, private workspace ownership, and per-user usage allowance.
 
 Until these limits are configured, do not accept unrestricted jobs. They are launch settings, not additional customer prompts.
 
@@ -246,6 +247,6 @@ Build in this order:
 2. Add the durable job runner, storage, access controls, budgets, and recovery.
 3. Add the single submission/status/preview/download interface.
 4. Validate the feature-demo path, format choices, references, and failure handling.
-5. Open the free private beta and use real output quality, repeat usage, and cost data to prioritize [ROADMAP.md](ROADMAP.md).
+5. Enable generation after hosted acceptance, then use real output quality, repeat usage, and cost data to prioritize [ROADMAP.md](ROADMAP.md).
 
 Do not implement the deferred editing workflow while building this MVP.

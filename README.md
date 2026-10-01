@@ -1,12 +1,31 @@
 # Video Studio
 
-One agent skill for reference-style footage editing and video creation. It consolidates BRAG's creative workflow, motion-design recipes, reference analysis, sound, and render review into one plan and one set of instructions.
+A publicly accessible studio for turning a software product URL, or a PRD with visual assets, into one checked launch or feature-demo video. Opening the studio creates a private browser session without an invitation or signup form. The Next.js interface uses a quiet, responsive design with system typography, light/dark appearance, persistent progress, and private preview/download.
+
+The application includes a Neon-backed durable queue, private Vercel Blob uploads, isolated Vercel Sandbox workers, Claude direction grounded in the unified Video Studio skill, an FFmpeg/browser compositor, ElevenLabs instrumental music/SFX, and bounded quality review and repairs.
+
+**Current rollout:** the web application is deployed at [Video Studio](https://video-studio-vert-two.vercel.app). Anyone can open a private workspace. Claude and ElevenLabs are configured, and real URL-launch and PRD-feature-demo outputs passed local quality checks. Generation remains disabled pending hosted worker, recovery, and private-delivery verification. See [MVP validation](docs/MVP-VALIDATION.md) for actual evidence and remaining work.
+
+## Application development
+
+```sh
+npm ci
+# Configure .env.local from .env.example; keep secrets out of Git.
+npm run db:migrate
+npm run dev
+npm test
+npm run build
+```
+
+Use Node 24. Local development runs at `http://127.0.0.1:3000`. See [operations and deployment](docs/OPERATIONS.md) for providers, worker snapshot creation, invitations, limits, retention, recovery, and rollout. The [worker README](worker/README.md) documents its private callback protocol and reproducibility contract.
+
+The repository also retains the broader unified agent toolkit described below. Its deferred capabilities are not exposed in the beta application.
 
 ## Product scope
 
-Read [PRD.md](PRD.md) for the private-beta MVP: software launch and feature-demo videos from a product URL, or a PRD with assets. General footage editing is deferred to [ROADMAP.md](ROADMAP.md). The toolkit includes broader capabilities; its examples do not enable those features in the beta.
+Read [PRD.md](PRD.md) for the MVP: software launch and feature-demo videos from a product URL, or a PRD with assets. Public entry replaced the invitation requirement on October 1, 2026; workspace ownership remains private. General footage editing is deferred to [ROADMAP.md](ROADMAP.md). The toolkit includes broader capabilities; its examples do not enable those features in the beta.
 
-## Start
+## Standalone toolkit
 
 Requirements: Python 3.10+, FFmpeg/FFprobe. For motion composition: Node22+, pinned Hyperframes and a browser. Copy `skills/video-studio` to your agent's supported skills folder, or ask Claude Code in this repository to read `CLAUDE.md`. Do not install the upstream packs too.
 

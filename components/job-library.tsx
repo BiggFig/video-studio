@@ -1,0 +1,23 @@
+"use client";
+
+import Link from "next/link";
+import Image from "next/image";
+import { useState } from "react";
+import { AlertCircle, ArrowRight, Check, ChevronRight, Clock3, Clapperboard, Film, LoaderCircle, Plus, RotateCw } from "lucide-react";
+import { STAGE_LABELS, type JobStatus, type JobSummary } from "@/lib/contracts";
+import { formatDate } from "./studio-context";
+import { usePollingResource } from "./use-polling-resource";
+
+export const ACTIVE_STATUSES: JobStatus[] = ["queued", "reading", "planning", "rendering", "checking"];
+export function StatusBadge({ status }: { status: JobStatus }) { const active = ACTIVE_STATUSES.includes(status); return <span className={`status-badge status-${status}`}>{status === "ready" ? <Check size={12}/> : active ? <Clock3 size={12}/> : <AlertCircle size={12}/>} {STAGE_LABELS[status]}</span>; }
+
+export function JobLibrary() {
+  const [filter, setFilter] = useState("all");
+  const { data, loading, error, refresh: fetchJobs } = usePollingResource<{ jobs: JobSummary[] }>("/api/jobs", 10_000);
+  const jobs = data?.jobs || [];
+  const visible = jobs.filter((job) => filter === "all" || (filter === "active" ? ACTIVE_STATUSES.includes(job.status) : filter === "ready" ? job.status === "ready" : !ACTIVE_STATUSES.includes(job.status) && job.status !== "ready"));
+  return <><div className="page-heading library-heading"><div><div className="eyebrow">Your work, in motion</div><h1>Your videos</h1><p>Every introduction, all in one place.</p></div><Link className="button button-primary" href="/studio/new"><Plus size={17}/> New video</Link></div>
+    {error && <div className="notice notice-error" role="alert"><AlertCircle size={18}/><div><strong>We couldn’t update your videos.</strong><p>{error}</p></div><button type="button" className="button button-secondary button-small" onClick={() => void fetchJobs()}><RotateCw size={15}/> Retry</button></div>}
+    {loading ? <div className="loading-state" role="status"><LoaderCircle className="spin" size={25}/><p>Gathering your videos…</p></div> : jobs.length === 0 && !error ? <div className="library-empty"><div className="empty-illustration" aria-hidden="true"><div className="empty-frame-back"/><div className="empty-frame-front"><Clapperboard size={41} strokeWidth={1.1}/></div><span className="empty-spark">✧</span></div><span className="eyebrow">A blank canvas. A big possibility.</span><h2>Your first video starts here.</h2><p>You’ve built something worth sharing.<br/>Bring your product link or brief, and make your entrance.</p><Link className="button button-primary" href="/studio/new">Create your first video <ArrowRight size={17}/></Link><span className="empty-footnote">One submission. A finished product video.</span></div> : <><div className="library-toolbar"><div className="library-filters" role="group" aria-label="Filter videos">{[{ id: "all", label: "All videos" }, { id: "active", label: "In progress" }, { id: "ready", label: "Ready" }, { id: "attention", label: "Needs attention" }].map(({ id, label }) => <button key={id} type="button" className={filter === id ? "selected" : ""} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>)}</div><span className="video-count">{visible.length} {visible.length === 1 ? "video" : "videos"}</span></div>{visible.length === 0 ? <div className="filter-empty"><Film size={26} strokeWidth={1.4}/><h2>No videos here yet.</h2><p>Videos with this status will appear here.</p><button className="text-link" type="button" onClick={() => setFilter("all")}>Show all videos <ArrowRight size={15}/></button></div> : <div className="job-grid">{visible.map((job) => <Link className="job-card" href={`/studio/jobs/${job.id}`} key={job.id}><div className={`job-thumbnail${job.status === "ready" ? " ready" : ""}`}>{job.status === "ready" ? <Image src={`/api/jobs/${job.id}/media?kind=poster`} alt="" fill sizes="(max-width: 700px) 100vw, 420px" unoptimized/> : <div className="job-placeholder"><Clapperboard size={31} strokeWidth={1.2}/><span>{ACTIVE_STATUSES.includes(job.status) ? "Your product is taking shape." : "Every great story needs a good start."}</span></div>}<span className="job-type-label">{job.videoType === "launch" ? "Product launch" : "Feature demo"}</span></div><div className="job-card-body"><div className="job-card-title"><h2>{job.title}</h2><ChevronRight size={18}/></div><div className="job-card-meta"><span>{formatDate(job.createdAt)}</span><span>{job.width && job.height ? `${job.width} × ${job.height}` : job.format === "auto" ? "Auto format" : job.format}</span></div><StatusBadge status={job.status}/></div></Link>)}</div>}</>}
+  </>;
+}

@@ -1,0 +1,9 @@
+.local
+.worker-smoke
+.env*
+!.env.example
+artifacts
+test-results
+playwright-report
+.git
+node_modules
