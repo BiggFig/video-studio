@@ -53,7 +53,10 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
     // Still holds may be serialized as rounded seconds during repair; nearest-frame
     // quantization avoids adding a frame each time. Reading and source speech never round down.
     const requestedFrames=asset.kind==="image"?Math.round(s.durationSeconds*30):Math.ceil(s.durationSeconds*30);
-    const duration=Math.max(requestedFrames,Math.ceil((words*0.32+1.2)*30),speech?Math.ceil((asset.duration_seconds||0)*30):0);
+    // Hundredths keep exact reading boundaries (20 words = 228 frames) from
+    // gaining a frame through binary floating-point addition before Math.ceil.
+    const readingFrames=Math.ceil(((words*32+120)*30)/100);
+    const duration=Math.max(requestedFrames,readingFrames,speech?Math.ceil((asset.duration_seconds||0)*30):0);
     if(asset.kind==="video" && s.sourceInSeconds+duration/30>(asset.duration_seconds||0)+0.04) throw new Error("Planned scene exceeds actual source duration");
     if(s.preserveAudio&&!asset.has_audio) throw new Error("Plan requests audio absent from source");
     const scene={id:`scene-${i+1}`,start_frame:output.duration_frames,duration_frames:duration,asset_id:asset.id,source_in_seconds:s.sourceInSeconds,playback_rate:1 as const,preserve_audio:s.preserveAudio,fit:"contain" as const,purpose:s.purpose,reference_technique:s.referenceTechnique,headline:s.headline,detail:s.detail,evidence:fact.text,evidence_id:fact.id,effects:[{type:"reveal",implementation:"FFmpeg eased vertical card entrance and restrained scene fade; whole actual source remains contained."}]}; output.duration_frames+=duration; return scene;

@@ -34,6 +34,31 @@ test("still requests round to the nearest frame while reading time always rounds
   await assert.rejects(compilePlan(input, evidence(), draft([scene(3, readingCopy), scene(3)]), hooks, await workspace(), { plan: shorter, findings: [] }), (error: unknown) => error instanceof Error && "code" in error && error.code === "duration_budget");
 });
 
+test("the real 20-word reading boundary is exactly 228 frames", async () => {
+  const copy = { headline: "Apply. Audit. Fix. Scale.", detail: "We map every leak, rank them by impact, and walk you through it on a call." };
+  assert.equal((copy.headline + " " + copy.detail).split(/\s+/).length, 20);
+  const sources: Evidence = { text: copy.headline + " " + copy.detail, assets: [image] };
+  const plan = await compilePlan(input, sources, draft([scene(3, copy), scene(3)]), hooks, await workspace());
+  assert.equal(plan.scenes[0].duration_frames, 228);
+  assert.equal(plan.scenes[0].duration_frames / 30, 7.6);
+  assert.deepEqual(validateTimeline(plan), []);
+});
+
+test("a 40.6-second repair with the 20-word scene stays within its 1218-frame audio budget", async () => {
+  const copy = { headline: "Apply. Audit. Fix. Scale.", detail: "We map every leak, rank them by impact, and walk you through it on a call." };
+  const sources: Evidence = { text: copy.headline + " " + copy.detail, assets: [image] };
+  const durations = [6, 6, 6, 7, 7.6, 8];
+  const original = await compilePlan(input, sources, draft(durations.map(n => scene(n))), hooks, await workspace());
+  assert.equal(original.output.duration_frames, 1218);
+  const revised = durations.map((n, i) => scene(n, i === 4 ? copy : {}));
+  const repaired = await compilePlan(input, sources, draft(revised), hooks, await workspace(), { plan: original, findings: [] });
+  assert.deepEqual(repaired.scenes.map(s => s.duration_frames), [180, 180, 180, 210, 228, 240]);
+  assert.equal(repaired.output.duration_frames, 1218);
+  assert.deepEqual(validateTimeline(repaired), []);
+  const longer = revised.map((s, i) => i === 4 ? { ...s, detail: copy.detail + " Today." } : s);
+  await assert.rejects(compilePlan(input, sources, draft(longer), hooks, await workspace(), { plan: original, findings: [] }), (error: unknown) => error instanceof Error && "code" in error && error.code === "duration_budget");
+});
+
 test("video requests still round up and cannot overrun the measured source", async () => {
   const video: Asset = { ...image, id: "clip", kind: "video", path: "assets/clip.mp4", duration_seconds: 7, has_audio: false };
   const sources = evidence([image, video]);
