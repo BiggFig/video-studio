@@ -9,6 +9,23 @@ import { ACTIVE_STATUSES } from "./job-library";
 import { usePollingResource } from "./use-polling-resource";
 
 const stageDescriptions = { queued: "Your video is in the queue, ready for its turn.", reading: "Getting to know your product and finding the visuals that tell its story.", planning: "Finding the right structure, words, and rhythm for your video.", rendering: "Bringing your product visuals, motion, and sound together.", checking: "Checking the finished video for clarity, accuracy, and technical quality.", ready: "Your video has passed its checks and is ready to share." };
+const processingStops: Record<string, { title: string; message: string; action: string }> = {
+  model_budget: {
+    title: "Processing reached its limit.",
+    message: "Processing stopped to keep this submission within its planning and review allowance.",
+    action: "Your submission is saved. The studio team needs to review its processing allowance before deciding how to continue. Refresh the status to check for an update.",
+  },
+  model_usage_exceeded: {
+    title: "A usage check needs attention.",
+    message: "Processing stopped because the service reported more usage than this submission allowed.",
+    action: "Your submission is saved. The studio team needs to review the recorded usage before deciding how to continue. Refresh the status to check for an update.",
+  },
+  model_reservation_unresolved: {
+    title: "A usage check needs attention.",
+    message: "Processing stopped because a previous service request has unconfirmed usage.",
+    action: "Your submission is saved. The studio team needs to verify the previous request before deciding how to continue. Refresh the status to check for an update.",
+  },
+};
 function elapsedLabel(start: string, end: number) { const seconds = Math.max(0, Math.floor((end - new Date(start).getTime()) / 1000)); if (seconds < 60) return `${seconds}s`; const minutes = Math.floor(seconds / 60); return minutes < 60 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`; }
 
 export function JobDetail({ id }: { id: string }) {
@@ -31,7 +48,8 @@ export function JobDetail({ id }: { id: string }) {
   const ready = job.status === "ready" && job.qualityPassed;
   const stopped = !active && !ready;
   const needsSource = job.status === "needs_input";
-  const serviceIssue = !needsSource && ["audio_unavailable", "audio_rate_limited", "audio_quota_exceeded", "audio_access_denied", "model_unavailable", "audio_review_unavailable", "provider_not_configured", "audio_payment_uncertain", "model_reservation_unresolved", "missing_model_usage", "invalid_model_output", "silent_generated_audio", "WORKER_START_FAILED"].includes(job.error?.code || "");
+  const processingStop = !needsSource ? processingStops[job.error?.code || ""] : undefined;
+  const serviceIssue = !needsSource && ["audio_unavailable", "audio_rate_limited", "audio_quota_exceeded", "audio_access_denied", "model_unavailable", "audio_review_unavailable", "provider_not_configured", "audio_payment_uncertain", "missing_model_usage", "invalid_model_output", "invalid_quality_review", "silent_generated_audio", "WORKER_START_FAILED"].includes(job.error?.code || "");
   const canStartNew = needsSource || job.status === "cancelled";
   const stageIndex = STAGES.indexOf(job.status as typeof STAGES[number]);
   const end = active ? now : new Date(job.completedAt || job.updatedAt).getTime();
@@ -41,10 +59,10 @@ export function JobDetail({ id }: { id: string }) {
     <div className="job-detail-layout"><div className="job-primary">{ready ? <div className="delivery-card"><div className="video-player-wrap"><video controls preload="metadata" playsInline poster={`/api/jobs/${job.id}/media?kind=poster`} src={`/api/jobs/${job.id}/media?kind=video`} aria-label={`Preview of ${job.title}`} onError={() => setMediaError(true)}/></div>{mediaError && <p className="form-error media-error" role="alert">The preview couldn’t load. Try refreshing, or use Download MP4.</p>}<div className="delivery-caption"><div><CircleCheck size={20}/><div><strong>Your moment is ready.</strong><p>Checked, finished, and ready to make an entrance.</p></div></div><span>{job.durationSeconds ? `${Math.round(job.durationSeconds)} sec · ` : ""}MP4</span></div></div> : stopped ? <div className="job-stopped">
         <span className="stopped-icon"><AlertCircle size={30} strokeWidth={1.4}/></span>
         <span className="eyebrow">A little attention needed</span>
-        <h2>{needsSource ? "Let’s give your story a little more." : serviceIssue ? "A service needs attention." : job.status === "needs_review" || job.status === "ready" ? "This video needs another look." : job.status === "cancelled" ? "This video was cancelled." : "We couldn’t finish this one."}</h2>
-        <p>{job.error?.message || (job.status === "ready" ? "Your video’s quality checks haven’t been confirmed, so it isn’t available to preview or download yet." : "This submission didn’t produce a finished video.")}</p>
+        <h2>{processingStop?.title || (needsSource ? "Let’s give your story a little more." : serviceIssue ? "A service needs attention." : job.status === "needs_review" || job.status === "ready" ? "This video needs another look." : job.status === "cancelled" ? "This video was cancelled." : "We couldn’t finish this one.")}</h2>
+        <p>{processingStop?.message || job.error?.message || (job.status === "ready" ? "Your video’s quality checks haven’t been confirmed, so it isn’t available to preview or download yet." : "This submission didn’t produce a finished video.")}</p>
         <div className="recovery-note"><strong>{needsSource ? "What to change" : "Next step"}</strong>
-          <p>{serviceIssue ? "Your submission is saved. The studio team needs to check this service issue before work can continue. Refresh the status to check for an update." : job.error?.action || (needsSource ? "Update the source material and start a new submission." : job.status === "cancelled" ? "You can return to your videos or start a new one." : "Your submission is saved. Refresh the status to check for an update, or return to your videos.")}</p>
+          <p>{processingStop?.action || (serviceIssue ? "Your submission is saved. The studio team needs to check this service issue before work can continue. Refresh the status to check for an update." : job.error?.action || (needsSource ? "Update the source material and start a new submission." : job.status === "cancelled" ? "You can return to your videos or start a new one." : "Your submission is saved. Refresh the status to check for an update, or return to your videos."))}</p>
         </div>
         {canStartNew ? <Link className="button button-primary" href="/studio/new">Start a new video <ArrowRight size={17}/></Link> : <button className="button button-primary" disabled={refreshing} onClick={() => void refreshStatus()}>{refreshing ? <LoaderCircle className="spin" size={17}/> : <RotateCw size={17}/>} {refreshing ? "Refreshing…" : "Refresh status"}</button>}
         <Link className="button button-secondary" href="/studio">Your videos</Link>

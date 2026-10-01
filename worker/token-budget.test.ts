@@ -44,6 +44,24 @@ test("counter sends the exact structured model, system and base64 images with a 
   assert.equal(TOKEN_COUNT_TIMEOUT_MS, 20_000); assert.deepEqual(estimate, { method: "anthropic-count-tokens", inputTokens: 2174, countedInputTokens: 1000, countRequestId: "fixture-count" });
 });
 
+test("scoped review policy is explicit, counted exactly and audited without weakening budgets",async t=>{
+  environment(t);const path=await workspace(t),providers=new Providers(path,input,hooks());
+  providers.skill="UNRELATED_PLANNING_AND_EXECUTION_CHAPTERS ".repeat(1000);providers.skillHash="a".repeat(64);
+  let counted="",generated="",calls=0;
+  mockFetch(t,async(url,options)=>{
+    calls++;
+    if(url.endsWith("count_tokens")){counted=String(options.body);return countResult(1000);}
+    generated=String(options.body);const body=JSON.parse(generated);
+    assert.match(body.system,/independent quality reviewer/);assert.match(body.system,/UNTRUSTED EVIDENCE/);assert.match(body.system,/source defects still block/i);assert.match(body.system,/all booleans true cannot coexist/i);assert.ok(!body.system.includes("UNRELATED_PLANNING_AND_EXECUTION_CHAPTERS"));
+    const saved=JSON.parse(await readFile(join(path,"analysis/model-1-review-budget.json"),"utf8"));
+    assert.equal(saved.systemPolicy,"quality-review-v1");assert.equal(saved.skillHash,providers.skillHash);assert.equal(saved.requestHash,digest(generated));assert.equal(saved.reservation.inputTokens,2174);assert.equal(saved.reservation.outputTokens,7000);assert.deepEqual(saved.limits,{inputTokens:200000,outputTokens:30000});
+    return result(1001,25);
+  });
+  await providers.claude("review","Actual source and output evidence",[],{policy:"quality-review-v1"});
+  const body=JSON.parse(generated);assert.deepEqual(JSON.parse(counted),{model:body.model,system:body.system,messages:body.messages});assert.equal(providers.ledger.inputTokens,1001);assert.equal(providers.ledger.modelCalls,1);
+  await assert.rejects(providers.claude("plan","Must retain full planning policy",[],{policy:"quality-review-v1"}),/restricted to review/);assert.equal(calls,2);
+});
+
 test("direct counting allows a supported request while persisting exact hashes and bounds before generation", async (t) => {
   environment(t); const path = await workspace(t), persisted = new Map<string, string>(), events: string[] = [];
   const providers = new Providers(path, { ...input, budgets: { ...input.budgets, maxModelInputTokens: 3000, maxModelOutputTokens: 1500 } }, hooks(async paths => { for (const p of paths) persisted.set(p, await readFile(join(path, p), "utf8")); events.push(paths[0]); }));

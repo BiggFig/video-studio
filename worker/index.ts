@@ -10,7 +10,7 @@ import { Providers } from "./providers";
 import { callbackAuth, ingest,type IngestDependencies } from "./ingest";
 import { makePlan, savePlan, validateTimeline } from "./planning";
 import { render } from "./render";
-import { quality } from "./quality";
+import { quality, repairableFindings } from "./quality";
 import { assertCompatibleRuntime } from "./runtime";
 import { RepairBudget } from "./repairs";
 import { workerTimeRemainingMs } from "./deadline";
@@ -95,7 +95,7 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
     deadline();await hooks.state("checking",{stage:"quality",repairPass:pass,draft});
     qc=await quality(plan,evidence,draft,workspace,providers,hooks,repairBudget.descriptions);
     if(qc.passed)break;
-    const repairable=qc.findings.filter(f=>f.repair);
+    const repairable=repairableFindings(qc.findings);
     if(pass===repairMax||!repairable.length)throw new PipelineError("quality_failed","The video did not pass every required quality check.","The draft and specific quality findings were retained for the beta administrator.","needs_review");
     plan=await repairBudget.execute(repairable.map(f=>f.message).join("; "),()=>makePlan(input,evidence,providers,hooks,workspace,{plan,findings:repairable}));
   }

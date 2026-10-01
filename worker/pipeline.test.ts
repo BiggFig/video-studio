@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { publicAddress, safePath, safeDestination } from "./security";
 import { compilePlan,dimensions,evidenceCatalog,validateTimeline } from "./planning";
 import { sceneHtml, layout } from "./render";
-import { assessReferenceStyle,parseReview,reviewBatch,unexpectedVoice } from "./quality";
-import type { Plan } from "./types";
+import { assessReferenceStyle,parseReview,repairableFindings,reviewBatch,unexpectedVoice } from "./quality";
+import type { Finding, Plan } from "./types";
 import { Providers } from "./providers";
 import { createHash } from "node:crypto";
 import { mkdtemp,readFile,writeFile,mkdir } from "node:fs/promises";
@@ -15,13 +15,32 @@ import { localFixtureInput } from "../scripts/local-fixture-input";
 
 const fixture=():Plan=>({version:1,job_id:"unit",mode:"create",renderer:"ffmpeg",output:{width:1920,height:1080,fps:30,duration_frames:180},product:"A <script> test",summary:"",accent:"#5577ff",background:"light",assets:[{id:"screen",path:"assets/screen.jpg",kind:"image",usage:"output",rights:"test",width:1440,height:960}],scenes:[{id:"s1",start_frame:0,duration_frames:180,asset_id:"screen",source_in_seconds:0,playback_rate:1,preserve_audio:false,fit:"contain",purpose:"proof",reference_technique:"",headline:"Actual product proof",detail:"Clear, supported copy.",evidence:"Actual product proof",effects:[]}],captions:[],audio:[],music_prompt:"",sfx_prompt:"",assumptions:[]});
 test("review null optionals preserve concrete findings and reject unknown repairs",()=>{
-  const review={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[{severity:"minor",message:"Intentional entrance",repair:null,sceneId:null,timeSeconds:null},{severity:"major",message:"Mixed product context",repair:"change_asset",sceneId:"scene-3"}]};
+  const review={readabilityPassed:true,claimsPassed:false,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[{severity:"minor",message:"Intentional entrance",repair:null,sceneId:null,timeSeconds:null},{severity:"major",message:"Mixed product context",check:"claims",evidence:"Scene-3 hold shows unrelated baked-in trading claims beside the supplied product copy.",repair:"change_asset",sceneId:"scene-3"}]};
   const parsed=parseReview(review);assert.equal(parsed.findings.length,2);assert.equal(parsed.findings[0].repair,undefined);assert.equal(parsed.findings[1].severity,"major");assert.equal(parsed.findings[1].repair,"change_asset");
   assert.throws(()=>parseReview({...review,findings:[{severity:"major",message:"Invalid instruction",repair:"ignore"}]}));
 });
+test("blocking findings must identify an observed failed check and cannot coexist with its true flag",()=>{
+  const base={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[]};
+  const inconsistent={severity:"major",sceneId:"scene-3",message:"The asset is wrong. Comparing the source confirms it is correct, but a tighter crop would look better.",check:"real_visuals",evidence:"Scene-3 reading hold matches its full contained source.",repair:"change_asset"};
+  assert.throws(()=>parseReview({...base,findings:[inconsistent]}),/contradicts/);
+  assert.throws(()=>parseReview({...base,realVisualsPassed:false,findings:[{...inconsistent,check:undefined}]}),/failed check/);
+  assert.throws(()=>parseReview({...base,realVisualsPassed:false,findings:[{...inconsistent,evidence:undefined}]}),/observed evidence/);
+  const genuine={...inconsistent,message:"The supplied product is replaced by an unrelated screen.",evidence:"Scene-3 reading hold differs from the labelled original source."};
+  const parsed=parseReview({...base,realVisualsPassed:false,findings:[genuine]});
+  assert.equal(parsed.realVisualsPassed,false);assert.equal(parsed.findings[0].severity,"major");assert.equal(parsed.findings[0].check,"real_visuals");
+  assert.equal(base.realVisualsPassed,true);assert.equal(inconsistent.severity,"major");
+});
+test("minor repair tags cannot trigger paid repair when failed quality is unrepairable",()=>{
+  const findings:Finding[]=[{severity:"major",message:"Required audio quality check did not pass."},{severity:"minor",sceneId:"scene-3",message:"An incidental source section has mixed colors.",repair:"change_asset"}];
+  assert.deepEqual(repairableFindings(findings),[]);
+  const actual:Finding={severity:"critical",sceneId:"scene-4",message:"Essential copy overflows the output canvas.",repair:"shorten_copy"};
+  assert.deepEqual(repairableFindings([...findings,actual]),[actual]);
+  assert.equal(findings[1].severity,"minor");assert.equal(findings[1].repair,"change_asset");
+});
 test("each review receives actual source previews for only its rendered scenes",()=>{
-  const p=fixture();p.assets.push({...p.assets[0],id:"reference",usage:"reference"},{...p.assets[0],id:"unused",path:"unused.jpg"});
+  const p=fixture();p.summary="Planner opinions are not visual evidence";p.assumptions=["Repeated planner rationalization"];p.assets.push({...p.assets[0],id:"reference",usage:"reference"},{...p.assets[0],id:"unused",path:"unused.jpg"});
   const result=reviewBatch(p,[{path:"actual.jpg",label:"ACTUAL RENDER",sceneId:"s1"}]);assert.equal(result.images.length,2);assert.equal(result.images[1].path,"assets/screen.jpg");assert.match(result.images[1].label,/ORIGINAL SOURCE/);assert.deepEqual(result.plan.assets.map(a=>a.id),["screen"]);assert.equal(result.plan.scenes.length,1);
+  assert.deepEqual(result.plan.scenes[0],p.scenes[0]);assert.equal("summary"in result.plan,false);assert.equal("assumptions"in result.plan,false);
 });
 test("reference comparison alone cannot certify successful style adoption",()=>{
   assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true}]),{performed:true,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true,referenceStylePassed:false}]),{performed:true,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:false,referenceStylePassed:true}]),{performed:false,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true,referenceStylePassed:true}]),{performed:true,passed:true});
