@@ -4,6 +4,7 @@ import { authenticateWorker } from "@/lib/server/worker-auth";
 import { checkpointJob, completeJob, failJob, heartbeatJob } from "@/lib/server/jobs";
 import { stopWorker, dispatchJobs } from "@/lib/server/dispatch";
 import { apiError, ApiError, json, readJson } from "@/lib/server/http";
+import { hasServerCheckpointField } from "@/lib/server/execution-budget";
 export const runtime="nodejs";
 export const maxDuration=120;
 export async function POST(request:Request,context:{params:Promise<{id:string}>}) {
@@ -29,7 +30,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
     if(data.status && data.status!=="heartbeat") {
       const status=z.enum(["reading","planning","rendering","checking"]).parse(data.status);
       const checkpoint=z.record(z.string(),z.unknown()).parse(data.checkpoint??{});
-      if (["sandboxName","snapshotId","runtimeVersion","runtimeBundleHash","runtimeHash","runtimeId"].some(key=>key in checkpoint)) throw new ApiError(400,"RESERVED_CHECKPOINT_FIELD","Worker checkpoint contains a reserved field.");
+      if (hasServerCheckpointField(checkpoint)) throw new ApiError(400,"RESERVED_CHECKPOINT_FIELD","Worker checkpoint contains a reserved field.");
       await checkpointJob(id,leaseToken,status,checkpoint);
     }
     return json({ok:true});

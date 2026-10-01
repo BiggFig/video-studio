@@ -1,17 +1,62 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { publicAddress, safePath, safeDestination } from "./security";
-import { dimensions, validateTimeline } from "./planning";
+import { compilePlan,dimensions,evidenceCatalog,validateTimeline } from "./planning";
 import { sceneHtml, layout } from "./render";
-import { unexpectedVoice } from "./quality";
+import { assessReferenceStyle,parseReview,reviewBatch,unexpectedVoice } from "./quality";
 import type { Plan } from "./types";
 import { Providers } from "./providers";
 import { createHash } from "node:crypto";
 import { mkdtemp,readFile,writeFile,mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { command,ffmpeg,frame,frameIndex,probe } from "./media";
+import { localFixtureInput } from "../scripts/local-fixture-input";
 
 const fixture=():Plan=>({version:1,job_id:"unit",mode:"create",renderer:"ffmpeg",output:{width:1920,height:1080,fps:30,duration_frames:180},product:"A <script> test",summary:"",accent:"#5577ff",background:"light",assets:[{id:"screen",path:"assets/screen.jpg",kind:"image",usage:"output",rights:"test",width:1440,height:960}],scenes:[{id:"s1",start_frame:0,duration_frames:180,asset_id:"screen",source_in_seconds:0,playback_rate:1,preserve_audio:false,fit:"contain",purpose:"proof",reference_technique:"",headline:"Actual product proof",detail:"Clear, supported copy.",evidence:"Actual product proof",effects:[]}],captions:[],audio:[],music_prompt:"",sfx_prompt:"",assumptions:[]});
+test("review null optionals preserve concrete findings and reject unknown repairs",()=>{
+  const review={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[{severity:"minor",message:"Intentional entrance",repair:null,sceneId:null,timeSeconds:null},{severity:"major",message:"Mixed product context",repair:"change_asset",sceneId:"scene-3"}]};
+  const parsed=parseReview(review);assert.equal(parsed.findings.length,2);assert.equal(parsed.findings[0].repair,undefined);assert.equal(parsed.findings[1].severity,"major");assert.equal(parsed.findings[1].repair,"change_asset");
+  assert.throws(()=>parseReview({...review,findings:[{severity:"major",message:"Invalid instruction",repair:"ignore"}]}));
+});
+test("each review receives actual source previews for only its rendered scenes",()=>{
+  const p=fixture();p.assets.push({...p.assets[0],id:"reference",usage:"reference"},{...p.assets[0],id:"unused",path:"unused.jpg"});
+  const result=reviewBatch(p,[{path:"actual.jpg",label:"ACTUAL RENDER",sceneId:"s1"}]);assert.equal(result.images.length,2);assert.equal(result.images[1].path,"assets/screen.jpg");assert.match(result.images[1].label,/ORIGINAL SOURCE/);assert.deepEqual(result.plan.assets.map(a=>a.id),["screen"]);assert.equal(result.plan.scenes.length,1);
+});
+test("reference comparison alone cannot certify successful style adoption",()=>{
+  assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true}]),{performed:true,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true,referenceStylePassed:false}]),{performed:true,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:false,referenceStylePassed:true}]),{performed:false,passed:false});assert.deepEqual(assessReferenceStyle([{referenceStyleReviewed:true,referenceStylePassed:true}]),{performed:true,passed:true});
+});
+test("actual FFmpeg frame ordinal decodes the last frame and missing frames fail closed",{skip:process.env.STUDIO_MEDIA_INTEGRATION!=="1"},async()=>{
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-frames-")),video=join(workspace,"fixture.mp4"),out=join(workspace,"frame.jpg");
+  await command(ffmpeg,["-v","error","-y","-f","lavfi","-i","color=c=blue:s=160x90:r=30","-frames:v","3","-c:v","libx264","-pix_fmt","yuv420p",video]);
+  await frameIndex(video,out,2);assert.equal((await probe(out)).width,160);
+  await assert.rejects(frameIndex(video,out,3),/did not decode|ffmpeg failed/);await assert.rejects(readFile(out));await assert.rejects(frame(video,out,5),/did not decode|ffmpeg failed/);await assert.rejects(readFile(out));
+});
+test("fact IDs preserve exact contiguous source text without concatenating evidence",()=>{
+  const source="A product headline without a period\n\nA complete supporting paragraph.\n\n"+"Long original source text. ".repeat(80),facts=evidenceCatalog(source);
+  assert.equal(facts[0].id,"fact-1");assert.equal(facts[0].text,"A product headline without a period");assert.ok(facts.every(f=>source.includes(f.text)&&f.text.length<=900));assert.equal(new Set(facts.map(f=>f.id)).size,facts.length);
+});
+test("retained plan compilation keeps bounded notes and still enforces source facts",async()=>{
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-plan-")),p=fixture(),hooks={persist:async()=>{},state:async()=>{},complete:async()=>{}};
+  const input={jobId:"unit",ownerId:"unit",mode:"url" as const,videoType:"launch" as const,format:"auto" as const,files:[]},evidence={text:"Actual product proof",assets:p.assets};
+  const scene={assetId:"screen",headline:"Actual product proof",detail:"",evidenceId:"fact-1",durationSeconds:3,purpose:"Supported narrative explanation. ".repeat(16),referenceTechnique:"Contained product card."};
+  const raw={sufficientEvidence:true,reason:"Supported",product:"Product",summary:"Product proof",accent:"#112233",background:"dark",musicPrompt:"Quiet instrumental ambient texture",sfxPrompt:"Soft interface reveal",assumptions:Array.from({length:16},(_,i)=>`Retained provider note ${i}`),scenes:[scene,scene]};
+  const compiled=await compilePlan(input,evidence,raw,hooks,workspace);assert.equal(compiled.assumptions.length,16);assert.equal(compiled.scenes[0].purpose,scene.purpose);assert.equal(compiled.scenes[0].evidence,evidence.text);
+  const verbose={...raw,summary:"summary ".repeat(100),scenes:[{...scene,purpose:"purpose ".repeat(130),referenceTechnique:"technique ".repeat(120)},scene]},bounded=await compilePlan(input,evidence,verbose,hooks,workspace);assert.equal(bounded.summary.length,500);assert.equal(bounded.scenes[0].purpose.length,800);assert.equal(bounded.scenes[0].reference_technique.length,800);assert.equal(verbose.summary.length,800);assert.equal(bounded.scenes[0].headline,scene.headline);assert.equal(bounded.scenes[0].evidence,evidence.text);
+  await assert.rejects(compilePlan(input,evidence,{...raw,scenes:[{...scene,evidenceId:"fact-999"},scene]},hooks,workspace),(error:unknown)=>error instanceof Error&&"code"in error&&error.code==="unsupported_claim");
+  await assert.rejects(compilePlan(input,evidence,{...raw,scenes:[{...scene,headline:"x".repeat(77)},scene]},hooks,workspace));
+  await assert.rejects(compilePlan(input,evidence,{...raw,product:"x".repeat(49)},hooks,workspace));
+  await assert.rejects(compilePlan(input,evidence,{...raw,scenes:[{...scene,detail:"x".repeat(151)},scene]},hooks,workspace));
+  await assert.rejects(compilePlan(input,evidence,{...raw,scenes:[{...scene,durationSeconds:0},scene]},hooks,workspace));
+  await assert.rejects(compilePlan(input,evidence,{sufficientEvidence:false,reason:"The required feature is absent from the supplied screenshots.",scenes:[]},hooks,workspace),(error:unknown)=>error instanceof Error&&"code"in error&&error.code==="insufficient_product_evidence"&&"status"in error&&error.status==="needs_input");
+});
+test("local fixture transport rejects unmapped URLs, byte changes and path traversal",async()=>{
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-fixture-")),bytes=Buffer.from("Local test bytes"),digest=createHash("sha256").update(bytes).digest("hex");await writeFile(join(workspace,"input.md"),bytes);
+  const manifest={mode:"prd",videoType:"feature-demo",format:"9:16",files:[{path:"input.md",kind:"prd",size_bytes:bytes.length,sha256:digest},{path:"input.md",kind:"asset",size_bytes:bytes.length,sha256:digest}]},path=join(workspace,"manifest.json");await writeFile(path,JSON.stringify(manifest));
+  const fixture=await localFixtureInput(path);assert.deepEqual((await fixture.dependencies.readInput(fixture.input.files[0].url,100,"upload")).bytes,bytes);await assert.rejects(fixture.dependencies.readInput("http://localhost/private",100,"upload"),/Unmapped/);await assert.rejects(fixture.dependencies.readInput(fixture.input.files[0].url,1,"upload"),/limit/);
+  await writeFile(join(workspace,"input.md"),Buffer.from("Changed fixtures"));await assert.rejects(fixture.dependencies.readInput(fixture.input.files[0].url,100,"upload"),/changed|verification/);
+  await writeFile(path,JSON.stringify({...manifest,files:manifest.files.map(f=>({...f,path:"../input.md"}))}));await assert.rejects(localFixtureInput(path),/escapes/);
+});
 
 test("public ingestion rejects loopback, metadata, LAN and mapped IPv6",async()=>{
   for(const address of ["127.0.0.1","10.1.1.1","172.16.0.1","192.168.1.1","169.254.169.254","100.64.0.1","::1","::ffff:127.0.0.1","fe80::1","fc00::1","ff02::1","2001:db8::1"])assert.equal(publicAddress(address),false,address);

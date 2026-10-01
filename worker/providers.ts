@@ -47,7 +47,7 @@ export class Providers {
     if(!Number.isFinite(data.usage?.input_tokens)||!Number.isFinite(data.usage?.output_tokens))throw new PipelineError("missing_model_usage","The model provider did not return verifiable usage.","Ask the beta administrator to inspect the retained budget reservation.","needs_review");
     this.ledger.reservedInputTokens-=inputReservation;this.ledger.reservedOutputTokens-=maxOutput;
     this.ledger.inputTokens+=Number(data.usage.input_tokens); this.ledger.outputTokens+=Number(data.usage.output_tokens);
-    this.ledger.providerRequests.push({provider:direct?"anthropic":"vercel-ai-gateway",operation:purpose,requestId:response.headers.get("request-id"),units:Number(data.usage.input_tokens)+Number(data.usage.output_tokens),unit:"tokens",model:String(data.model||model)}); await this.save();
+    this.ledger.providerRequests.push({provider:direct?"anthropic":"vercel-ai-gateway",operation:purpose,requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),units:Number(data.usage.input_tokens)+Number(data.usage.output_tokens),unit:"tokens",model:String(data.model||model)}); await this.save();
     const raw=data.content?.filter((b:{type:string})=>b.type==="text").map((b:{text:string})=>b.text).join("") || "";
     const responsePath=`analysis/model-${this.ledger.modelCalls}-${purpose}.json`;await writeFile(join(this.workspace,responsePath),raw);await this.hooks.persist([responsePath]);
     try { return JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,"")) as T; } catch { throw new PipelineError("invalid_model_output","The planning provider returned an incomplete plan.","Try a new submission or contact the beta administrator."); }
@@ -71,7 +71,7 @@ export class Providers {
     // closed instead of paying again without knowing whether a request succeeded.
     await this.hooks.persist([relative]);
     this.ledger.audio[key]={status:"completed",path:relative,hash:await hash(path)};
-    this.ledger.providerRequests.push({provider:"elevenlabs",operation:kind,requestId:response.headers.get("request-id"),units:duration,unit:"seconds"}); await this.save(); return relative;
+    this.ledger.providerRequests.push({provider:"elevenlabs",operation:kind,requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),songId:response.headers.get("song-id"),units:duration,unit:"seconds"}); await this.save(); return relative;
   }
   async transcribe(relative:string,duration:number):Promise<Transcript> {
     const key=createHash("sha256").update(await readFile(join(this.workspace,relative))).digest("hex").slice(0,16),dest=`analysis/transcript-${key}.json`;
@@ -84,6 +84,6 @@ export class Providers {
     const raw=await response.json();
     const result:Transcript={text:String(raw.text||""),words:(raw.words||[]).map((w:{text:string;start:number;end:number;type:string})=>({text:w.text,start:w.start,end:w.end,type:w.type}))};
     await writeJson(join(this.workspace,dest),result); await this.hooks.persist([dest]);
-    this.ledger.providerRequests.push({provider:"elevenlabs",operation:"speech-to-text",requestId:response.headers.get("request-id"),units:duration,unit:"seconds"}); await this.save(); return result;
+    this.ledger.providerRequests.push({provider:"elevenlabs",operation:"speech-to-text",requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),units:duration,unit:"seconds"}); await this.save(); return result;
   }
 }

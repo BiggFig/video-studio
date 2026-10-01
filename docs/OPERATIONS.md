@@ -10,7 +10,7 @@ Claude receives the versioned unified skill, grounded product evidence, and a co
 
 ## Setup
 
-1. Install Node 22 or newer and run `npm ci`.
+1. Install Node 24.x (the version required by `package.json`) and run `npm ci`.
 2. Link this directory to a Vercel project with `vercel link`. Connect a Neon database and a **private** Blob store.
 3. Copy `.env.example` to `.env.local`, or run `vercel env pull .env.local`. Set `APP_URL` to the deployment's canonical URL. For local development, use `http://127.0.0.1:3000`.
 4. Supply random, independent 32-byte secrets for `SESSION_SECRET`, `WORKER_SECRET`, and `CRON_SECRET`. Supply a random bootstrap invitation and the owner's email. Never commit these values.
@@ -43,10 +43,10 @@ Sessions last 30 days. Sign-out revokes the current session. A new invitation ca
 | New jobs per tester per day | 3 deployed; also lifetime invitation allowance |
 | Global running workers | 2 |
 | Queue attempts | 3 with bounded backoff |
-| Sandbox | 4 vCPUs, 30-minute hard deadline |
+| Sandbox | 4 vCPUs; one 30-minute execution window across all attempts, including setup and recovery waits |
 | Claude requests | At most 10; input/output token budgets recorded |
 | Audio generation | At most one music and one SFX request per job |
-| Automatic repairs | At most 2 |
+| Automatic repairs | At most 2 across all attempts, durably reserved before a paid repair |
 | Artifact storage | 2 GiB cumulative reserved bytes and 400 reservations, including retries |
 | Video | 30 fps, H.264/AAC, full HD; maximum 5 minutes |
 | Submitted job source/project/output retention | 30 days from submission; reused uploads extend to the latest associated job expiry |
@@ -61,6 +61,8 @@ Workers heartbeat every 25 seconds; leases expire after 180 seconds. Queue claim
 Cron also removes expired objects in bounded batches using exact job/owner paths, then removes expired job/upload database records. Download availability ends at record expiry even if deletion has not run yet. Reserved artifacts and failed/intermediate drafts count toward job limits and retention. Expired sessions and rate-limit entries are pruned. Invitation records remain stored, including consumed bootstrap invitations, to prevent reuse. User records and lifetime `jobs_used` counters survive job retention.
 
 Before allocating compute, dispatch records the SHA-256 of the bundled worker and skill files, the exact Sandbox snapshot ID, and a combined runtime digest. Retries use that recorded snapshot. A changed bundle or mismatched runtime digest holds the job for review before any new paid work; the worker also compares the digest in restored version records. Keep the original deployment and snapshot available when changing the worker protocol or skill.
+
+Dispatch also records the original execution start and absolute deadline before allocating compute. Retries, setup and lease recovery consume that same window; changing configuration cannot extend an existing job. A worker cannot overwrite these server-owned fields. Jobs with an invalid or missing prior deadline fail closed, and fewer than 60 seconds remaining cannot start another worker. The worker independently honors the absolute deadline. Repair reservations are retained with the job; an interrupted reservation stops for review instead of repeating an uncertain paid repair.
 
 Use Vercel function logs for API/dispatch failures, Sandbox logs for worker diagnostics, and `studio_jobs` for state, checkpoint, quality, lease, and failure details. Worker tokens are job- and lease-scoped. Never log raw provider responses, secrets, or source documents. A failed or unperformed quality check must remain `needs_review` or failed.
 

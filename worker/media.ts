@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -31,7 +31,19 @@ export async function probe(path: string) {
 }
 export async function frame(path: string, out: string, at: number, maxWidth=1600) {
   await mkdir(dirname(out),{recursive:true});
+  await rm(out,{force:true});
   await command(ffmpeg,["-v","error","-y","-ss",String(Math.max(0,at)),"-i",path,"-frames:v","1","-vf",`scale='min(${maxWidth},iw)':-2`,"-q:v","2",out]);
+  await requireFrame(out);
+}
+async function requireFrame(out:string) {
+  if(!(await stat(out).catch(()=>null))?.size)throw new Error(`FFmpeg did not decode the requested frame: ${out}`);
+}
+/** Decode by ordinal, avoiding fractional concat timestamps at the final frame. */
+export async function frameIndex(path:string,out:string,index:number,maxWidth=1600) {
+  if(!Number.isInteger(index)||index<0)throw new Error("Frame index must be a nonnegative integer");
+  await mkdir(dirname(out),{recursive:true});await rm(out,{force:true});
+  await command(ffmpeg,["-v","error","-y","-i",path,"-vf",`select=eq(n\\,${index}),scale='min(${maxWidth},iw)':-2`,"-frames:v","1","-fps_mode","vfr","-q:v","2",out]);
+  await requireFrame(out);
 }
 export async function audioMeasurements(path: string) {
   const raw = await command(ffmpeg,["-hide_banner","-i",path,"-vn","-af","loudnorm=I=-14:TP=-1:LRA=11:print_format=json,silencedetect=n=-45dB:d=1","-f","null","-"],180_000);
@@ -42,7 +54,7 @@ export async function doctor(workspace: string, skillRoot: string) {
   const versions: Record<string,string> = {node:process.version,renderer:"video-studio-html-ffmpeg/1.0.0"};
   versions.ffmpeg=(await command(ffmpeg,["-version"])).split(/\r?\n/)[0];
   versions.ffprobe=(await command(ffprobe,["-version"])).split(/\r?\n/)[0];
-  const output = await command(process.env.PYTHON_PATH || "python3",[join(skillRoot,"scripts","video_tool.py"),"doctor"]);
+  const output = await command(process.env.PYTHON_PATH || "python3",["-X","utf8",join(skillRoot,"scripts","video_tool.py"),"doctor"]);
   if(JSON.parse(output).ok!==true)throw new Error("The pinned skill media doctor did not pass");
   await writeFile(join(workspace,"analysis","doctor.txt"),output);
   return versions;

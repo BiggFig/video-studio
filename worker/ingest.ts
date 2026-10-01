@@ -5,6 +5,7 @@ import { audioMeasurements, command, ffmpeg, frame, mediaEnvironment, probe, wri
 import { safeDownload } from "./security";
 import { PipelineError, type Asset, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
+import { extractProductVisuals } from "./product-visuals";
 
 export function callbackAuth() { const url=process.env.WORKER_CALLBACK_URL; const token=process.env.PIPELINE_CALLBACK_TOKEN; return url && token ? {origin:new URL(url).origin,token}:undefined; }
 
@@ -67,15 +68,17 @@ export async function extractPrd(bytes:Buffer,workspace:string,index:number,expe
   return{path,text};
 }
 
-export async function ingest(input:WorkerInput,workspace:string,providers:Providers,hooks:Hooks):Promise<Evidence> {
+export interface IngestDependencies { readInput?:typeof downloadInput }
+export async function ingest(input:WorkerInput,workspace:string,providers:Providers,hooks:Hooks,dependencies:IngestDependencies={}):Promise<Evidence> {
   const evidence:Evidence={text:"",assets:[]};
+  const readInput=dependencies.readInput||downloadInput;
   const limits=input.limits||{maxFiles:12,maxFileBytes:250*1024*1024,maxTotalBytes:500*1024*1024,maxPrdBytes:15*1024*1024,maxReferenceBytes:100*1024*1024,maxSourceDurationSeconds:300,maxReferenceDurationSeconds:180};
   if(input.files.length>limits.maxFiles) throw new PipelineError("too_many_files","Too many input files.",`Upload at most ${limits.maxFiles} files.`,"needs_input");
   for(const folder of ["assets","analysis","project","renders"]) await mkdir(join(workspace,folder),{recursive:true});
   let totalBytes=0;
   for(const [index,file] of input.files.entries()) {
     const max=file.kind==="prd"?limits.maxPrdBytes:file.kind==="reference"?limits.maxReferenceBytes:limits.maxFileBytes;
-    const downloaded=await downloadInput(file.url,max,"upload",callbackAuth()); totalBytes+=downloaded.bytes.length;
+    const downloaded=await readInput(file.url,max,"upload",callbackAuth()); totalBytes+=downloaded.bytes.length;
     if(totalBytes>limits.maxTotalBytes) throw new PipelineError("input_size","The combined inputs exceed the job limit.","Supply fewer or smaller files.","needs_input");
     if(file.kind==="prd") {
       const document=await extractPrd(downloaded.bytes,workspace,index,file.mimeType==="application/pdf"||/\.pdf$/i.test(file.name));evidence.text+=document.text;
@@ -89,10 +92,10 @@ export async function ingest(input:WorkerInput,workspace:string,providers:Provid
   if(input.mode==="url") {
     if(!input.productUrl) throw new PipelineError("missing_url","A product URL is required.","Enter a public product URL.","needs_input");
     const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;
-    await hooks.persist(captured.assets.map(a=>a.path).concat("analysis/product-source.txt","analysis/capture-diagnostics.json"));
+    await hooks.persist(captured.artifactPaths);
   } else if(evidence.text.trim().length<100 || !evidence.assets.some(a=>a.usage==="output")) throw new PipelineError("insufficient_prd","The PRD needs readable product information and at least one usable visual.","Upload a text-based PRD plus product screenshots or a screen recording.","needs_input");
   if(input.referenceUrl) {
-    const downloaded=await downloadInput(input.referenceUrl,limits.maxReferenceBytes,"reference");
+    const downloaded=await readInput(input.referenceUrl,limits.maxReferenceBytes,"reference");
     requireDirectReference(downloaded.contentType);
     const relative="assets/reference-download.mp4"; await writeFile(join(workspace,relative),downloaded.bytes);
     evidence.assets.push(await ingestMedia(relative,"reference","reference",workspace,providers,limits.maxReferenceDurationSeconds)); await hooks.persist([relative]);
@@ -134,7 +137,7 @@ export async function ingestMedia(relative:string,id:string,usage:"output"|"refe
   return asset;
 }
 
-export async function captureProduct(url:string,workspace:string):Promise<{text:string;assets:Asset[];url:string}> {
+export async function captureProduct(url:string,workspace:string):Promise<{text:string;assets:Asset[];url:string;artifactPaths:string[]}> {
   let browser:Awaited<ReturnType<typeof chromium.launch>>;
   try{browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()});}catch{throw new PipelineError("media_runtime_unavailable","The product capture browser is unavailable.","Ask the beta administrator to restore the worker's Chromium runtime.");}
   try {
@@ -168,7 +171,15 @@ export async function captureProduct(url:string,workspace:string):Promise<{text:
       const path=`assets/product-capture-${i}.jpg`; await page.screenshot({path:join(workspace,path),type:"jpeg",quality:90});
       assets.push({id:`capture-${i}`,path,kind:"image",usage:"output",rights:"Accurate capture of the submitted public product page for the requested video.",width:1440,height:960,preview:path,source:url});
     }
+    const artifactPaths=assets.map(a=>a.path).concat("analysis/product-source.txt","analysis/capture-diagnostics.json");
+    try{
+      const originals=await extractProductVisuals(page,workspace,page.url(),{download:async(source,maxBytes)=>{
+        if(++requests>500)throw new Error("Capture request budget exhausted");
+        const result=await downloads.run(reservation=>safeDownload(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
+      }});
+      assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
+    }catch(error){diagnostics.errors.push(`Complete product image extraction unavailable: ${error instanceof Error?error.message.slice(0,400):"unknown error"}`);}
     await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,requests,bytes});
-    return{text,assets,url:page.url()};
+    return{text,assets,url:page.url(),artifactPaths:[...new Set(artifactPaths)]};
   } finally {await browser.close();}
 }
