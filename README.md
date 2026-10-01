@@ -4,7 +4,7 @@ A publicly accessible studio for turning a software product URL, or a PRD with v
 
 The application includes a Neon-backed durable queue, private Vercel Blob uploads, isolated Vercel Sandbox workers, Claude direction grounded in the unified Video Studio skill, an FFmpeg/browser compositor, ElevenLabs instrumental music/SFX, and bounded quality review and repairs.
 
-**Current rollout:** the web application is deployed at [Video Studio](https://video-studio-vert-two.vercel.app). Anyone can open a private workspace. Claude and ElevenLabs are configured, and real URL-launch and PRD-feature-demo outputs passed local quality checks. Generation remains disabled pending hosted worker, recovery, and private-delivery verification. See [MVP validation](docs/MVP-VALIDATION.md) for actual evidence and remaining work.
+**Current rollout:** the web application is deployed at [Video Studio](https://video-studio-vert-two.vercel.app). Anyone can open a private workspace. Claude and ElevenLabs are configured, and real URL-launch and PRD-feature-demo outputs passed local quality checks. Production generation was enabled at the owner's request on October 1; hosted end-to-end acceptance remains incomplete. See [MVP validation](docs/MVP-VALIDATION.md) for actual evidence and remaining work.
 
 ## Application development
 
