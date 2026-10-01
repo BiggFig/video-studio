@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Video Studio — Your product, in motion", template: "%s · Video Studio" },
-  description: "Create a software launch or feature-demo video from your product URL or PRD. One submission. Your product, in motion. Free private beta.",
+  description: "Create a software launch or feature-demo video from your product URL or PRD. One submission. Your product, in motion. Free public beta.",
   robots: { index: false, follow: false },
   icons: { icon: "/icon.svg" },
 };

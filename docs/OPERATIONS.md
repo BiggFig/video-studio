@@ -1,8 +1,8 @@
-# Operating the private beta
+# Operating the beta
 
 ## Architecture
 
-Next.js serves the invitation, studio, job library, and authenticated API on Vercel. Neon Postgres stores users, hashed sessions/invitations, upload ownership, quota counters, a leased job queue, checkpoints, and artifact reservations. All source, intermediate, and output objects use a **private** Vercel Blob store.
+Next.js serves the public landing page, private browser-session studio, job library, and authenticated API on Vercel. Visitors enter without an invitation or signup form. Neon Postgres stores users, hashed sessions/invitations, upload ownership, quota counters, a leased job queue, checkpoints, and artifact reservations. All source, intermediate, and output objects use a **private** Vercel Blob store.
 
 The cron route dispatches queued work every minute. Submission also dispatches with Next.js `after()`. Each job runs in a separate Vercel Sandbox restored from a prepared snapshot. The sandbox contains pinned Node dependencies, Chromium, FFmpeg/FFprobe, Python, Poppler, and fonts. The application writes a bundle containing only worker source, the unified skill, and the shared contract. It never bundles environment files into a worker.
 
@@ -22,11 +22,15 @@ Claude receives the versioned unified skill, grounded product evidence, and a co
 
 `scripts/configure-project.ps1` is an optional setup helper for the linked project. It generates and retains local secrets in ignored `.local/project-settings.json`; inspect the canonical URL and settings before running it. Its environment updates affect production, preview, and development. Use separate databases/stores for independent preview testing in a broader rollout.
 
-## Invitations
+## Public entry and administrative access
 
-The initial owner enters `BETA_OWNER_INVITE_TOKEN` on the invitation page. It is single-use and does not recreate access after redemption. An authenticated owner can POST `/api/admin/invites` with JSON `{ "email": "tester@example.com", "name": "Tester", "jobAllowance": 20 }`, a same-origin header, and their session cookie. The response contains a seven-day single-use code. Deliver it privately through an approved channel. This application does not send email.
+`POST /api/auth/guest` opens a browser workspace without a code. It preserves any existing authenticated session; otherwise it creates one non-admin user and a 30-day signed HttpOnly session. A new guest has a lifetime allowance of three submissions. Same-origin checks and per-IP session-creation limits apply. Public access does not bypass upload/job ownership, quotas, admin checks, worker authentication, or `BETA_ACCEPTING_JOBS`.
 
-Sessions last 30 days. Sign-out revokes the current session. A new invitation can sign an existing invited user back in; it does not reset their allowance or consumed-job count. `job_allowance` sets the lifetime submission allowance when a user is first created, and `jobs_used` increments once for each accepted submission, including jobs that later fail. Repeated idempotent submissions do not increment it. Increase an existing user's allowance through trusted database administration. To revoke a user's access immediately, set `studio_users.disabled_at` through trusted administration and revoke that user's sessions. Do not share the bootstrap owner code or manufacture public accounts.
+The visitor's cookie is the access key to their private workspace. Another browser or clearing cookies opens a different workspace; signing out revokes the current session. There is no guest account recovery or cross-device sign-in. Guest creation limits reduce repeated session creation; they do not make a browser identity a verified person.
+
+Administrative invitation redemption remains available through same-origin `POST /api/auth/redeem` with `{ "token": "OWNER_INVITATION" }`. The real `BETA_OWNER_INVITE_TOKEN` is single-use and never recreated after redemption; it is no longer required or requested by the public interface. `/invite` redirects to the studio. An authenticated owner can POST `/api/admin/invites` with JSON `{ "email": "tester@example.com", "name": "Tester", "jobAllowance": 20 }`, a same-origin header, and their session cookie. The response contains a seven-day single-use code. Deliver it privately through an approved channel. This application does not send email.
+
+Sessions last 30 days. Sign-out revokes the current session. A new invitation can sign an existing invited user back in; it does not reset their allowance or consumed-job count. `job_allowance` sets the lifetime submission allowance when a user is first created, and `jobs_used` increments once for each accepted submission, including jobs that later fail. Repeated idempotent submissions do not increment it. Increase an existing user's allowance through trusted database administration. To revoke a user's access immediately, set `studio_users.disabled_at` through trusted administration and revoke that user's sessions. Never expose the bootstrap owner code through public entry.
 
 ## Configured limits
 
@@ -40,7 +44,7 @@ Sessions last 30 days. Sign-out revokes the current session. A new invitation ca
 | Public page capture | 55 MB reserved download budget, at most 4 concurrent downloads, 8 MB per resource and 500 requests; failed transfers conservatively consume their reservation |
 | Product recording | 300 seconds |
 | Running/queued jobs per tester | 1 deployed; configurable |
-| New jobs per tester per day | 3 deployed; also lifetime invitation allowance |
+| New jobs per user per day | 3 deployed; also lifetime user allowance (three for new guests) |
 | Global running workers | 2 |
 | Queue attempts | 3 with bounded backoff |
 | Sandbox | 4 vCPUs; one 30-minute execution window across all attempts, including setup and recovery waits |

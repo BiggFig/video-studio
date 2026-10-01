@@ -1,10 +1,10 @@
 # Video Studio
 
-An invitation-only application that turns a software product URL, or a PRD with visual assets, into one checked launch or feature-demo video. The Next.js interface uses a quiet, responsive design with system typography, light/dark appearance, persistent progress, and private preview/download.
+A publicly accessible studio for turning a software product URL, or a PRD with visual assets, into one checked launch or feature-demo video. Opening the studio creates a private browser session without an invitation or signup form. The Next.js interface uses a quiet, responsive design with system typography, light/dark appearance, persistent progress, and private preview/download.
 
 The application includes a Neon-backed durable queue, private Vercel Blob uploads, isolated Vercel Sandbox workers, Claude direction grounded in the unified Video Studio skill, an FFmpeg/browser compositor, ElevenLabs instrumental music/SFX, and bounded quality review and repairs.
 
-**Current rollout:** the web application is deployed at [Video Studio](https://video-studio-vert-two.vercel.app). Generation is deliberately disabled while provider access and the representative end-to-end acceptance matrix remain outstanding. A successful build and synthetic renderer test do not certify the full MVP. See [MVP validation](docs/MVP-VALIDATION.md) for actual evidence and remaining work.
+**Current rollout:** the web application is deployed at [Video Studio](https://video-studio-vert-two.vercel.app). Anyone can open a private workspace. Claude and ElevenLabs are configured, and real URL-launch and PRD-feature-demo outputs passed local quality checks. Generation remains disabled pending hosted worker, recovery, and private-delivery verification. See [MVP validation](docs/MVP-VALIDATION.md) for actual evidence and remaining work.
 
 ## Application development
 
@@ -23,7 +23,7 @@ The repository also retains the broader unified agent toolkit described below. I
 
 ## Product scope
 
-Read [PRD.md](PRD.md) for the private-beta MVP: software launch and feature-demo videos from a product URL, or a PRD with assets. General footage editing is deferred to [ROADMAP.md](ROADMAP.md). The toolkit includes broader capabilities; its examples do not enable those features in the beta.
+Read [PRD.md](PRD.md) for the MVP: software launch and feature-demo videos from a product URL, or a PRD with assets. Public entry replaced the invitation requirement on October 1, 2026; workspace ownership remains private. General footage editing is deferred to [ROADMAP.md](ROADMAP.md). The toolkit includes broader capabilities; its examples do not enable those features in the beta.
 
 ## Standalone toolkit
 

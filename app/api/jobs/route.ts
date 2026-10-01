@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const user = await requireUser();
-    if (!acceptingJobs()) throw new ApiError(503, "BETA_PAUSED", "The studio is preparing its next beta session. Please try again soon.");
+    if (!acceptingJobs()) throw new ApiError(503, "BETA_PAUSED", "Video generation is paused while we finish hosted verification. You can explore the studio now.");
     const job = await createJob(user.id, await readJson(request));
     after(async () => { try { const { dispatchJobs } = await import("@/lib/server/dispatch"); await dispatchJobs(); } catch { console.error("Background dispatch deferred to queue recovery"); } });
     return json({ job: jobDetail(job) }, 201);

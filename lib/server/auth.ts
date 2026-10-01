@@ -1,14 +1,18 @@
 import { cookies } from "next/headers";
+import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 import { z } from "zod";
 import type { StudioUser } from "../contracts";
 import { authConfigured } from "./config";
 import { query } from "./db";
-import { ApiError } from "./http";
+import { ApiError, assertSameOrigin } from "./http";
 import { hashToken, randomToken, signToken, verifyToken } from "./security";
 
 const cookieName = "studio_session";
 type UserRow = { id: string; email: string; name: string; is_admin: boolean };
 const publicUser = (row: UserRow): StudioUser => ({ id: row.id, email: row.email, name: row.name, isAdmin: row.is_admin });
+export const sessionCookieOptions = (production = process.env.NODE_ENV === "production") => ({ httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: 60 * 60 * 24 * 30 });
+async function writeSessionCookie(signedToken: string) { (await cookies()).set(cookieName, signedToken, sessionCookieOptions()); }
 
 export async function currentUser(): Promise<StudioUser | null> {
   if (!authConfigured()) return null;
@@ -20,7 +24,7 @@ export async function currentUser(): Promise<StudioUser | null> {
 
 export async function requireUser() {
   const user = await currentUser();
-  if (!user) throw new ApiError(401, "SIGN_IN_REQUIRED", "Use your invitation to sign in to the private beta.");
+  if (!user) throw new ApiError(401, "SIGN_IN_REQUIRED", "Open the studio to start your private workspace.");
   return user;
 }
 
@@ -33,6 +37,47 @@ export async function requireAdmin() {
 export async function rateLimit(bucket: string, maximum: number, seconds: number) {
   const rows = await query<{ count: number }>(`INSERT INTO studio_rate_limits(bucket,count,expires_at) VALUES($1,1,now()+make_interval(secs=>$2)) ON CONFLICT(bucket) DO UPDATE SET count=CASE WHEN studio_rate_limits.expires_at<=now() THEN 1 ELSE studio_rate_limits.count+1 END,expires_at=CASE WHEN studio_rate_limits.expires_at<=now() THEN now()+make_interval(secs=>$2) ELSE studio_rate_limits.expires_at END RETURNING count`, [hashToken(bucket), seconds]);
   if (rows[0].count > maximum) throw new ApiError(429, "TOO_MANY_REQUESTS", "Please wait a few minutes before trying again.");
+}
+
+type GuestRow = UserRow & { job_allowance: number };
+export interface GuestSessionPorts {
+  configured(): boolean;
+  current(): Promise<StudioUser | null>;
+  limit(bucket: string, maximum: number, seconds: number): Promise<void>;
+  execute(sql: string, params: unknown[]): Promise<GuestRow[]>;
+  writeCookie(signedToken: string): Promise<void>;
+}
+const guestPorts: GuestSessionPorts = {
+  configured: authConfigured, current: currentUser, limit: rateLimit,
+  execute: (sql, params) => query<GuestRow>(sql, params), writeCookie: writeSessionCookie,
+};
+
+/** Public access creates a private identity; clients never select an owner or role. */
+export async function enterGuestSession(request: Request, ports: GuestSessionPorts = guestPorts): Promise<StudioUser> {
+  assertSameOrigin(request);
+  if (!ports.configured()) throw new ApiError(503, "STUDIO_NOT_CONFIGURED", "Studio access is being set up. Please check back soon.");
+  const existing = await ports.current();
+  if (existing) return existing;
+  const forwarded = request.headers.get("x-vercel-forwarded-for") ?? request.headers.get("x-forwarded-for") ?? "";
+  const candidate = forwarded.split(",")[0].trim();
+  await ports.limit(`guest:${isIP(candidate) ? candidate : "unknown"}`, 10, 3600);
+  const sessionToken = randomToken(), signedToken = signToken(sessionToken);
+  const email = `guest-${randomUUID()}@guest.invalid`;
+  // One SQL statement commits the unique non-admin identity and session together.
+  // No conflict update or caller-supplied identity can attach a guest to an owner.
+  const rows = await ports.execute(`WITH guest AS (
+    INSERT INTO studio_users(email,name,is_admin,job_allowance)
+    VALUES($1,'Guest',false,3) RETURNING id,email,name,is_admin,job_allowance
+  ), session AS (
+    INSERT INTO studio_sessions(token_hash,user_id,expires_at)
+    SELECT $2,id,now()+interval '30 days' FROM guest RETURNING user_id
+  ) SELECT guest.* FROM guest JOIN session ON session.user_id=guest.id`, [email, hashToken(sessionToken)]);
+  const guest = rows[0];
+  if (rows.length !== 1 || !guest || guest.email !== email || guest.is_admin !== false || guest.job_allowance !== 3 || !z.string().uuid().safeParse(guest.id).success) {
+    throw new ApiError(503, "GUEST_SESSION_UNAVAILABLE", "Your workspace could not be opened. Please try again.");
+  }
+  await ports.writeCookie(signedToken);
+  return publicUser(guest);
 }
 
 async function bootstrapOwner() {
@@ -56,7 +101,7 @@ export async function redeemInvitation(token: string, request: Request) {
     throw error;
   }
   if (!rows[0]) throw new ApiError(401, "INVITE_INVALID", "This invitation is no longer available.");
-  (await cookies()).set(cookieName, signToken(sessionToken), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  await writeSessionCookie(signToken(sessionToken));
   return publicUser(rows[0]);
 }
 
