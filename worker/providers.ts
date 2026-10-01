@@ -2,17 +2,28 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { audioMeasurements, hash, json, probe, writeJson } from "./media";
-import { PipelineError, type Hooks, type Ledger, type Transcript, type WorkerInput } from "./types";
+import { PipelineError, type AudioFailure, type Hooks, type Ledger, type Transcript, type WorkerInput } from "./types";
 import { inputReservation, modelUsage, TOKEN_BUDGET_VIOLATION, TOKEN_COUNT_MARGIN, usageViolations } from "./token-budget";
 import { parseProviderLedger } from "./provider-ledger";
+import { audioFailure, audioFailureError, MAX_AUDIO_ATTEMPTS, nextAudioAttemptAt, uncertainAudioError } from "./audio-retry";
+import { workerTimeRemainingMs } from "./deadline";
+
+/** Programmatic test seam only; never accepted through job JSON or environment. */
+export interface AudioRuntime {
+  now(): number; sleep(ms: number): Promise<void>; random(): number;
+  probe: typeof probe; measurements: typeof audioMeasurements;
+}
+const defaultAudioRuntime: AudioRuntime = { now: () => Date.now(), sleep: ms => new Promise(done => setTimeout(done, ms)), random: Math.random, probe, measurements: audioMeasurements };
 
 export class Providers {
   ledger: Ledger = {modelCalls:0,inputTokens:0,outputTokens:0,reservedInputTokens:0,reservedOutputTokens:0,audioGenerations:0,asrSeconds:0,providerRequests:[],audio:{}};
   skill = ""; skillHash = "";
   private modelUsageCheckpointPending = false;
   private modelLedgerInvalid = false;
+  private audioCheckpointPending = false;
+  private readonly audioStartedAt: number;
   model = process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6" : process.env.AI_GATEWAY_MODEL || "anthropic/claude-sonnet-4.6";
-  constructor(public workspace: string, private input: WorkerInput, private hooks: Hooks) {}
+  constructor(public workspace: string, private input: WorkerInput, private hooks: Hooks, private audioRuntime: AudioRuntime = defaultAudioRuntime) { this.audioStartedAt = audioRuntime.now(); }
   async init(skillRoot: string) {
     const chapters = ["SKILL.md","references/job-contract.md","references/story-and-formats.md","references/motion-and-captions.md","references/audio-and-assets.md","references/rendering.md","references/quality-and-delivery.md"];
     this.skill = (await Promise.all(chapters.map(p=>readFile(join(skillRoot,p),"utf8")))).join("\n\n");
@@ -85,26 +96,69 @@ export class Providers {
   }
   async audio(kind:"music"|"sfx",prompt:string,duration:number):Promise<string> {
     this.assertResolvedModelBudget();
+    if(this.audioCheckpointPending) throw uncertainAudioError();
     const key=createHash("sha256").update(JSON.stringify({kind,prompt,duration,version:1})).digest("hex");
     const relative=`assets/${kind}-${key.slice(0,16)}.mp3`,path=join(this.workspace,relative),previous=this.ledger.audio[key];
     if(previous?.status==="completed") {
       if(await hash(path)!==previous.hash) throw new Error("Resumed audio checksum mismatch");
-      await probe(path); return relative;
+      await this.audioRuntime.probe(path); return relative;
     }
-    if(previous?.status==="reserved") throw new PipelineError("audio_payment_uncertain","Audio generation was interrupted after the request was reserved.","Ask the beta administrator to recover the provider output before retrying. A second paid generation was prevented.","needs_review");
-    if(this.ledger.audioGenerations>=Math.min(this.input.budgets?.maxAudioGenerations||2,4)) throw new PipelineError("audio_budget","This job reached its audio generation limit.","Ask the beta administrator to review the retained project.","needs_review");
-    this.ledger.audioGenerations++; this.ledger.audio[key]={status:"reserved",path:relative,hash:""}; await this.save();
-    const response=await fetch(`https://api.elevenlabs.io/v1/${kind==="music"?"music":"sound-generation"}?output_format=mp3_44100_128`,{method:"POST",headers:{"xi-api-key":process.env.ELEVENLABS_API_KEY!,"content-type":"application/json"},body:JSON.stringify(kind==="music"?{prompt:`Instrumental only, no vocals, no speech. ${prompt}`,music_length_ms:Math.round(duration*1000),force_instrumental:true,model_id:process.env.ELEVENLABS_MUSIC_MODEL||"music_v1"}:{text:`No voice or words. ${prompt}`,duration_seconds:duration,prompt_influence:0.5}),signal:AbortSignal.timeout(240_000)});
-    if(!response.ok) throw new PipelineError("audio_unavailable",`The audio provider returned ${response.status}.`,"Ask the beta administrator to check audio-provider access and the retained payment reservation.","needs_review");
-    const bytes=Buffer.from(await response.arrayBuffer()); if(bytes.length>30_000_000||bytes.length<1000) throw new Error("Audio response size invalid");
-    await writeFile(path,bytes); const measured=await probe(path); if(!measured.audio || measured.duration+0.4<duration) throw new Error("Generated audio is incomplete");
-    const levels=await audioMeasurements(path);if(!levels.loudness||!Number.isFinite(Number(levels.loudness.input_i)))throw new PipelineError("silent_generated_audio","The generated audio is silent or invalid.","Ask the administrator to inspect the retained provider request; duplicate billing was prevented.","needs_review");
-    // Store bytes before marking the payment reusable. A crash in this gap fails
-    // closed instead of paying again without knowing whether a request succeeded.
-    await this.hooks.persist([relative]);
-    this.ledger.audio[key]={status:"completed",path:relative,hash:await hash(path)};
-    this.ledger.providerRequests.push({provider:"elevenlabs",operation:kind,requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),songId:response.headers.get("song-id"),units:duration,unit:"seconds"}); await this.save(); return relative;
+    if(previous?.status==="reserved") throw uncertainAudioError();
+    if(previous?.status==="rejected") throw audioFailureError(previous.failures.at(-1)!.classification);
+    if(!previous && this.ledger.audioGenerations>=Math.min(this.input.budgets?.maxAudioGenerations||2,4)) throw new PipelineError("audio_budget","This job reached its audio generation limit.","Ask the beta administrator to review the retained project.","needs_review");
+    const url=`https://api.elevenlabs.io/v1/${kind==="music"?"music":"sound-generation"}?output_format=mp3_44100_128`;
+    const body=JSON.stringify(kind==="music"?{prompt:`Instrumental only, no vocals, no speech. ${prompt}`,music_length_ms:Math.round(duration*1000),force_instrumental:true,model_id:process.env.ELEVENLABS_MUSIC_MODEL||"music_v1"}:{text:`No voice or words. ${prompt}`,duration_seconds:duration,prompt_influence:0.5});
+    const requestHash=createHash("sha256").update(url+"\n"+body).digest("hex");
+    if(previous && previous.requestHash!==requestHash) throw new PipelineError("audio_request_changed","The pending audio request no longer matches its saved request.","Ask the administrator to restore the original audio model and request settings before recovery.","needs_review");
+    const deadlineAt=this.audioStartedAt+workerTimeRemainingMs(this.input,this.audioStartedAt);
+    let attempts=previous?.attempts??0,failures:AudioFailure[]=previous?.failures??[];
+    for(;;) {
+      const entry=this.ledger.audio[key];
+      if(entry?.status==="retry_wait") {
+        if(attempts>=MAX_AUDIO_ATTEMPTS) throw audioFailureError("rate_limit");
+        // A persisted wake time survives restart. Never shorten Retry-After.
+        while(this.audioRuntime.now()<entry.nextAttemptAt) {
+          const now=this.audioRuntime.now();
+          if(entry.nextAttemptAt>=deadlineAt || now>=deadlineAt) throw audioFailureError("rate_limit",true);
+          await this.audioRuntime.sleep(Math.min(entry.nextAttemptAt-now,60_000));
+        }
+      }
+      const remaining=deadlineAt-this.audioRuntime.now();
+      if(remaining<=0) {
+        if(entry?.status==="retry_wait") throw audioFailureError("rate_limit",true);
+        throw new PipelineError("time_budget","This job has reached its total processing time limit.","Ask the administrator to review the retained project; retrying cannot extend its original deadline.","needs_review");
+      }
+      if(!entry) this.ledger.audioGenerations++; // One logical generation slot, never refunded/reset by retries.
+      attempts++;
+      this.ledger.audio[key]={status:"reserved",path:relative,hash:"",attempts,requestHash,failures};
+      await this.saveAudio(); // No POST unless its attempt reservation is durable.
+      if(this.audioRuntime.now()>=deadlineAt) throw new PipelineError("time_budget","The job deadline was reached while saving its audio reservation.","Ask the administrator to inspect the retained reservation; no further audio request was sent.","needs_review");
+      let response:Response;
+      try {
+        response=await fetch(url,{method:"POST",headers:{"xi-api-key":process.env.ELEVENLABS_API_KEY!,"content-type":"application/json"},body,signal:AbortSignal.timeout(Math.max(1,Math.min(240_000,deadlineAt-this.audioRuntime.now()))),redirect:"error"});
+      } catch { throw uncertainAudioError(); }
+      if(!response.ok) {
+        const failure=await audioFailure(response,attempts,this.audioRuntime.now());failures=[...failures,failure];
+        const saved={path:relative,hash:"" as const,attempts,requestHash,failures};
+        this.ledger.audio[key]=failure.classification==="rate_limit"
+          ? {...saved,status:"retry_wait",nextAttemptAt:nextAudioAttemptAt(failure,this.audioRuntime.random())}
+          : {...saved,status:failure.classification==="unknown"?"reserved":"rejected"};
+        await this.saveAudio(); // Failure here leaves the remote reservation unresolved.
+        if(failure.classification==="rate_limit") continue;
+        throw audioFailureError(failure.classification);
+      }
+      let bytes:Buffer;
+      try { bytes=Buffer.from(await response.arrayBuffer()); } catch { throw uncertainAudioError(); }
+      if(bytes.length>30_000_000||bytes.length<1000) throw uncertainAudioError();
+      await writeFile(path,bytes); const measured=await this.audioRuntime.probe(path); if(!measured.audio || measured.duration+0.4<duration) throw new Error("Generated audio is incomplete");
+      const levels=await this.audioRuntime.measurements(path);if(!levels.loudness||!Number.isFinite(Number(levels.loudness.input_i)))throw new PipelineError("silent_generated_audio","The generated audio is silent or invalid.","Ask the administrator to inspect the retained provider request; duplicate billing was prevented.","needs_review");
+      // Store bytes before marking payment reusable. A crash in this gap remains unresolved.
+      this.audioCheckpointPending=true;await this.hooks.persist([relative]);
+      this.ledger.audio[key]={status:"completed",path:relative,hash:await hash(path),attempts,requestHash,failures};
+      this.ledger.providerRequests.push({provider:"elevenlabs",operation:kind,requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),songId:response.headers.get("song-id"),units:duration,unit:"seconds"});await this.saveAudio();return relative;
+    }
   }
+  private async saveAudio() { this.audioCheckpointPending=true;await this.save();this.audioCheckpointPending=false; }
   async transcribe(relative:string,duration:number):Promise<Transcript> {
     this.assertResolvedModelBudget();
     const key=createHash("sha256").update(await readFile(join(this.workspace,relative))).digest("hex").slice(0,16),dest=`analysis/transcript-${key}.json`;
