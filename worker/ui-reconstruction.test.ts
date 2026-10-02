@@ -7,7 +7,7 @@ import { compileResearch, evidenceIdentity, researchProduct, sourceFacts, stageD
 import { compileResearchWithRetry } from "./research-review";
 import { compileScript, loadCompletedProductionStages, scriptConstraints, scriptVisibleWords, validateScript, writeScript } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
-import { buildUiDocuments, compileUiDocuments, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDocumentSchema, validateUiActions, validateUiBundle, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
+import { buildUiDocuments, compileUiDocuments, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDesignRequest, uiDocumentReadiness, UI_READINESS_PATH, uiDocumentSchema, validateUiActions, validateUiBundle, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
 import { constrainedScriptSchema, constrainedUiSchema, scriptOutputConfig } from "./model-format";
 import type { Providers } from "./providers";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
@@ -178,7 +178,7 @@ test("UI stage persists reservation, document and completion in order, reuses va
   const events: string[] = [], localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
   const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async (purpose: string, prompt: string, images: { path: string }[], options: unknown) => { calls++; assert.equal(purpose, "ui-design"); assert.match(prompt, /actual product UI/); assert.equal(images.length, 2); assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: 5, inputTokens: 0, outputTokens: 17000 }, maxOutputTokens: 6000, uiConstraints: { targets: [{ id: "notes", sourceAssetIds: ["editor", "graph"], capabilityFactIds: ["fact-2", "fact-3"] }] } }); return { sufficientEvidence: true, reason: "Observed", documentsById: { notes: document() } }; } } as unknown as Providers;
   const bundle = await buildUiDocuments(input, evidence, research, providers, localHooks, root); assert.ok(bundle); validateUiBundle(bundle, input, evidence, research);
-  assert.deepEqual(events, ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
+  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path)), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
   assert.deepEqual(await buildUiDocuments(input, evidence, research, providers, hooks, root), bundle); assert.equal(calls, 1);
   const saved = JSON.parse(await readFile(join(root, "analysis/ui.json"), "utf8")); saved.documents[0].elements[0].text = "Tampered"; await writeFile(join(root, "analysis/ui.json"), JSON.stringify(saved));
   await assert.rejects(loadUiDocuments(input, evidence, research, root), blocked); assert.equal(calls, 1);
@@ -188,14 +188,18 @@ test("UI stage persists reservation, document and completion in order, reuses va
 });
 test("the complete mocked v3 sequence and retained repair keep the same UI bundle and all canonical stage bindings", async t => {
   const root = await workspace(t), calls: string[] = [];
-  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : scriptRaw(); } } as unknown as Providers;
+  const base = scriptRaw(), currentScript = { ...base, creativeDirection: { concept: "focus", evidenceId: "fact-2" }, scenes: [
+    { ...base.scenes[0], storyRole: "product", headline: "Atlas", presentation: { template: "brand", theme: "dark", transition: "cut" }, direction: { job: "context", motion: "reveal" } },
+    ...base.scenes.map((scene, index) => ({ ...scene, direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
+  ] };
+  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : currentScript; } } as unknown as Providers;
   const research = await researchProduct(input, evidence, providers, hooks, root), ui = await buildUiDocuments(input, evidence, research, providers, hooks, root);
   const script = await writeScript(input, evidence, research, providers, hooks, root, ui), plan = await compilePlan(input, evidence, script, hooks, root);
   assert.deepEqual(calls, ["research", "ui-design", "script"]);
   const restored = await loadCompletedProductionStages(input, evidence, root, plan); assert.deepEqual(restored.ui, ui);
-  const perform = await prepareRetainedPlanRepair(input, evidence, scriptRaw(), hooks, root, { plan, findings: [] }), repaired = await perform();
+  const perform = await prepareRetainedPlanRepair(input, evidence, currentScript, hooks, root, { plan, findings: [] }), repaired = await perform();
   assert.equal(repaired.production?.uiSha256, ui!.sha256); assert.deepEqual(repaired.uiDocuments, ui!.documents);
-  const changed = structuredClone(plan); changed.uiDocuments![0].elements[0].text = "Altered controls"; await assert.rejects(prepareRetainedPlanRepair(input, evidence, scriptRaw(), hooks, root, { plan: changed, findings: [] }), blocked);
+  const changed = structuredClone(plan); changed.uiDocuments![0].elements[0].text = "Altered controls"; await assert.rejects(prepareRetainedPlanRepair(input, evidence, currentScript, hooks, root, { plan: changed, findings: [] }), blocked);
 });
 test("new research correction reserves the mandatory UI call/output while the UI stage refuses unaffordable work", async t => {
   const root = await workspace(t), research = fixture().research; let called = 0;
@@ -252,7 +256,7 @@ test("two UI targets use separate exact keyed calls within one 6000-token alloca
   const bundle = await buildUiDocuments(input, evidence, research, providers, { ...hooks, persist: async paths => { events.push(...paths); } }, root);
   assert.ok(bundle); assert.equal(calls, 2); assert.equal(ledger.outputTokens, 8000);
   assert.deepEqual(bundle.documents, documents); validateUiBundle(bundle, input, evidence, research);
-  assert.deepEqual(events, ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
+  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path)), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
   assert.equal(JSON.stringify(research), before);
   assert.deepEqual(await buildUiDocuments(input, evidence, research, providers, hooks, root), bundle); assert.equal(calls, 2);
 });
@@ -365,4 +369,65 @@ test("typing requires the documented editable control to be visible before selec
   ]);
   const unknown = structuredClone(doc); unknown.states[3].visibleElementIds.push("invented-input");
   assert.throws(() => compileUiDocuments({ sufficientEvidence: true, reason: "Unsupported input", documents: [unknown] }, input, evidence, research), /missing, duplicate/);
+});
+
+test("target briefs preserve exact authorized quotes and pixels without repeating another target's facts or DOM", () => {
+  const { research } = twoTargets(), target = research.documentTargets![0];
+  const supplied = structuredClone(evidence);
+  supplied.assets[0].transcript = { text: "Unrelated audio passage must not be repeated as target evidence", words: [] };
+  supplied.uiSources = [{ id: "dom-editor", assetId: "editor", basis: "dom", context: "marketing-example", width: 1000, height: 600, rootSelector: "#private-source-selector", elements: [{ id: "e1", role: "input", rect: { x: .1, y: .1, width: .5, height: .1 }, selector: "#source-only-path", text: "Exact observed text" }], limitations: ["Only one observed state."] }, { id: "dom-graph", assetId: "graph", basis: "pixels", context: "marketing-example", width: 1000, height: 600, elements: [], limitations: ["OTHER TARGET DOM"] }];
+  const before = JSON.stringify({ research, supplied }), request = uiDesignRequest(research, supplied, target, 3000);
+  const context = JSON.parse(request.prompt.split("VERIFIED TARGET SCOPE (only these canonical capability passages are authorized): ")[1].split("\nSELECTED SOURCES:")[0]);
+  assert.deepEqual(context.capabilities, research.facts.filter(fact => target.capabilityFactIds.includes(fact.evidenceId)));
+  assert.deepEqual(context.mechanismSteps, research.story!.mechanism!.steps.filter(step => target.sourceAssetIds.includes(step.assetId)));
+  assert.deepEqual(request.images, [{ path: "assets/editor.png", label: "ACTUAL DOCUMENTATION SOURCE editor" }]);
+  assert.match(request.prompt, /8–12 workflow-critical elements/); assert.match(request.prompt, /20%.*closing JSON/);
+  assert.match(request.prompt, /Exact observed text/);
+  for (const excluded of ["OTHER TARGET DOM", "#private-source-selector", "#source-only-path", supplied.assets[0].transcript.text, research.facts.find(fact => fact.evidenceId === "fact-3")!.quote]) assert.ok(!request.prompt.includes(excluded));
+  assert.equal(JSON.stringify({ research, supplied }), before);
+});
+
+test("UI readiness persists exact source scope and actionable failed validation before another target can be charged", async t => {
+  const root = await workspace(t), { research, documents } = twoTargets(); let calls = 0;
+  const raw = { sufficientEvidence: true, reason: "Observed", documentsById: { notes: structuredClone(documents[0]) } };
+  raw.documentsById.notes.elements[0].textBasis = "example-content";
+  const original = JSON.stringify(raw), events: string[] = [];
+  const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async () => {
+    calls++;
+    const sourceReport = JSON.parse(await readFile(join(root, "analysis/ui-source-readiness.json"), "utf8"));
+    assert.equal(sourceReport.status, "ready_for_documentation"); assert.equal(sourceReport.researchSha256, stageDigest(research));
+    const report = JSON.parse(await readFile(join(root, UI_READINESS_PATH), "utf8"));
+    assert.equal(report.targets[0].status, "requested"); assert.equal(report.targets[0].outputAllocation, 3000);
+    assert.ok(events.includes(UI_READINESS_PATH)); return raw;
+  } } as unknown as Providers;
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, { ...hooks, persist: async paths => { events.push(...paths); } }, root), blocked);
+  const saved = await readFile(join(root, UI_READINESS_PATH), "utf8"), report = JSON.parse(saved);
+  assert.equal(report.status, "stopped"); assert.equal(report.targets[0].status, "failed"); assert.equal(report.targets[1].status, "pending");
+  assert.equal(report.targets[0].responseSha256, stageDigest(raw)); assert.equal(report.targets[0].validation.code, "production_stage_changed");
+  assert.match(report.targets[0].validation.reason, /observed UI state/); assert.equal(calls, 1); assert.equal(JSON.stringify(raw), original);
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), blocked);
+  assert.equal(await readFile(join(root, UI_READINESS_PATH), "utf8"), saved); assert.equal(calls, 1);
+});
+
+test("missing selected still pixels and failed readiness persistence stop before UI generation", async t => {
+  for (const failure of ["missing-preview", "persist"] as const) {
+    const root = await workspace(t), { research } = fixture(), supplied = structuredClone(evidence); let calls = 0;
+    if (failure === "missing-preview") supplied.assets[0].kind = "video";
+    const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => { calls++; } } as unknown as Providers;
+    const localHooks = { ...hooks, persist: async (paths: string[]) => { if (failure === "persist" && paths.includes(UI_READINESS_PATH)) throw new Error("Readiness checkpoint unavailable"); } };
+    await assert.rejects(buildUiDocuments(input, supplied, research, providers, localHooks, root), error => failure === "persist" ? error instanceof Error && error.message === "Readiness checkpoint unavailable" : error instanceof PipelineError && error.status === "needs_input");
+    assert.equal(calls, 0);
+  }
+});
+
+test("successful document readiness distinguishes visible editing from hidden controls without certifying pixel fidelity", async t => {
+  const root = await workspace(t), { research } = fixture(), doc = document();
+  const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => ({ sufficientEvidence: true, reason: "Observed", documentsById: { notes: doc } }) } as unknown as Providers;
+  await buildUiDocuments(input, evidence, research, providers, hooks, root);
+  const report = JSON.parse(await readFile(join(root, UI_READINESS_PATH), "utf8"));
+  assert.equal(report.status, "ready_for_script"); assert.match(report.meaning, /independent rendered quality review/);
+  assert.equal(report.targets[0].documentSha256, stageDigest(doc)); assert.equal(report.targets[0].elementCount, 3);
+  assert.deepEqual(report.targets[0].states[0].editableElementIds, ["note"]);
+  const hidden = structuredClone(doc); hidden.elements.push({ ...hidden.elements[0], id: "hidden-input", initiallyVisible: false });
+  assert.match(uiDocumentReadiness(hidden).warnings[0], /hidden in every documented state/);
 });

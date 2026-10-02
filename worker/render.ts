@@ -3,6 +3,7 @@ import { audioMeasurements, command, ffmpeg, probe, writeJson } from "./media";
 import { PipelineError, type Hooks, type Plan, type Scene } from "./types";
 import { validateTimeline } from "./planning";
 import { renderMotionPicture } from "./motion-render";
+import { soundDirectionReport } from "./audio-direction";
 
 const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
 export function layout(plan:Plan) {
@@ -18,6 +19,8 @@ export function sceneHtml(plan:Plan,scene:Scene,index:number):string {
 export async function render(plan:Plan,workspace:string,hooks:Hooks,pass:number):Promise<string> {
   const timelineErrors=validateTimeline(plan);if(timelineErrors.length)throw new PipelineError("invalid_render_timeline",timelineErrors.join("; "),"The retained plan requires an internal timeline repair.","needs_review");
   const picture=await renderMotionPicture(plan,workspace,pass,hooks),silent=picture.path;
+  await writeJson(join(workspace,"analysis/sound-direction.json"),soundDirectionReport(plan));
+  await hooks.persist(["analysis/sound-direction.json"]);
   const audioInputs:{path:string;start:number;duration:number;source:number;gain:number;role:string}[]=plan.audio.map(a=>({path:plan.assets.find(x=>x.id===a.asset_id)!.path,start:a.start_frame/30,duration:a.duration_frames/30,source:a.source_in_seconds,gain:a.gain_db,role:a.role}));
   for(const scene of plan.scenes.filter(s=>s.preserve_audio)) audioInputs.push({path:plan.assets.find(a=>a.id===scene.asset_id)!.path,start:scene.start_frame/30,duration:scene.duration_frames/30,source:scene.source_in_seconds,gain:0,role:"speech"});
   const mixArgs=["-v","error","-y"],filters:string[]=[];
@@ -46,7 +49,7 @@ export async function render(plan:Plan,workspace:string,hooks:Hooks,pass:number)
   for(const [i,a] of audioInputs.entries()) {
     mixArgs.push("-i",join(workspace,a.path));
     const duck=a.role==="music"&&speechRanges.length?`,volume='${speechRanges.map(s=>`if(between(t,${s.start},${s.start+s.duration}),0.18,`).join("")}1${")".repeat(speechRanges.length)}':eval=frame`:"";
-    const fade=a.role==="music"?`,afade=t=in:st=0:d=0.6,afade=t=out:st=${Math.max(0,a.duration-1.2)}:d=1.2`:a.role==="sfx"?",afade=t=out:st=0.8:d=0.4":"";
+    const fade=a.role==="music"?`,afade=t=in:st=0:d=0.6,afade=t=out:st=${Math.max(0,a.duration-1.2)}:d=1.2`:a.role==="sfx"?(plan.creativeDirection?`,afade=t=in:st=0:d=0.025,afade=t=out:st=${Math.max(0,a.duration-.2)}:d=${Math.min(.2,a.duration)}`:",afade=t=out:st=0.8:d=0.4"):"";
     filters.push(`[${i}:a]atrim=start=${a.source}:duration=${a.duration},asetpts=PTS-STARTPTS,aresample=48000,volume=${a.gain}dB${duck}${fade},adelay=${Math.round(a.start*1000)}|${Math.round(a.start*1000)}[a${i}]`);
   }
   filters.push(audioInputs.map((_,i)=>`[a${i}]`).join("")+`amix=inputs=${audioInputs.length}:normalize=0:duration=longest,apad,atrim=duration=${plan.output.duration_frames/30}[mix]`);

@@ -6,6 +6,7 @@ import { audioMeasurements, command, ffmpeg, frameIndex, hash, probe, writeJson 
 import { validateTimeline } from "./planning";
 import { motionSampleFrames, presentation, transitionFrames } from "./motion-composition";
 import { uiActionSampleFrames } from "./ui-state";
+import { soundCues, soundCueIssues } from "./audio-direction";
 import { motionTimingForPresentation } from "./motion-timing";
 import { motionAssetIds, motionUsage } from "./motion-assets";
 import { assertQualityRetryState, reviewWithSchemaRetry } from "./quality-review";
@@ -50,7 +51,7 @@ export function reviewBatch(plan:Plan,samples:Sample[]){
     const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan);
     return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo"};
   });
-  return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
+  return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,creativeDirection:plan.creativeDirection,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
 }
 export function unexpectedVoice(plan:Plan,heard:Transcript) {
   const windows=plan.scenes.filter(s=>s.preserve_audio).map(s=>({start:s.start_frame/30,end:(s.start_frame+s.duration_frames)/30}));
@@ -87,7 +88,7 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
   const measurements=await audioMeasurements(path),loudness=measurements.loudness;
   const reviewAudio="analysis/final-audio.mp3"; await command(ffmpeg,["-v","error","-y","-i",path,"-vn","-ac","1","-ar","16000","-b:a","48k",join(workspace,reviewAudio)]);
   const heard=await providers.transcribe(reviewAudio,media.duration),speechScenes=plan.scenes.filter(s=>s.preserve_audio);
-  const hasPlannedAudio=plan.audio.some(a=>a.role==="music")&&plan.audio.some(a=>a.role==="sfx");
+  const hasPlannedAudio=plan.audio.some(a=>a.role==="music")&&(plan.creativeDirection?soundCueIssues(plan).length===0&&plan.audio.filter(a=>a.role==="sfx").length===soundCues(plan).length:plan.audio.some(a=>a.role==="sfx"));
   const levels=!!loudness&&Number.isFinite(Number(loudness.input_i))&&Number(loudness.input_i)>=-17&&Number(loudness.input_i)<=-11&&Number(loudness.input_tp)<=-0.3;
   const unexpected=unexpectedVoice(plan,heard),noUnplannedVoice=unexpected.length===0;
   const stems=JSON.parse(await readFile(join(workspace,"analysis/audio-stems.json"),"utf8")) as {speechBalance:{marginDb:number}[];stems:{role:string;lufs:number}[]};

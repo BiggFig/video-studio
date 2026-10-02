@@ -14,7 +14,7 @@ export function uiStageViewport(width:number,height:number,compact=false){
 export interface UiCameraFrame { x:number;y:number;scale:number;targetId:string|null;phase:"wide"|"focus"|"return" }
 
 /** Self-contained, replayable camera; embedded verbatim beside the trusted UI state evaluator. */
-export function expectedUiCamera(document:UiDocument,actions:UiAction[],frame:number,viewport:{width:number;height:number}):UiCameraFrame {
+export function expectedUiCamera(document:UiDocument,actions:UiAction[],frame:number,viewport:{width:number;height:number},directed=false):UiCameraFrame {
   if(!Number.isInteger(frame)||frame<0||!Number.isFinite(viewport.width)||!Number.isFinite(viewport.height)||viewport.width<=0||viewport.height<=0)throw new Error("Invalid UI camera frame or viewport");
   const fit=Math.min(viewport.width/document.viewport.width,viewport.height/document.viewport.height),width=document.viewport.width*fit,height=document.viewport.height*fit;
   const targets=actions.filter(action=>action.targetId).map(action=>document.elements.find(element=>element.id===action.targetId));if(targets.some(target=>!target))throw new Error("UI camera target missing");
@@ -33,7 +33,7 @@ export function expectedUiCamera(document:UiDocument,actions:UiAction[],frame:nu
     const limitX=Math.abs(width*scale-viewport.width)/2,limitY=Math.abs(height*scale-viewport.height)/2;
     const next={x:Math.max(-viewport.width/2-(context.left-.5)*width*scale,Math.min(viewport.width/2-(context.right-.5)*width*scale,Math.max(-limitX,Math.min(limitX,x)))),y:Math.max(-viewport.height/2-(context.top-.5)*height*scale,Math.min(viewport.height/2-(context.bottom-.5)*height*scale,Math.max(-limitY,Math.min(limitY,y)))),scale};
     const progress=Math.max(0,Math.min(1,(action.atFrame-start)/duration)),ease=progress<.5?4*progress**3:1-(-2*progress+2)**3/2;
-    from={x:from.x+(to.x-from.x)*ease,y:from.y+(to.y-from.y)*ease,scale:from.scale+(to.scale-from.scale)*ease};to=next;start=action.atFrame;duration=Math.max(1,Math.min(12,action.kind==="click"?Math.floor(action.durationFrames/2):action.durationFrames));targetId=element.id;phase=scale>1.000001?"focus":"wide";
+    from={x:from.x+(to.x-from.x)*ease,y:from.y+(to.y-from.y)*ease,scale:from.scale+(to.scale-from.scale)*ease};to=next;start=action.atFrame;duration=Math.max(1,directed&&action.kind!=="click"?action.durationFrames:Math.min(12,action.kind==="click"?Math.floor(action.durationFrames/2):action.durationFrames));targetId=element.id;phase=scale>1.000001?"focus":"wide";
   }
   if(focused&&frame>=last){const progress=Math.max(0,Math.min(1,(last-start)/duration)),ease=progress<.5?4*progress**3:1-(-2*progress+2)**3/2;from={x:from.x+(to.x-from.x)*ease,y:from.y+(to.y-from.y)*ease,scale:from.scale+(to.scale-from.scale)*ease};to=wide;start=last;duration=12;phase=frame>=last+12?"wide":"return";if(phase==="wide")targetId=null;}
   const progress=Math.max(0,Math.min(1,(frame-start)/duration)),ease=progress<.5?4*progress**3:1-(-2*progress+2)**3/2;

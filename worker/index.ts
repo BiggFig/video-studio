@@ -18,6 +18,8 @@ import { quality, repairableFindings } from "./quality";
 import { assertCompatibleRuntime } from "./runtime";
 import { RepairBudget } from "./repairs";
 import { workerTimeRemainingMs } from "./deadline";
+import { alignAudioToPlan } from "./audio-direction";
+import { validatePlanCreativeDirection } from "./creative-direction";
 
 const runtimeInputSchema=z.object({runtimeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),runtimeId:z.string().min(1).max(256).optional(),deadlineAt:z.string().max(64).optional()});
 
@@ -85,8 +87,9 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   const script=await writeScript(input,evidence,research,providers,hooks,workspace,uiBundle);
   deadline();
   let plan:Plan;
-  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||plan.production?.uiSha256!==uiBundle?.sha256||(uiBundle&&stageDigest(plan.uiDocuments)!==stageDigest(uiBundle.documents))||plan.audienceLabel!==script.audienceLabel||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research, UI documents and script.");}
+  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||plan.production?.uiSha256!==uiBundle?.sha256||(uiBundle&&stageDigest(plan.uiDocuments)!==stageDigest(uiBundle.documents))||plan.audienceLabel!==script.audienceLabel||stageDigest(plan.creativeDirection??null)!==stageDigest(script.creativeDirection??null)||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research, UI documents and script.");}
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
+  validatePlanCreativeDirection(plan,research,evidence);
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
     if(plan.renderer==="hyperframes"&&plan.uiDocuments?.length){
@@ -102,9 +105,11 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
       deadline();
     }
     const music=await providers.audio("music",plan.music_prompt,plan.output.duration_frames/30),sfx=await providers.audio("sfx",plan.sfx_prompt,1.2);
-    const musicProbe=await probe(join(workspace,music)),sfxProbe=await probe(join(workspace,sfx));
-    plan.assets.push({id:"generated-music",path:music,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; instrumental-only request.",width:0,height:0,duration_seconds:musicProbe.duration,has_audio:true},{id:"generated-sfx",path:sfx,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; no speech requested.",width:0,height:0,duration_seconds:sfxProbe.duration,has_audio:true});
-    plan.audio=[{asset_id:"generated-music",start_frame:0,duration_frames:plan.output.duration_frames,source_in_seconds:0,playback_rate:1,gain_db:-6,role:"music"},{asset_id:"generated-sfx",start_frame:plan.scenes[1].start_frame,duration_frames:36,source_in_seconds:0,playback_rate:1,gain_db:-12,role:"sfx"}];
+    const musicProbe=await probe(join(workspace,music));
+    plan.assets.push({id:"generated-music",path:music,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; instrumental-only request.",width:0,height:0,duration_seconds:musicProbe.duration,has_audio:true});
+    const audio:Plan["audio"]=[{asset_id:"generated-music",start_frame:0,duration_frames:plan.output.duration_frames,source_in_seconds:0,playback_rate:1,gain_db:-6,role:"music"}];
+    if(sfx){const sfxProbe=await probe(join(workspace,sfx));plan.assets.push({id:"generated-sfx",path:sfx,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; no speech requested.",width:0,height:0,duration_seconds:sfxProbe.duration,has_audio:true});audio.push({asset_id:"generated-sfx",start_frame:plan.scenes[1].start_frame,duration_frames:36,source_in_seconds:0,playback_rate:1,gain_db:-12,role:"sfx"});}
+    plan.audio=alignAudioToPlan(plan,audio);
     await savePlan(plan,workspace,hooks);
   }
   const validation=await command(process.env.PYTHON_PATH||"python3",["-X","utf8",join(skillRoot,"scripts/video_tool.py"),"validate",join(workspace,"plan.json")]);

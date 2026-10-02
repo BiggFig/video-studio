@@ -9,6 +9,21 @@ const constraints: ScriptConstraints = {
   roleEvidenceIds: { problem: ["fact-10", "fact-8"], product: ["fact-2", "fact-8", "fact-9", "fact-10", "fact-16"], mechanism: ["fact-10", "fact-16"], outcome: ["fact-8", "fact-9"], differentiator: ["fact-8", "fact-2"], cta: ["fact-8"] },
 };
 
+test("directed transport adds bounded concept and shot data without grammar alternatives", () => {
+  const directed: ScriptConstraints = { ...constraints, uiDocuments: [{ id: "editor", elementIds: ["input"], editableElementIds: ["input"], stateIds: ["initial", "result"], capabilityFactIds: ["fact-10"] }], creativeDirection: { concepts: [{ concept: "focus", evidenceIds: ["fact-10"] }] } };
+  const schema = constrainedScriptSchema(directed) as Schema;
+  assert.deepEqual(schema.properties!.transportVersion.enum, ["flat-script-v2"]);
+  assert.deepEqual(schema.properties!.creativeDirection.properties!.evidenceId.enum, ["fact-10"]);
+  assert.deepEqual(schema.properties!.creativeDirection.properties!.concept.enum, ["focus"]);
+  assert.ok(schema.properties!.scenes.items!.required!.includes("direction"));
+  let unions = 0; const inspect = (node: Schema) => { if (node.anyOf) unions++; if (node.items) inspect(node.items); Object.values(node.properties || {}).forEach(inspect); }; inspect(schema);
+  assert.equal(unions, 0);
+  assert.throws(() => constrainedScriptSchema({ ...directed, creativeDirection: { concepts: [{ concept: "focus", evidenceIds: ["fact-999"] }] } }), /verified facts/);
+  assert.throws(() => constrainedScriptSchema({ ...directed, creativeDirection: { concepts: [] } }), /verified facts/);
+  delete directed.creativeDirection;
+  assert.deepEqual((constrainedScriptSchema(directed) as Schema).properties!.transportVersion.enum, ["flat-script-v1"]);
+});
+
 test("script grammar closes every object and requires all nonoptional fields", () => {
   let objects = 0;
   function inspect(schema: Schema, path = "script") {
@@ -164,4 +179,14 @@ test("two-document script grammar is flat while role citations remain indivisibl
     if (node.items) inspect(node.items); if (node.anyOf) { unions++; node.anyOf.forEach(inspect); }
   };
   inspect(schema); assert.equal(unions, 0); assert.equal(optional, 0);
+});
+
+
+test("correction scene allowance uses supported grammar descriptions and rejects invalid bounds",()=>{
+  for(const uiDocuments of[undefined,[{id:"editor",elementIds:["input"],editableElementIds:["input"],stateIds:["initial"],capabilityFactIds:["fact-10"]}]]){
+    const schema=constrainedScriptSchema({...constraints,uiDocuments,maxScenes:5}) as any;
+    assert.match(schema.properties.scenes.description,/At most 5 scenes/);
+    assert.equal(schema.properties.scenes.maxItems,undefined);
+  }
+  for(const maxScenes of[1,9,2.5,NaN])assert.throws(()=>constrainedScriptSchema({...constraints,maxScenes}),/scene allowance/);
 });

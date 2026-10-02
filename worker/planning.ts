@@ -8,6 +8,7 @@ import { evidenceCatalog, researchProduct, stageDigest, stageFailure, type Resea
 import { explicitPrice, prepareRetainedScriptRepair, prepareScriptRepair, scriptDraftSchema, scriptSchema, scriptVisibleText, scriptVisibleWords, visibleWordCount, writeScript } from "./scripting";
 import { motionTimingForPresentation } from "./motion-timing";
 import { buildUiDocuments, loadUiDocuments, uiExampleCopy, validateUiActions } from "./ui-reconstruction";
+import { alignAudioToPlan, soundCueIssues } from "./audio-direction";
 export { evidenceCatalog } from "./research";
 
 const directorSchema=scriptDraftSchema;
@@ -61,7 +62,7 @@ export async function prepareRetainedPlanRepair(input:WorkerInput,evidence:Evide
 export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknown,hooks:Hooks,workspace:string,repair?:{plan:Plan;findings:Finding[]}):Promise<Plan> {
   if(repair?.plan.production){
     const script=scriptSchema.safeParse(raw),previous=repair.plan.production;
-    if(!script.success||repair.plan.job_id!==input.jobId||script.data.jobId!==input.jobId||script.data.researchSha256!==previous.researchSha256||script.data.evidenceSha256!==previous.evidenceSha256||script.data.uiSha256!==previous.uiSha256||stageDigest(script.data.uiDocuments||null)!==stageDigest(repair.plan.uiDocuments||null))throw stageFailure("A production-bound plan requires a repaired script verified against the same research and evidence.");
+    if(!script.success||repair.plan.job_id!==input.jobId||script.data.jobId!==input.jobId||script.data.researchSha256!==previous.researchSha256||script.data.evidenceSha256!==previous.evidenceSha256||script.data.uiSha256!==previous.uiSha256||stageDigest(script.data.uiDocuments||null)!==stageDigest(repair.plan.uiDocuments||null)||stageDigest(script.data.creativeDirection||null)!==stageDigest(repair.plan.creativeDirection||null))throw stageFailure("A production-bound plan requires a repaired script verified against the same research, creative direction and evidence.");
   }
   const assets=evidence.assets.filter(a=>a.usage==="output"),source=evidence.text+"\n\n"+assets.map(a=>a.transcript?.text||"").join("\n\n"),facts=evidenceCatalog(source);
   const sufficiency=z.object({sufficientEvidence:z.boolean(),reason:z.string()}).parse(raw);
@@ -70,9 +71,10 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
   // summaries without discarding a valid plan; the provider's full raw response
   // is retained independently. Visible copy, fact IDs and timing stay strict.
   const metadata=raw as Record<string,unknown>,bound=(value:unknown,max:number)=>typeof value==="string"?value.slice(0,max):value;
-  const bounded={...metadata,summary:bound(metadata.summary,500),scenes:Array.isArray(metadata.scenes)?metadata.scenes.map(scene=>scene&&typeof scene==="object"?{...scene,purpose:bound(scene.purpose,800),referenceTechnique:bound(scene.referenceTechnique,800)}:scene):metadata.scenes};
-  const draft=directorSchema.parse(bounded);
   const script=scriptSchema.safeParse(raw),current=script.success&&script.data.version>=2;
+  const bounded={...metadata,...(script.success&&script.data.creativeDirection?{creativeDirection:{concept:script.data.creativeDirection.concept,evidenceId:script.data.creativeDirection.evidenceId}}:{}),summary:bound(metadata.summary,500),scenes:Array.isArray(metadata.scenes)?metadata.scenes.map(scene=>scene&&typeof scene==="object"?{...scene,...(script.success&&scene.direction?{direction:{job:scene.direction.job,motion:scene.direction.motion}}:{}),purpose:bound(scene.purpose,800),referenceTechnique:bound(scene.referenceTechnique,800)}:scene):metadata.scenes};
+  const draft=directorSchema.parse(bounded);
+  if(draft.creativeDirection&&!script.success)throw stageFailure("Creative direction requires a compiled source-bound script.");
   if(current&&script.data.jobId!==input.jobId)throw stageFailure("The current script belongs to a different job.");
   if(script.success&&script.data.version===3&&(!script.data.uiDocuments||!script.data.uiSha256||script.data.uiSha256!==stageDigest({version:1,jobId:input.jobId,evidenceSha256:script.data.evidenceSha256,researchSha256:script.data.researchSha256,documents:script.data.uiDocuments})||script.data.audienceLabel!==`For ${script.data.story?.primaryAudience?.text}`))throw stageFailure("The compiled script changed its UI document binding or audience label.");
   if(current&&(!script.data.story||scriptVisibleWords({...draft,audienceLabel:script.data.audienceLabel})>48))throw new PipelineError("invalid_generated_script","The current plan lacks its verified story or exceeds 48 generated visible words.","Inspect the retained script before audio generation. No copy or reading holds were truncated.","needs_review");
@@ -150,14 +152,14 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
     const duration=Math.max(requestedFrames,readingFrames,speech?Math.ceil((asset.duration_seconds||0)*30):0);
     if(asset.kind==="video" && s.sourceInSeconds+duration/30>(asset.duration_seconds||0)+0.04) throw new Error("Planned scene exceeds actual source duration");
     if(s.preserveAudio&&!asset.has_audio) throw new Error("Plan requests audio absent from source");
-    const scene={id:`scene-${i+1}`,start_frame:output.duration_frames,duration_frames:duration,asset_id:asset.id,source_in_seconds:s.sourceInSeconds,playback_rate:1 as const,preserve_audio:s.preserveAudio,fit:"contain" as const,purpose:s.purpose,reference_technique:s.referenceTechnique,headline:s.headline,detail:s.detail,evidence:fact.text,evidence_id:fact.id,...(s.storyRole?{storyRole:s.storyRole}:{}),...(presentation?{presentation}:{}),effects:[{type:"reveal",implementation:presentation?`Trusted frame-driven HTML ${presentation.template} template${presentation.visual?` with ${presentation.visual.kind}`:""}; ${presentation.transition} outgoing transition; source-grounded copy and actual proof media.`:"FFmpeg eased vertical card entrance and restrained scene fade; whole actual source remains contained."}]}; output.duration_frames+=duration; return scene;
+    const scene={id:`scene-${i+1}`,start_frame:output.duration_frames,duration_frames:duration,asset_id:asset.id,source_in_seconds:s.sourceInSeconds,playback_rate:1 as const,preserve_audio:s.preserveAudio,fit:"contain" as const,purpose:s.purpose,reference_technique:s.referenceTechnique,headline:s.headline,detail:s.detail,evidence:fact.text,evidence_id:fact.id,...(s.storyRole?{storyRole:s.storyRole}:{}),...(script.success&&script.data.scenes[i].direction?{direction:script.data.scenes[i].direction}:{}),...(presentation?{presentation}:{}),effects:[{type:"reveal",implementation:presentation?`Trusted frame-driven HTML ${presentation.template} template${presentation.visual?` with ${presentation.visual.kind}`:""}; ${presentation.transition} outgoing transition; source-grounded copy and actual proof media.`:"FFmpeg eased vertical card entrance and restrained scene fade; whole actual source remains contained."}]}; output.duration_frames+=duration; return scene;
   });
   if(output.duration_frames/30>Math.min(300,input.budgets?.maxDurationSeconds||90) || (repair&&output.duration_frames>repair.plan.output.duration_frames)) throw new PipelineError("duration_budget","The plan exceeds this job's duration budget.","Supply a shorter, focused recording or screenshots.","needs_review");
   const brand=current?brandFromEvidence(evidence):undefined;
-  const plan:Plan={version:1,job_id:input.jobId,mode:"create",renderer:scenes.some(scene=>scene.presentation)?"hyperframes":"ffmpeg",output,product:draft.product,summary:draft.summary,accent:current?brand?.accent||"#333333":draft.accent,background:current?(brand&&luminance(brand.background)<.179?"dark":"light"):draft.background,...(brand?{brand}:{}),...(current?{story:script.data.story}:{}),...(script.success&&script.data.version===3?{uiDocuments:script.data.uiDocuments,audienceLabel:script.data.audienceLabel}:{}),assets:[...evidence.assets,...stillBindings],scenes,captions:[],audio:[],music_prompt:repair?.plan.music_prompt||draft.musicPrompt,sfx_prompt:repair?.plan.sfx_prompt||draft.sfxPrompt,assumptions:draft.assumptions};
+  const plan:Plan={version:1,job_id:input.jobId,mode:"create",renderer:scenes.some(scene=>scene.presentation)?"hyperframes":"ffmpeg",output,product:draft.product,summary:draft.summary,accent:current?brand?.accent||"#333333":draft.accent,background:current?(brand&&luminance(brand.background)<.179?"dark":"light"):draft.background,...(brand?{brand}:{}),...(current?{story:script.data.story}:{}),...(script.success&&script.data.creativeDirection?{creativeDirection:script.data.creativeDirection}:{}),...(script.success&&script.data.version===3?{uiDocuments:script.data.uiDocuments,audienceLabel:script.data.audienceLabel}:{}),assets:[...evidence.assets,...stillBindings],scenes,captions:[],audio:[],music_prompt:repair?.plan.music_prompt||draft.musicPrompt,sfx_prompt:repair?.plan.sfx_prompt||draft.sfxPrompt,assumptions:draft.assumptions};
   const binding=z.object({researchSha256:z.string().regex(/^[a-f0-9]{64}$/),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/),uiSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()}).safeParse(raw);
   if(binding.success)plan.production={...binding.data,scriptSha256:stageDigest(raw)};
-  if(repair) { plan.assets.push(...repair.plan.assets.filter(a=>a.kind==="audio")); plan.audio=repair.plan.audio.map(a=>({...a,start_frame:a.role==="sfx"?plan.scenes[1].start_frame:0,duration_frames:a.role==="music"?output.duration_frames:a.duration_frames})); }
+  if(repair) { plan.assets.push(...repair.plan.assets.filter(a=>a.kind==="audio")); plan.audio=alignAudioToPlan(plan,repair.plan.audio); }
   if(current){await writeJson(join(workspace,"analysis/copy-audit.json"),{version:1,scriptSha256:stageDigest(raw),visibleWords:scriptVisibleWords({...draft,audienceLabel:script.data.audienceLabel}),maximumVisibleWords:48,targetSeconds:[20,28],actualSeconds:output.duration_frames/30,scenes:draft.scenes.map((scene,index)=>({sceneId:scenes[index].id,storyRole:scene.storyRole,visibleWords:scriptVisibleText(draft.product,scene,index===0?script.data.audienceLabel:undefined).reduce((sum,text)=>sum+visibleWordCount(text),0),durationFrames:scenes[index].duration_frames}))});await hooks.persist(["analysis/copy-audit.json"]);}
   await savePlan(plan,workspace,hooks); return plan;
 }
@@ -176,7 +178,8 @@ export function validateTimeline(plan:Plan):string[] {
     if(!Number.isInteger(layer.start_frame)||!Number.isInteger(layer.duration_frames)||layer.start_frame<0||layer.duration_frames<=0||layer.start_frame+layer.duration_frames>plan.output.duration_frames)errors.push(`Audio ${i}: invalid or out-of-output frame range`);
     if(!Number.isFinite(layer.source_in_seconds)||layer.source_in_seconds<0||layer.source_in_seconds+layer.duration_frames/30>(asset?.duration_seconds||0)+1/30)errors.push(`Audio ${i}: source range overflow`);
     if(layer.role==="music"&&(layer.start_frame!==0||layer.duration_frames!==plan.output.duration_frames))errors.push(`Audio ${i}: music must cover the full timeline`);
-    if(layer.role==="sfx"&&layer.start_frame!==plan.scenes[1]?.start_frame)errors.push(`Audio ${i}: reveal sound is not aligned with its intended scene`);
+    if(!plan.creativeDirection&&layer.role==="sfx"&&layer.start_frame!==plan.scenes[1]?.start_frame)errors.push(`Audio ${i}: reveal sound is not aligned with its intended scene`);
   }
+  errors.push(...soundCueIssues(plan));
   return errors;
 }

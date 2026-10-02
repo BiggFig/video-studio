@@ -85,6 +85,20 @@ test("eligible replacement images are reserved while adding smaller unused candi
   assert.deepEqual(await again.providers.qualityRepairReserve(value.plan, value.evidence, value.research), full);
 });
 
+test("directed review receives the creative choice and reserves every shot's maximum continuity metadata", () => {
+  const value=fixture(2), legacy=qualityRepairEnvelope(value.plan,value.evidence,value.research);
+  const claim={text:"Verified product facts.",basis:"explicit" as const,evidenceIds:["fact-1"]};
+  value.plan.creativeDirection={version:1,product:"Product",researchSha256:"b".repeat(64),evidenceSha256:"c".repeat(64),audience:claim,mechanism:claim,outcome:claim,cta:claim,workflow:[{action:"Focus the actual UI",evidenceId:"fact-1",assetId:"old-small"}],brand:null,briefSha256:"a".repeat(64),concept:"focus",evidenceId:"fact-1",evidence:"Verified product facts."};
+  for(const scene of value.plan.scenes)scene.direction={version:1,job:"action",motion:"focus",continuityKey:"\0".repeat(300)};
+  const request=context(value), envelope=qualityRepairEnvelope(value.plan,value.evidence,value.research);
+  assert.deepEqual(request.plan.creativeDirection,value.plan.creativeDirection);
+  assert.match(qualityReviewPrompt(request),/CREATIVE DIRECTION:/);
+  assert.match(qualityReviewPrompt(request),/continuityKey/);
+  assert.ok(envelope.prompt.includes(JSON.stringify(value.plan.creativeDirection)));
+  const actualAdded=Buffer.byteLength(JSON.stringify(value.plan.scenes.map(s=>({direction:s.direction}))));
+  assert.ok(envelope.batches[0].variableBytes-legacy.batches[0].variableBytes>=actualAdded-3);
+});
+
 test("small direct count cannot shrink the fallback guarantee and 45k multi-page repair refuses before generation", async t => {
   environment(t, true); const value = fixture(6, "A".repeat(45_000)), { providers } = await provider(t, value);
   let requests = 0;

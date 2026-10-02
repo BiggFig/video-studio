@@ -24,3 +24,20 @@ test("camera reverse/repeated seeks and embedded browser evaluator agree without
  expectedUiCamera(document,actions,190,viewport);assert.deepEqual(expectedUiCamera(document,actions,115,viewport),middle);assert.equal(JSON.stringify(embedded(document,actions,115,viewport)),JSON.stringify(middle));assert.equal(JSON.stringify({document,actions}),before);
  assert.throws(()=>expectedUiCamera(document,[{...actions[0],targetId:"missing"}],70,viewport),/target missing/);assert.throws(()=>expectedUiCamera(document,actions,-1,viewport),/Invalid/);
 });
+
+test("directed camera continues through typing and settles to the same full result without changing legacy motion",()=>{
+ const viewport=uiStageViewport(1920,1080),embedded=runInNewContext(`(${uiCameraEvaluatorSource()})`);
+ const legacy=expectedUiCamera(document,actions,70,viewport);
+ const early=expectedUiCamera(document,actions,55,viewport,true),later=expectedUiCamera(document,actions,70,viewport,true);
+ assert.notDeepEqual(early,later);assert.ok(later.scale<=legacy.scale);
+ assert.deepEqual(expectedUiCamera(document,actions,168,viewport,true),{x:0,y:0,scale:1,targetId:null,phase:"wide"});
+ assert.deepEqual(expectedUiCamera(document,actions,70,viewport),legacy);
+ for(const [width,height]of [[1920,1080],[1080,1920],[1080,1080]]){
+  const view=uiStageViewport(width,height),fit=Math.min(view.width/1000,view.height/600),dw=1000*fit,dh=600*fit;
+  for(let frame=0;frame<200;frame++){
+   const camera=expectedUiCamera(document,actions,frame,view,true);assert.equal(JSON.stringify(embedded(document,actions,frame,view,true)),JSON.stringify(camera));
+   assert.ok(camera.scale>=1&&camera.scale<=1.45);
+   if(camera.targetId){const r=document.elements.find(element=>element.id===camera.targetId)!.rect,left=view.width/2+(r.x-.5)*dw*camera.scale+camera.x,top=view.height/2+(r.y-.5)*dh*camera.scale+camera.y;assert.ok(left>=-1e-6&&top>=-1e-6&&left+r.width*dw*camera.scale<=view.width+1e-6&&top+r.height*dh*camera.scale<=view.height+1e-6,`directed ${width}x${height} frame${frame}`);}
+  }
+ }
+});

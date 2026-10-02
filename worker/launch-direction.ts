@@ -28,5 +28,13 @@ export const launchDirection = {
   },
 } as const;
 
-export const directionForContractVersion = (version: 1 | 2 | 3) => version === 3 ? launchDirection : legacyDirection;
+/** Additive direction contract. Retained v3 bindings continue to hash the unmodified v1 profile. */
+export const productLaunchDirection = {
+  ...launchDirection,
+  id: "grounded-product-direction-v2", version: 2,
+  concept: "Choose one eligible source-bound visual idea from the product's creative brief. Execute it through focus on a documented task, connections between verified concepts, or convergence of two intact actual product panels. These are explanatory staging choices, not new capabilities.",
+  shots: "Assign every shot a concrete hook, context, action, result, payoff or CTA job. Motion must implement that job using a supported primitive. Keep the demonstrated task continuous; never reset its UI merely to fill an outcome beat.",
+  continuity: "A continuity key binds only the same actual UI document or source object. It does not transfer unseen state, invent a data merge, or replace the complete readable final result.",
+} as const;
+export const directionForContractVersion = (version: 1 | 2 | 3, directed = false) => version === 3 ? directed ? productLaunchDirection : launchDirection : legacyDirection;
 export const usesCurrentLaunchDirection = (plan: Pick<Plan, "uiDocuments" | "production">) => !!plan.production?.uiSha256 || !!plan.uiDocuments?.length;

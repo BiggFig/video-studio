@@ -1,8 +1,9 @@
 /** Provider grammar handles shape only; the production compiler still checks all source bindings and limits. */
 type Schema = Record<string, unknown>;
-export interface ScriptConstraints { assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[] }
+export interface ScriptConstraints { maxScenes?: number; assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[]; creativeDirection?: { concepts: { concept: "focus" | "connect" | "consolidate"; evidenceIds: string[] }[] } }
 export interface UiDesignConstraints { targets: { id: string; sourceAssetIds: string[]; capabilityFactIds: string[] }[] }
 export const FLAT_SCRIPT_TRANSPORT_VERSION = "flat-script-v1";
+export const DIRECTED_SCRIPT_TRANSPORT_VERSION = "flat-script-v2";
 const text = { type: "string" };
 const choice = (...values: string[]) => ({ type: "string", enum: values });
 const object = (properties: Record<string, Schema>, optional: string[] = []): Schema => ({ type: "object", properties, required: Object.keys(properties).filter(key => !optional.includes(key)), additionalProperties: false });
@@ -34,7 +35,8 @@ export function scriptOutputConfig(model: string, direct: boolean, policy?: stri
 
 /** Bind narrative choices in the grammar, before the semantic compiler checks actual claims. */
 export function constrainedScriptSchema(constraints: ScriptConstraints): Schema {
-  if (constraints.uiDocuments?.length) return flatUiScriptSchema(constraints);
+  if (constraints.maxScenes !== undefined && (!Number.isSafeInteger(constraints.maxScenes) || constraints.maxScenes < 2 || constraints.maxScenes > 8)) throw new Error("Invalid script scene allowance");
+  if (constraints.uiDocuments?.length) return describeSceneAllowance(flatUiScriptSchema(constraints), constraints.maxScenes);
   const schema = structuredClone(SCRIPT_OUTPUT_SCHEMA) as any;
   const scene = schema.properties.scenes.items, presentation = scene.properties.presentation;
   if (!constraints.assetIds.length || !constraints.selectedFactIds.length) throw new Error("Script grammar requires verified source IDs");
@@ -72,6 +74,13 @@ export function constrainedScriptSchema(constraints: ScriptConstraints): Schema 
   }));
   if (!["mechanism", "outcome", "cta"].every(role => constraints.roleEvidenceIds[role]?.length)) throw new Error("Script grammar requires verified story roles");
   schema.properties.scenes.items = { anyOf: variants };
+  return describeSceneAllowance(schema, constraints.maxScenes);
+}
+
+// Anthropic does not document maxItems support. The compiler enforces this
+// bound for every transport; supported schema descriptions guide generation.
+function describeSceneAllowance(schema: Schema, maxScenes?: number): Schema {
+  if (maxScenes !== undefined) ((schema.properties as Record<string, Schema>).scenes).description = `At most ${maxScenes} scenes. The compiler rejects more before rendering; all mandatory story roles must fit within this allowance.`;
   return schema;
 }
 
@@ -85,7 +94,7 @@ function flatUiScriptSchema(constraints: ScriptConstraints): Schema {
   scene.properties.storyEvidence = choice(...Object.entries(constraints.roleEvidenceIds).flatMap(([role, ids]) => ids.map(id => `${role}:${id}`)));
   scene.properties.assetId = choice(...constraints.assetIds);
   scene.required = Object.keys(scene.properties);
-  schema.properties.transportVersion = choice(FLAT_SCRIPT_TRANSPORT_VERSION);
+  schema.properties.transportVersion = choice(constraints.creativeDirection ? DIRECTED_SCRIPT_TRANSPORT_VERSION : FLAT_SCRIPT_TRANSPORT_VERSION);
   schema.required.push("transportVersion");
   const nullableId = (values: string[]) => choice("", ...new Set(values));
   const action = object({
@@ -105,6 +114,14 @@ function flatUiScriptSchema(constraints: ScriptConstraints): Schema {
       documentId: nullableId(documents.map(document => document.id)), actions: array(action),
     }),
   });
+  if (constraints.creativeDirection) {
+    const concepts = constraints.creativeDirection.concepts;
+    if (!concepts.length || concepts.length > 3 || new Set(concepts.map(value => value.concept)).size !== concepts.length || concepts.some(value => !["focus", "connect", "consolidate"].includes(value.concept) || !value.evidenceIds.length || value.evidenceIds.some(id => !constraints.selectedFactIds.includes(id)))) throw new Error("Creative direction requires distinct supported concepts and verified facts");
+    schema.properties.creativeDirection = object({ concept: choice(...concepts.map(value => value.concept)), evidenceId: choice(...new Set(concepts.flatMap(value => value.evidenceIds))) });
+    schema.required.push("creativeDirection");
+    scene.properties.direction = object({ job: choice("hook", "context", "action", "result", "payoff", "cta"), motion: choice("reveal", "focus", "connect", "consolidate", "hold") });
+    scene.required.push("direction");
+  }
   return schema;
 }
 

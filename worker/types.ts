@@ -2,6 +2,7 @@ import type { InputMode, JobStatus, OutputFormat, StudioLimits, VideoType } from
 import type { ResearchStory } from "./research";
 import type { UiDocument, UiAction } from "./ui-reconstruction";
 import type { UiSource } from "./ui-sources";
+import type { CreativeDirection, ShotDirection } from "./creative-direction";
 
 export type FileInput = { id: string; name: string; kind: "prd" | "asset" | "reference"; url: string; mimeType: string; size?: number };
 export interface WorkerInput {
@@ -44,9 +45,10 @@ export interface Presentation {
 export interface Scene {
   id: string; start_frame: number; duration_frames: number; asset_id: string; source_in_seconds: number;
   playback_rate: 1; preserve_audio: boolean; fit: "contain"; purpose: string; reference_technique: string;
-  headline: string; detail: string; evidence: string; effects: { type: string; implementation: string }[];
+  headline: string; detail: string; evidence: string; evidence_id?: string; effects: { type: string; implementation: string }[];
   presentation?: Presentation;
   storyRole?: "problem" | "product" | "mechanism" | "outcome" | "differentiator" | "cta";
+  direction?: ShotDirection;
 }
 export interface Plan {
   version: 1; job_id: string; mode: "create"; renderer: "ffmpeg" | "hyperframes";
@@ -55,6 +57,7 @@ export interface Plan {
   audienceLabel?: string;
   brand?: { logoAssetId?: string; background: string; foreground: string; accent: string; sourceUrl: string };
   story?: ResearchStory;
+  creativeDirection?: CreativeDirection;
   uiDocuments?: UiDocument[];
   assets: Asset[]; scenes: Scene[]; captions: never[];
   audio: { asset_id: string; start_frame: number; duration_frames: number; source_in_seconds: number; playback_rate: 1; gain_db: number; role: "music" | "sfx" }[];
