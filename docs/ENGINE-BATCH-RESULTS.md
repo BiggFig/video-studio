@@ -4,7 +4,7 @@ Implementation and ownership are tracked in [the ticket batch](ENGINE-BATCH-2026
 
 ## Integrated checks
 
-The final integrated suite passed 352 tests, with 16 environment-specific integration tests skipped. Type checking and the production build passed. A separate opt-in browser/media run passed all 34 tests, including five integration cases skipped by the default suite. Database/storage, PDF and other unrelated opt-in checks were not rerun for this batch. Targeted tests cover research/source bindings, compact UI documentation, creative direction, legacy compatibility, repair continuity, camera bounds in three aspect ratios, sound scheduling and benchmark attribution. Independent agent review found and resolved a sound-repair issue: the generated effect now remains available when one repair removes all scheduled cues and another restores them.
+The integrated suite passed 365 tests, with 21 environment-specific integration tests skipped. Type checking and the production build passed. A separate opt-in browser/media run passed all 34 tests, including five integration cases skipped by the default suite. The new UI inspector's separate opt-in suite passed all 11 tests, including five browser cases skipped by default. Database/storage, PDF and other unrelated opt-in checks were not rerun for this batch. Targeted tests cover research/source bindings, compact UI documentation, creative direction, legacy compatibility, repair continuity, camera bounds in three aspect ratios, sound scheduling and benchmark attribution. Independent agent review found and resolved a sound-repair issue: the generated effect now remains available when one repair removes all scheduled cues and another restores them.
 
 ## Renderer evidence
 
@@ -16,7 +16,7 @@ Observed limitations remain: softer CSS materials than the references' volumetri
 
 | Case | Test performed | Observed result | What remains unproven |
 | --- | --- | --- | --- |
-| Obsidian | Fresh provider-backed URL pipeline | Trial 2 reached a complete audiovisual draft; independent review confirmed UI fidelity/behavior defects. Trials 1 and 3 stopped earlier with retained diagnostics | Complete automatic quality pass and creative quality |
+| Obsidian | Fresh provider-backed URL pipeline | Trial 2 reached a complete audiovisual draft with UI defects. Trial 5 passed research, documentation and scripting on first responses, then found actual UI text clipping before audio | Complete automatic quality pass and creative quality |
 | Excalidraw | Public capture and structural readiness only, no model calls | Three assets, one UI candidate and 25 DOM elements; recognizable empty canvas and tools | Supported audience/workflow/outcome research and performed drawing/result |
 | Example.com | Public capture and structural readiness only, no model calls | Two generic viewports, no product UI or workflow | Automatic semantic insufficient-evidence decision; structural readiness alone correctly does not claim product proof |
 
@@ -68,9 +68,25 @@ Fresh scripts now use `flat-script-v3` and select trusted shot recipes instead o
 
 A separate source-text review confirmed that the composed result `[[I think therefore I am]]` was not literally observed in trial 4. Fresh UI responses now require illustrative source-ui strings to match observed visible text or exact selected-source DOM text. Newly composed results remain allowed as explicitly illustrative example-content. Later-revealed base examples also count toward reading time. Retained responses are not rewritten or retroactively relabeled.
 
+## Fresh automatic trial 5
+
+Workspace: `.local/engine-batch-acceptance-20261002e`. Runtime hash: `7c89be5df749bd4655c7e3517262139e8e40d4dbe2fdad253f69affaeb00e74e`.
+
+Research, UI documentation and the new recipe-based script all passed their first responses. The catalogue contained 39 verified choices; the script identified writers developing interconnected ideas, introduced Obsidian, and demonstrated wikilink entry, choice and result. The source, script, plan and catalogue hashes all verify. This crossed the previous script-binding failure without using a correction call.
+
+The actual browser preflight then found a clipped paragraph in the documented UI. At frame 324 its element had 103 usable pixels of height but needed 137; the final line extended 32.2 pixels below its box. The same clipping occurred at frames 295 and 490. State identity and camera bounds passed. Independent inspection confirmed a genuine layout error, not a font-loading or state-check defect. A separate diagnostic copy increasing the logical box height from 48 to 72 fitted the unchanged text and font; it was not substituted into the failed job.
+
+The untouched run ended `needs_review` / `ui_state_mismatch`, with three model calls, 38,500 input tokens, 6,436 output tokens and zero audio generations. There is no export or delivered-file QC. The benchmark correctly returns `automaticLocalPass: false`. Followup work checks complete UI states in the real browser immediately after documentation, before scripting, and permits one complete measured-layout correction within the original UI output allowance. The final scene/camera preflight remains required.
+
+The implemented inspector uses the production font, trusted HTML/CSS and state resolver. It checks every declared state in both permitted UI scene layouts, saves bounded measured diagnostics and failure images, blocks browser networking and stops on unavailable or invalid measurements. Actual Chromium tests cover landscape, portrait, square, selected styles, text overrides, inert markup, non-text SVG edges and failures beyond diagnostic truncation. The saved trial-5 document fails in all six state/layout combinations; the isolated height-only copy passes, with the original source hash unchanged. Fresh generation cannot bypass these checks by omitting its transport version; historical compilation and completed-stage loads keep their prior behavior.
+
+Correction tests verify exact provider preflight before the durable attempt marker, one attempt only, shared 6,000-token accounting across targets, preserved future script/review reservations, and no paid correction for schema, provenance, unavailable measurement, uncertain provider or exhausted-budget failures. This is a validated repair mechanism, not a claim that the failed trial recovered automatically.
+
 ## Repeatable checks
 
 Run `npm test`, `npm run typecheck`, and `npm run build` for the default regression and deployment checks. The optional browser/media checks use `STUDIO_UI_SOURCE_INTEGRATION=1`, `STUDIO_RESEARCH_CAPTURE_INTEGRATION=1`, and `STUDIO_MEDIA_INTEGRATION=1` with `node --import tsx --test worker/ui-sources.test.ts worker/url-research.test.ts worker/pipeline.test.ts`. These require the local browser/media dependencies; they do not invoke paid creative providers.
+
+Run the early-layout browser suite with `STUDIO_UI_LAYOUT_INTEGRATION=1` and `node --import tsx --test worker/ui-document-layout.test.ts`. Add `STUDIO_UI_LAYOUT_TRIAL5=1` only when the retained local trial-5 workspace exists; that regression reads the original and checks a separate in-memory counterfactual without rewriting it.
 
 A real provider trial is explicitly opt-in: `node --env-file=.env.local --import tsx scripts/acceptance-local.ts --run-paid --url https://obsidian.md/ --workspace .local/<new-run-name>`. Configure the existing Python/media dependencies and provider credentials locally. Use a new workspace after a runtime change, retain every failed run, and freeze worker/skill files for the run's duration. Existing call, token, audio, repair and wall-time limits remain enforced.
 

@@ -7,7 +7,7 @@ import { compileResearch, evidenceIdentity, researchProduct, sourceFacts, stageD
 import { compileResearchWithRetry } from "./research-review";
 import { compileScript, loadCompletedProductionStages, scriptConstraints, scriptVisibleWords, validateScript, writeScript } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
-import { buildUiDocuments, compileUiDocuments, decodeUiTransport, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDesignRequest, uiDocumentReadiness, UI_READINESS_PATH, uiDocumentSchema, uiExampleCopy, validateUiActions, validateUiBundle, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
+import { buildUiDocuments as buildUiDocumentsCurrent, compileUiDocuments, decodeUiTransport, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDesignRequest, uiDocumentReadiness, UI_READINESS_PATH, UI_LAYOUT_RETRY_PATH, uiDocumentSchema, uiExampleCopy, validateUiActions, validateUiBundle, type UiDocumentDependencies, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
 import { constrainedScriptSchema, constrainedUiSchema, scriptOutputConfig, UI_TRANSPORT_VERSION } from "./model-format";
 import { buildShotRecipeCatalog, RECIPE_SCRIPT_TRANSPORT_VERSION } from "./shot-recipes";
 import type { Providers } from "./providers";
@@ -15,6 +15,182 @@ import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./ty
 
 const input: WorkerInput = { jobId: "editable-ui", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "16:9", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200000, maxModelOutputTokens: 30000 } };
 const hooks: Hooks = { persist: async () => {}, state: async () => {}, complete: async () => {} };
+const passedLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (_documents, options) => {
+  const reportPath = `analysis/${options.reportName}.json`;
+  await writeFile(join(options.workspace, reportPath), JSON.stringify({ passed: true, issues: [] }));
+  return { passed: true, reportPath, artifactPaths: [reportPath], issues: [] };
+};
+
+async function layoutCorrectionFixture(t: TestContext, initialUsage = 3000) {
+  const root = await workspace(t), { research } = fixture(), original = document(), corrected = document();
+  original.elements[0].rect.height = .1; corrected.elements[0].rect.height = .2;
+  const keyed = (doc: UiDocument) => ({ transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Exact source scope", documentsById: { notes: doc } });
+  const raw = keyed(original), correctedRaw = keyed(corrected), before = JSON.stringify(raw), events: string[] = [];
+  const ledger = { modelCalls: 1, inputTokens: 1000, outputTokens: 1000, reservedInputTokens: 0, reservedOutputTokens: 0 };
+  let initialCalls = 0, prepared = 0, correctedCalls = 0, inspections = 0;
+  const localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
+  const providers = { ledger, claude: async () => { initialCalls++; ledger.modelCalls++; ledger.outputTokens += initialUsage; return raw; }, prepareClaude: async (_purpose: string, prompt: string, images: { path: string }[], options: any) => {
+    prepared++; events.push("prepared");
+    assert.equal(_purpose, "ui-design"); assert.match(prompt, /UNTRUSTED MODEL OUTPUT/); assert.match(prompt, /TRUSTED MEASURED DIAGNOSTICS/);
+    assert.deepEqual(images, uiDesignRequest(research, evidence, research.documentTargets![0], 6000).images);
+    assert.deepEqual(options.reserve, { calls: 5, inputTokens: 0, outputTokens: 17000 });
+    assert.equal(options.maxOutputTokens, 6000 - initialUsage);
+    assert.deepEqual(options.uiConstraints, uiDesignConstraints(research));
+    await assert.rejects(readFile(join(root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+    return async () => {
+      correctedCalls++; events.push("corrected-call");
+      assert.equal(JSON.parse(await readFile(join(root, UI_LAYOUT_RETRY_PATH), "utf8")).status, "reserved");
+      assert.ok(events.includes(UI_LAYOUT_RETRY_PATH));
+      ledger.modelCalls++; ledger.outputTokens += Math.min(2500, options.maxOutputTokens);
+      return correctedRaw;
+    };
+  } } as unknown as Providers;
+  const inspectLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (documents, options) => {
+    const passed = ++inspections > 1, reportPath = `analysis/${options.reportName}.json`;
+    const issues = passed ? [] : [{ code: "text_overflow" as const, documentId: documents[0].id, stateId: documents[0].states[0].id, elementId: documents[0].elements[0].id, layout: "compact" as const, metrics: { fontSize: 18, clientHeight: 10, scrollHeight: 24 } }];
+    await writeFile(join(root, reportPath), JSON.stringify({ passed, issues })); events.push(`inspect:${options.reportName}`);
+    return { passed, reportPath, artifactPaths: [reportPath], issues };
+  };
+  const run = (dependencies: UiDocumentDependencies = { inspectLayout }) => buildUiDocuments(input, evidence, research, providers, localHooks, root, dependencies);
+  return { root, research, raw, correctedRaw, before, ledger, events, providers, localHooks, inspectLayout, run, get initialCalls() { return initialCalls; }, get prepared() { return prepared; }, get correctedCalls() { return correctedCalls; }, get inspections() { return inspections; } };
+}
+const buildUiDocuments: typeof buildUiDocumentsCurrent = (input, evidence, research, providers, hooks, workspace, dependencies) => buildUiDocumentsCurrent(input, evidence, research, providers, hooks, workspace, { inspectLayout: passedLayout, ...dependencies });
+
+test("measured UI layout gets one preflighted correction, retains both reports and preserves the original response", async t => {
+  const f = await layoutCorrectionFixture(t), bundle = await f.run();
+  assert.deepEqual(bundle!.documents, [f.correctedRaw.documentsById.notes]);
+  assert.equal(f.initialCalls, 1); assert.equal(f.correctedCalls, 1); assert.equal(f.prepared, 1); assert.equal(f.inspections, 2);
+  assert.equal(f.ledger.outputTokens, 6500); assert.equal(JSON.stringify(f.raw), f.before);
+  const marker = JSON.parse(await readFile(join(f.root, UI_LAYOUT_RETRY_PATH), "utf8"));
+  assert.equal(marker.status, "completed"); assert.equal(marker.outcome, "valid"); assert.equal(marker.outputAllocation, 3000);
+  assert.equal(marker.originalResponseSha256, stageDigest(f.raw)); assert.equal(marker.originalDocumentSha256, stageDigest(f.raw.documentsById.notes));
+  const report = JSON.parse(await readFile(join(f.root, UI_READINESS_PATH), "utf8")), target = report.targets[0];
+  assert.equal(target.initialLayout.passed, false); assert.equal(target.correctedLayout.passed, true);
+  assert.notEqual(target.initialLayout.reportPath, target.correctedLayout.reportPath);
+  assert.equal(target.initialLayout.documentSha256, stageDigest(f.raw.documentsById.notes));
+  assert.equal(target.correctedLayout.documentSha256, stageDigest(f.correctedRaw.documentsById.notes));
+  assert.equal(target.responseSha256, stageDigest(f.raw)); assert.equal(target.correctedResponseSha256, stageDigest(f.correctedRaw));
+  const initial = await readFile(join(f.root, target.initialLayout.reportPath), "utf8");
+  assert.equal(JSON.parse(initial).passed, false); assert.equal(marker.layoutReportSha256, stageDigest(JSON.parse(initial)));
+  assert.ok(f.events.indexOf("prepared") < f.events.indexOf(UI_LAYOUT_RETRY_PATH));
+  assert.ok(f.events.indexOf(UI_LAYOUT_RETRY_PATH) < f.events.indexOf("corrected-call"));
+  assert.deepEqual(await f.run({ inspectLayout: async () => { throw Error("Completed stage must not be inspected again"); } }), bundle);
+  assert.equal(f.initialCalls, 1); assert.equal(f.correctedCalls, 1);
+});
+
+test("exhausted UI allocation and rejected exact provider preflight cannot reserve or spend a correction", async t => {
+  for (const initialUsage of [5489, 6000]) {
+    const f = await layoutCorrectionFixture(t, initialUsage);
+    await assert.rejects(f.run(), error => error instanceof PipelineError && error.code === "model_budget");
+    assert.equal(f.initialCalls, 1); assert.equal(f.prepared, 0); assert.equal(f.correctedCalls, 0);
+    await assert.rejects(readFile(join(f.root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+  }
+  for (const message of ["Exact input allowance exhausted", "Remaining call ceiling protects required script and reviews"]) {
+    const f = await layoutCorrectionFixture(t); let preflights = 0;
+    f.providers.prepareClaude = async (_purpose, _prompt, _images, options) => { preflights++; assert.deepEqual(options?.reserve, { calls: 5, inputTokens: 0, outputTokens: 17000 }); throw new PipelineError("model_budget", message, "Inspect retained allowance", "needs_review"); };
+    await assert.rejects(f.run(), error => error instanceof PipelineError && error.code === "model_budget");
+    assert.equal(preflights, 1); assert.equal(f.correctedCalls, 0);
+    await assert.rejects(readFile(join(f.root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+  }
+});
+
+test("schema, provenance, missing transport, insufficient evidence and uncertain initial responses never get layout correction", async t => {
+  for (const failure of ["schema", "scope", "text", "transport", "insufficient", "uncertain"] as const) {
+    const f = await layoutCorrectionFixture(t);
+    if (failure === "schema") f.raw.documentsById.notes.styles[0].fontSize = -1;
+    if (failure === "scope") f.raw.documentsById.notes.capabilityFactIds = ["fact-4"];
+    if (failure === "text") f.raw.documentsById.notes = hiddenResultDocument();
+    if (failure === "transport") delete (f.raw as Partial<typeof f.raw>).transportVersion;
+    if (failure === "insufficient") f.raw.sufficientEvidence = false;
+    if (failure === "uncertain") f.providers.claude = async () => { throw new Error("Provider response lost"); };
+    await assert.rejects(f.run());
+    assert.equal(f.prepared, 0); assert.equal(f.correctedCalls, 0); assert.equal(f.inspections, 0);
+    await assert.rejects(readFile(join(f.root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+  }
+});
+
+test("inspection infrastructure errors and nonfinite metrics never become paid geometry corrections", async t => {
+  for (const failure of ["browser", "metrics"] as const) {
+    const f = await layoutCorrectionFixture(t);
+    const inspectLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (documents, options) => {
+      if (failure === "browser") throw new PipelineError("ui_layout_unavailable", "Browser unavailable", "Inspect runtime", "needs_review");
+      const result = await f.inspectLayout(documents, options);
+      result.issues[0].code = "invalid_metrics" as any;
+      return result;
+    };
+    await assert.rejects(f.run({ inspectLayout }), error => error instanceof PipelineError && error.code === "ui_layout_unavailable");
+    assert.equal(f.prepared, 0); assert.equal(f.correctedCalls, 0);
+    await assert.rejects(readFile(join(f.root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+  }
+});
+
+test("a returned invalid correction or a second measured failure is consumed and cannot repeat", async t => {
+  for (const failure of ["layout", "schema", "scope", "text", "transport"] as const) {
+    const f = await layoutCorrectionFixture(t);
+    if (failure === "schema") f.correctedRaw.documentsById.notes.viewport.width = 0;
+    if (failure === "scope") f.correctedRaw.documentsById.notes.sourceAssetIds = ["missing"];
+    if (failure === "text") f.correctedRaw.documentsById.notes = hiddenResultDocument();
+    if (failure === "transport") delete (f.correctedRaw as Partial<typeof f.correctedRaw>).transportVersion;
+    const inspectLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (documents, options) => {
+      const result = await f.inspectLayout(documents, options);
+      if (!result.issues.length && failure === "layout") {
+        const failed = { ...result, passed: false, issues: [{ code: "text_overflow" as const, documentId: documents[0].id, stateId: documents[0].states[0].id, elementId: documents[0].elements[0].id, layout: "compact" as const, metrics: { scrollHeight: 100, clientHeight: 10 } }] };
+        await writeFile(join(options.workspace, result.reportPath), JSON.stringify(failed)); return failed;
+      }
+      return result;
+    };
+    await assert.rejects(f.run({ inspectLayout })); assert.equal(f.correctedCalls, 1);
+    const saved = await readFile(join(f.root, UI_LAYOUT_RETRY_PATH), "utf8"); assert.equal(JSON.parse(saved).outcome, "invalid");
+    await assert.rejects(f.run(), blocked); assert.equal(f.initialCalls, 1); assert.equal(f.correctedCalls, 1);
+    assert.equal(await readFile(join(f.root, UI_LAYOUT_RETRY_PATH), "utf8"), saved);
+    assert.equal(JSON.stringify(f.raw), f.before);
+  }
+});
+
+test("orphan markers and interrupted correction checkpoints never restart UI spending", async t => {
+  for (const marker of ["{corrupt", JSON.stringify({ status: "reserved" }), JSON.stringify({ status: "completed", outcome: "valid" })]) {
+    const f = await layoutCorrectionFixture(t); await writeFile(join(f.root, UI_LAYOUT_RETRY_PATH), marker);
+    await assert.rejects(f.run(), blocked); assert.equal(f.initialCalls, 0); assert.equal(f.prepared, 0);
+  }
+  for (const failure of ["marker-checkpoint", "provider-uncertain", "completion-checkpoint"] as const) {
+    const f = await layoutCorrectionFixture(t); let markerSaves = 0;
+    const originalPersist = f.localHooks.persist;
+    f.localHooks.persist = async paths => { if (paths.includes(UI_LAYOUT_RETRY_PATH) && ++markerSaves === (failure === "marker-checkpoint" ? 1 : failure === "completion-checkpoint" ? 2 : 99)) throw Error("Checkpoint lost"); await originalPersist(paths); };
+    if (failure === "provider-uncertain") f.providers.prepareClaude = async () => async () => { throw Error("Correction response lost"); };
+    await assert.rejects(f.run(), /lost/);
+    const before = f.initialCalls;
+    await assert.rejects(f.run(), blocked); assert.equal(f.initialCalls, before);
+    if (failure === "marker-checkpoint") assert.equal(f.correctedCalls, 0);
+  }
+});
+
+test("a two-target correction retains the untouched target allocation and refuses actual UI usage over6000", async t => {
+  const root = await workspace(t), { research, documents } = twoTargets(), ledger = { modelCalls: 1, outputTokens: 1000, reservedOutputTokens: 0 };
+  let initialCalls = 0, corrections = 0, inspections = 0;
+  const response = (doc: UiDocument) => ({ transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Scoped", documentsById: { [doc.id]: doc } });
+  const providers = { ledger, claude: async (_purpose: string, _prompt: string, _images: unknown, options: any) => {
+    const index = initialCalls++; assert.equal(options.maxOutputTokens, 3000);
+    ledger.modelCalls++; ledger.outputTokens += index ? 3000 : 1500; return response(documents[index]);
+  }, prepareClaude: async (_purpose: string, _prompt: string, _images: unknown, options: any) => {
+    assert.equal(options.maxOutputTokens, 1500); assert.deepEqual(options.reserve, { calls: 6, inputTokens: 0, outputTokens: 20000 });
+    return async () => { corrections++; ledger.modelCalls++; ledger.outputTokens += 1500; return response(documents[0]); };
+  } } as unknown as Providers;
+  const inspectLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (docs, options) => {
+    const result = await passedLayout(docs, options);
+    if (++inspections === 1) {
+      result.passed = false; result.issues = [{ code: "text_overflow", documentId: docs[0].id, stateId: docs[0].states[0].id, elementId: docs[0].elements[0].id, layout: "compact", metrics: { clientHeight: 10, scrollHeight: 24 } }];
+      await writeFile(join(root, result.reportPath), JSON.stringify(result));
+    }
+    return result;
+  };
+  assert.deepEqual((await buildUiDocuments(input, evidence, research, providers, hooks, root, { inspectLayout }))!.documents, documents);
+  assert.equal(initialCalls, 2); assert.equal(corrections, 1); assert.equal(ledger.outputTokens - 1000, 6000);
+  const over = await layoutCorrectionFixture(t), prepare = over.providers.prepareClaude.bind(over.providers);
+  over.providers.prepareClaude = async (...args) => { const execute = await prepare(...args); return async <T>() => { const response = await execute(); over.ledger.outputTokens += 501; return response as T; }; };
+  await assert.rejects(over.run(), error => error instanceof PipelineError && error.code === "model_budget");
+  assert.equal(JSON.parse(await readFile(join(over.root, UI_LAYOUT_RETRY_PATH), "utf8")).status, "reserved");
+  await assert.rejects(readFile(join(over.root, "analysis/ui.json")), { code: "ENOENT" });
+});
 const evidence: Evidence = { text: "Atlas organizes sources for researchers.\n\nEdit notes and link ideas.\n\nSee relationships in a graph.\n\nDownload Atlas.", assets: ["editor", "graph"].map(id => ({ id, path: `assets/${id}.png`, kind: "image", usage: "output", rights: "Actual fixture source", width: 1000, height: 600 })) };
 const claim = (text: string, fact: string) => ({ text, basis: "explicit", evidenceIds: [fact] });
 function researchRaw() {
@@ -177,9 +353,9 @@ test("flat script transport preserves exact citations, visible copy and actions 
 test("UI stage persists reservation, document and completion in order, reuses valid bytes and refuses incomplete or changed stages", async t => {
   const root = await workspace(t), research = compileResearch(input, evidence, researchRaw(), await evidenceIdentity(input, evidence, root)); let calls = 0;
   const events: string[] = [], localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
-  const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async (purpose: string, prompt: string, images: { path: string }[], options: unknown) => { calls++; assert.equal(purpose, "ui-design"); assert.match(prompt, /actual product UI/); assert.equal(images.length, 2); assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: 5, inputTokens: 0, outputTokens: 17000 }, maxOutputTokens: 6000, uiConstraints: { targets: [{ id: "notes", sourceAssetIds: ["editor", "graph"], capabilityFactIds: ["fact-2", "fact-3"] }] } }); return { sufficientEvidence: true, reason: "Observed", documentsById: { notes: document() } }; } } as unknown as Providers;
+  const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async (purpose: string, prompt: string, images: { path: string }[], options: unknown) => { calls++; assert.equal(purpose, "ui-design"); assert.match(prompt, /actual product UI/); assert.equal(images.length, 2); assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: 5, inputTokens: 0, outputTokens: 17000 }, maxOutputTokens: 6000, uiConstraints: { targets: [{ id: "notes", sourceAssetIds: ["editor", "graph"], capabilityFactIds: ["fact-2", "fact-3"] }] } }); return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: document() } }; } } as unknown as Providers;
   const bundle = await buildUiDocuments(input, evidence, research, providers, localHooks, root); assert.ok(bundle); validateUiBundle(bundle, input, evidence, research);
-  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path)), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
+  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path) && !path.startsWith("analysis/ui-layout-")), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
   assert.deepEqual(await buildUiDocuments(input, evidence, research, providers, hooks, root), bundle); assert.equal(calls, 1);
   const saved = JSON.parse(await readFile(join(root, "analysis/ui.json"), "utf8")); saved.documents[0].elements[0].text = "Tampered"; await writeFile(join(root, "analysis/ui.json"), JSON.stringify(saved));
   await assert.rejects(loadUiDocuments(input, evidence, research, root), blocked); assert.equal(calls, 1);
@@ -194,7 +370,7 @@ test("the complete mocked v3 sequence and retained repair keep the same UI bundl
     ...base.scenes.map((scene, index) => ({ ...scene, ...(index === 1 ? { presentation: { ...scene.presentation, visual: { kind: "showcase" } } } : {}), direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
   ] };
   let recipeResponse: unknown;
-  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; } } as unknown as Providers;
+  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; } } as unknown as Providers;
   const research = await researchProduct(input, evidence, providers, hooks, root), ui = await buildUiDocuments(input, evidence, research, providers, hooks, root);
   const catalog = buildShotRecipeCatalog(research, evidence, ui!);
   recipeResponse = { ...currentScript, transportVersion: RECIPE_SCRIPT_TRANSPORT_VERSION, scenes: currentScript.scenes.map(scene => {
@@ -261,12 +437,12 @@ test("two UI targets use separate exact keyed calls within one 6000-token alloca
     assert.equal(JSON.parse(await readFile(join(root, "analysis/ui-state.json"), "utf8")).status, "reserved");
     await assert.rejects(readFile(join(root, "analysis/ui.json")), { code: "ENOENT" });
     ledger.modelCalls++; ledger.outputTokens += 3000;
-    return { sufficientEvidence: true, reason: "Observed target", documentsById: { [target.id]: documents[index] } };
+    return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed target", documentsById: { [target.id]: documents[index] } };
   } } as unknown as Providers;
   const bundle = await buildUiDocuments(input, evidence, research, providers, { ...hooks, persist: async paths => { events.push(...paths); } }, root);
   assert.ok(bundle); assert.equal(calls, 2); assert.equal(ledger.outputTokens, 8000);
   assert.deepEqual(bundle.documents, documents); validateUiBundle(bundle, input, evidence, research);
-  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path)), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
+  assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path) && !path.startsWith("analysis/ui-layout-")), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
   assert.equal(JSON.stringify(research), before);
   assert.deepEqual(await buildUiDocuments(input, evidence, research, providers, hooks, root), bundle); assert.equal(calls, 2);
 });
@@ -282,7 +458,7 @@ test("the final UI target receives unused actual output while total UI usage sta
       assert.deepEqual(options.reserve, { calls: index ? 5 : 6, inputTokens: 0, outputTokens: index ? 17000 : 20000 });
       assert.equal(ledger.outputTokens + allocation + options.reserve.outputTokens, startOutput + 23000);
       ledger.outputTokens += index ? allocation : firstUsage;
-      return { sufficientEvidence: true, reason: "Observed target", documentsById: { [documents[index].id]: documents[index] } };
+      return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed target", documentsById: { [documents[index].id]: documents[index] } };
     } } as unknown as Providers;
     const bundle = await buildUiDocuments(input, evidence, research, providers, hooks, root);
     assert.deepEqual(bundle?.documents, documents); assert.equal(calls, 2); assert.equal(ledger.outputTokens - startOutput, 6000);
@@ -294,13 +470,13 @@ test("invalid or over-cap UI usage fails closed without replenishing a partial s
   for (const delta of [-1, 0.5, NaN, Infinity, 3001, 6001]) {
     const root = await workspace(t), { research, documents } = twoTargets(); let calls = 0;
     const ledger = { outputTokens: 2000, reservedOutputTokens: 0 };
-    const providers = { ledger, claude: async () => { calls++; ledger.outputTokens += delta; return { sufficientEvidence: true, reason: "Observed", documentsById: { notes: documents[0] } }; } } as unknown as Providers;
+    const providers = { ledger, claude: async () => { calls++; ledger.outputTokens += delta; return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: documents[0] } }; } } as unknown as Providers;
     await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), error => error instanceof PipelineError && error.code === "model_budget");
     assert.equal(calls, 1); await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), blocked); assert.equal(calls, 1);
   }
   const root = await workspace(t), { research, documents } = twoTargets(); let calls = 0;
   const ledger = { outputTokens: 2000, reservedOutputTokens: 0 };
-  const providers = { ledger, claude: async () => { const index = calls++; ledger.outputTokens += index ? 3835 : 2166; return { sufficientEvidence: true, reason: "Observed", documentsById: { [documents[index].id]: documents[index] } }; } } as unknown as Providers;
+  const providers = { ledger, claude: async () => { const index = calls++; ledger.outputTokens += index ? 3835 : 2166; return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { [documents[index].id]: documents[index] } }; } } as unknown as Providers;
   await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), error => error instanceof PipelineError && error.code === "model_budget");
   assert.equal(calls, 2); await assert.rejects(readFile(join(root, "analysis/ui.json")), { code: "ENOENT" });
   await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), blocked); assert.equal(calls, 2);
@@ -323,7 +499,7 @@ test("a partial two-target UI stage cannot repeat after a lost or invalid second
       if (index === 1 && failure === "lost") throw new Error("Second target response lost");
       const doc = structuredClone(documents[index]);
       if (index === 1) doc.capabilityFactIds = ["fact-2"];
-      return { sufficientEvidence: true, reason: "Observed target", documentsById: { [doc.id]: doc } };
+      return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed target", documentsById: { [doc.id]: doc } };
     } } as unknown as Providers;
     await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), failure === "lost" ? /Second target response lost/ : blocked);
     assert.equal(calls, 2); assert.equal(JSON.parse(await readFile(join(root, "analysis/ui-state.json"), "utf8")).status, "reserved");
@@ -336,7 +512,7 @@ test("wrong target keys and borrowed capabilities stop before another UI call", 
   for (const kind of ["extra-key", "scope", "array", "refusal"] as const) {
     const root = await workspace(t), { research, documents } = twoTargets(); let calls = 0;
     const doc = structuredClone(documents[0]); if (kind === "scope") doc.capabilityFactIds.push("fact-3");
-    const response = kind === "refusal" ? { sufficientEvidence: false, reason: "Required UI is unreadable" } : kind === "array" ? { sufficientEvidence: true, reason: "Wrong transport", documents: [doc] } : { sufficientEvidence: true, reason: "Observed", documentsById: { notes: doc, ...(kind === "extra-key" ? { "graph-view": documents[1] } : {}) } };
+    const response = kind === "refusal" ? { sufficientEvidence: false, reason: "Required UI is unreadable" } : kind === "array" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Wrong transport", documents: [doc] } : { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: doc, ...(kind === "extra-key" ? { "graph-view": documents[1] } : {}) } };
     const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => { calls++; return response; } } as unknown as Providers;
     await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), error => error instanceof PipelineError && (kind === "refusal" ? error.status === "needs_input" : ["production_stage_changed", "invalid_ui_document"].includes(error.code)));
     assert.equal(calls, 1);
@@ -399,7 +575,7 @@ test("target briefs preserve exact authorized quotes and pixels without repeatin
 
 test("UI readiness persists exact source scope and actionable failed validation before another target can be charged", async t => {
   const root = await workspace(t), { research, documents } = twoTargets(); let calls = 0;
-  const raw = { sufficientEvidence: true, reason: "Observed", documentsById: { notes: structuredClone(documents[0]) } };
+  const raw = { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: structuredClone(documents[0]) } };
   raw.documentsById.notes.elements[0].textBasis = "example-content";
   const original = JSON.stringify(raw), events: string[] = [];
   const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async () => {
@@ -432,10 +608,10 @@ test("missing selected still pixels and failed readiness persistence stop before
 
 test("successful document readiness distinguishes visible editing from hidden controls without certifying pixel fidelity", async t => {
   const root = await workspace(t), { research } = fixture(), doc = document();
-  const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => ({ sufficientEvidence: true, reason: "Observed", documentsById: { notes: doc } }) } as unknown as Providers;
+  const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => ({ transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: doc } }) } as unknown as Providers;
   await buildUiDocuments(input, evidence, research, providers, hooks, root);
   const report = JSON.parse(await readFile(join(root, UI_READINESS_PATH), "utf8"));
-  assert.equal(report.status, "ready_for_script"); assert.match(report.meaning, /independent rendered quality review/);
+  assert.equal(report.status, "ready_for_script"); assert.match(report.meaning, /actual browser layout checks/); assert.match(report.meaning, /independent quality review/);
   assert.equal(report.targets[0].documentSha256, stageDigest(doc)); assert.equal(report.targets[0].elementCount, 3);
   assert.deepEqual(report.targets[0].states[0].editableElementIds, ["note"]);
   const hidden = structuredClone(doc); hidden.elements.push({ ...hidden.elements[0], id: "hidden-input", initiallyVisible: false });

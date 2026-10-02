@@ -49,6 +49,8 @@ Reduce redundant UI response data and focus reconstruction on the actual workflo
 Acceptance:
 - Compact documentation retains required source, capability and state validation.
 - Observed text and newly authored sample input are classified correctly.
+- Fresh UI documents are measured with the production browser/font/layout rules before scripting. A confirmed layout failure may receive one complete correction within the original 6,000-output-token UI allowance and remaining job budget; original responses and measurements remain retained.
+- Provider ambiguity, invalid provenance, an exhausted allowance or an already reserved correction cannot trigger another paid attempt.
 - Real historical rejection cases receive meaningful regression coverage.
 - A fresh automatic URL trial reaches scripting, or records an explicit remaining failure without promoting an invalid response.
 
