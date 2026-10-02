@@ -98,6 +98,41 @@ test("a missing immutable launch result spends neither script correction nor sem
   assert.equal(calls, 0); await assert.rejects(readFile(join(w.workspace, SCRIPT_RETRY_PATH)), { code: "ENOENT" });
 });
 
+test("unsupported generated speed qualifiers use one correction and are checked before semantic review", async t => {
+  for (const fixed of [true, false]) {
+    const f = fixture(), w = await setup(t), bad = structuredClone(f.raw); bad.scenes[1].headline = "Edit a note instantly";
+    let corrections = 0, reviews = 0;
+    const providers = { ledger: w.ledger, prepareClaude: async (purpose: string, prompt: string) => {
+      if (purpose === "script") { assert.match(prompt, /speedQualifierIssues/); assert.match(prompt, /unsupported_source_speed_qualifier/); return async () => { corrections++; return fixed ? f.raw : bad; }; }
+      return async () => { reviews++; return verdict(buildWorkflowContext(f.script, f.ui)); };
+    } } as unknown as Providers;
+    const options = { ...w, input, evidence, research: f.research, providers, prompt: "Immutable source", ui: f.ui, directed: true, recipes: true, workflow: true as const };
+    if (fixed) await compileScriptWithRetry(bad, options);
+    else await assert.rejects(compileScriptWithRetry(bad, options), error => error instanceof PipelineError && error.code === "invalid_generated_script");
+    assert.equal(corrections, 1); assert.equal(reviews, fixed ? 1 : 0);
+    const diagnostic = JSON.parse(await readFile(join(w.workspace, SCRIPT_REJECTION_PATH), "utf8"));
+    assert.ok(diagnostic.diagnostics.speedQualifierIssues.some((issue: { evidenceId: string }) => issue.evidenceId === "fact-2"));
+    await assert.rejects(compileScriptWithRetry(bad, options), blocked); assert.equal(corrections, 1);
+  }
+});
+
+test("generated repairs reject unsupported speed copy before review while retained compilation stays compatible", async t => {
+  const f = fixture(), w = await setup(t);
+  const original = await gateWorkflowScript(f.script, { ...w, input, ui: f.ui, reserve: qc, providers: { ledger: w.ledger, prepareClaude: async () => async () => verdict(buildWorkflowContext(f.script, f.ui)) } as unknown as Providers });
+  const plan = await compilePlan(input, evidence, original, w.hooks, w.workspace), bad = structuredClone(f.raw); bad.scenes[1].headline = "Edit a note immediately";
+  // Historical parsing alone does not acquire this new generation-only rule.
+  assert.equal(compileScript(bad, input, evidence, f.research, { plan, findings: [] }, f.ui).scenes[1].headline, bad.scenes[1].headline);
+  let generated = 0, reviews = 0;
+  const providers = { ledger: w.ledger, prepareClaude: async (purpose: string) => {
+    if (purpose !== "script") { reviews++; throw Error("Invalid copy must not reach semantic preflight"); }
+    return async () => { generated++; return bad; };
+  } } as unknown as Providers;
+  const perform = await prepareScriptRepair(input, evidence, f.research, providers, w.hooks, w.workspace, { plan, findings: [] }, qc, f.ui);
+  await assert.rejects(perform(), error => error instanceof PipelineError && error.code === "invalid_generated_script");
+  assert.equal(generated, 1); assert.equal(reviews, 0);
+  await assert.rejects(readFile(join(w.workspace, SCRIPT_RETRY_PATH)), { code: "ENOENT" });
+});
+
 test("a backward outcome spends only the existing script correction before semantic review", async t => {
   const f = fixture(true), w = await setup(t), launch = { ...input, videoType: "launch" as const }, raw = structuredClone(f.raw);
   const catalog = buildShotRecipeCatalog(f.research, evidence, f.ui), proof = catalog.recipes.find(recipe => recipe.storyRole === "outcome" && recipe.evidenceId === "fact-3" && recipe.template === "proof" && recipe.visual.kind === "showcase");
