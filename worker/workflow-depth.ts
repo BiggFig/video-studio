@@ -96,13 +96,26 @@ function permittedBeforeStep(document: UiDocument, actions: UiAction[], confirma
 export function launchSequenceInventory(documents: UiDocument[]) {
   return documents.flatMap(document => {
     const inspection = inspectLaunchResult(document); if (!inspection.result) return [];
-    const initial = expectedUiState(document, [], 0), declared = snapshot(document, inspection.result.beforeStateId);
-    return [{ documentId: document.id, ...inspection.result, initialStateId: initial.stateId, initialContextAllowsDirectClick: initial.stateId === inspection.result.beforeStateId || sameUiClickConfirmationContext(document, initial, declared, inspection.result.confirmationElementId) }];
+    const result = inspection.result, initial = expectedUiState(document, [], 0), declared = snapshot(document, result.beforeStateId);
+    const initialContextAllowsDirectClick = initial.stateId === result.beforeStateId || sameUiClickConfirmationContext(document, initial, declared, result.confirmationElementId);
+    // This inventory offers source-bound actions, not automatic edits to a draft.
+    // Validate a legal timing example before exposing timing-free instructions.
+    let directStartActions: Omit<UiAction, "atFrame" | "durationFrames">[] | undefined;
+    if (initialContextAllowsDirectClick) {
+      const candidate: UiAction[] = [{ kind: "click", atFrame: 30, durationFrames: 6, targetId: result.confirmationElementId, evidenceId: result.evidenceIds[0] }, { kind: "state", atFrame: 42, durationFrames: 1, stateId: result.afterStateId, evidenceId: result.evidenceIds[0] }];
+      try {
+        validateUiActions(document, candidate);
+        if (!uiActionBehaviorIssues(document, candidate, { rejectImplicitTypedReset: true, rejectUnsupportedGraphicCreation: true }).length) directStartActions = candidate.map(({ atFrame: _atFrame, durationFrames: _durationFrames, ...action }) => action);
+      } catch { /* An unavailable direct sequence must not be advertised. */ }
+    }
+    return [{ documentId: document.id, ...result, initialStateId: initial.stateId, initialContextAllowsDirectClick, ...(directStartActions ? { directStartActions } : {}) }];
   });
 }
 
+export const launchDepthInstruction = "Demonstrate at least one declared terminalResult in one continuous ui-demo scene. When initialContextAllowsDirectClick is true, the initial context already satisfies the before-context: directly click confirmationElementId, then apply afterStateId using its evidenceIds. No visit to beforeStateId is required. Prefer the trusted directStartActions when supplied; author their legal timing without adding a cosmetic or no-op state visit. Otherwise reach the documented before-context through a genuinely visible supported change before confirming. Preserve the exact afterStateId and resultElementIds through the final reading hold. Pointer-only, query entry, option highlighting or clearing alone cannot satisfy this minimum launch requirement. Never invent a selected style or change documents. If no supported complete sequence exists, return sufficientEvidence:false.";
+
 export function launchSequenceRequest(documents: UiDocument[]): string {
-  return `MANDATORY LAUNCH SEQUENCE: Keep at least one complete source-defined before-context → confirmation → terminal-result sequence in a continuous UI scene. These are immutable document IDs, not new states. initialContextAllowsDirectClick permits a click without a cosmetic prehighlight; only the named clicked control's selected colors may differ. All surrounding text, visibility and styling must match the documented context. Otherwise reach the documented beforeStateId with a real permitted visible change. Never add a no-op state transition. Preserve the exact terminal result and reading hold, a separate required outcome/result-or-payoff beat, and the final CTA; fixing UI choreography is not a reason to delete story roles. Respect all action, copy, reading and frame limits. SOURCE-BOUND SEQUENCES: ${JSON.stringify(launchSequenceInventory(documents))}\n`;
+  return `MANDATORY LAUNCH SEQUENCE: ${launchDepthInstruction} These are immutable document IDs, not new states. The direct-click exception permits only the named clicked control's optional selected colors; all surrounding text, visibility and styling must match the documented context. Preserve a separate required outcome/result-or-payoff beat and the final CTA; fixing UI choreography is not a reason to delete story roles. Respect all action, copy, reading and frame limits. SOURCE-BOUND SEQUENCES: ${JSON.stringify(launchSequenceInventory(documents))}\n`;
 }
 
 /** Require actual scheduled confirmation -> declared result, persistent through all later states. */

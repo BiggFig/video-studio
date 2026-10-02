@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { stageDigest, type Research } from "./research";
 import { compileScript, scriptRequest, type Script } from "./scripting";
 import type { UiDocument } from "./ui-reconstruction";
-import { assertLaunchWorkflowDepth, assertLaunchOutcomeContinuity, inspectLaunchResult, launchResultCopy, launchSequenceInventory, LaunchDepthRejected, LaunchOutcomeRejected, type TerminalResult } from "./workflow-depth";
+import { assertLaunchWorkflowDepth, assertLaunchOutcomeContinuity, inspectLaunchResult, launchResultCopy, launchSequenceInventory, launchDepthInstruction, LaunchDepthRejected, LaunchOutcomeRejected, type TerminalResult } from "./workflow-depth";
 import { buildWorkflowContext, workflowTaskEvidence } from "./workflow-coherence";
 import { gateWorkflowScript, loadWorkflowScript } from "./workflow-stage";
 import { PipelineError, type Evidence, type WorkerInput } from "./types";
@@ -15,6 +15,8 @@ import { sameEffectiveUiState, sameUiClickConfirmationContext } from "./script-u
 import { expectedUiState } from "./ui-state";
 import { buildShotRecipeCatalog, launchOutcomeRecipeGuidance } from "./shot-recipes";
 import { workflowArtifactPaths } from "./workflow-stage";
+import { uiActionBehaviorIssues } from "./script-ui-behavior";
+import { validateUiActions } from "./ui-reconstruction";
 
 function fixture(complete = true) {
   const rect = { x: .1, y: .1, width: .8, height: .1 }, source = "source";
@@ -113,6 +115,18 @@ test("a genuine before-context mismatch reports exact IDs and only a permitted v
     assert.deepEqual(issue.permittedMissingStep, { kind: "state", stateId: "selected", evidenceId: "fact-1", insertBeforeActionId: "action-2", reason: "documented_visible_state_change" });
     return true;
   });
+});
+
+test("trusted direct-start inventory offers only validated source actions and does not edit a script", () => {
+  const f = fixture(), before = JSON.stringify(f.script), direct = launchSequenceInventory([f.document])[0];
+  assert.equal(direct.initialContextAllowsDirectClick, true);
+  assert.deepEqual(direct.directStartActions, [{ kind: "click", targetId: "choice", evidenceId: "fact-1" }, { kind: "state", stateId: "completed", evidenceId: "fact-1" }]);
+  const timed = direct.directStartActions!.map((action, index) => ({ ...action, atFrame: index ? 42 : 30, durationFrames: index ? 1 : 6 }));
+  validateUiActions(f.document, timed); assert.deepEqual(uiActionBehaviorIssues(f.document, timed), []);
+  assert.equal(JSON.stringify(f.script), before);
+  f.document.terminalResult.beforeStateId = "selected"; // A genuinely different query context.
+  const unavailable = launchSequenceInventory([f.document])[0];
+  assert.equal(unavailable.initialContextAllowsDirectClick, false); assert.equal(unavailable.directStartActions, undefined);
 });
 
 test("equivalence ignores pointer and hidden values but retains visible provenance and caret", () => {
@@ -296,5 +310,34 @@ test("trial j direct click and a labelled manual hover control reach the same re
   actions.splice(clickIndex, 0, { kind: "state", stateId: "state-hover", targetId: "", text: "", atFrame, durationFrames: 1, evidenceId: "fact-10" });
   assert.equal(assertLaunchWorkflowDepth(compileScript(manual, input, evidence, research, undefined, ui, options), ui).length, 1);
   assert.throws(() => compileScript(values[5], input, evidence, research, undefined, ui, options), /distinct result or payoff job/);
+  for (const [index, path] of paths.entries()) assert.deepEqual(await readFile(join(root, path)), bytes[index]);
+});
+
+test("trial l no-op drafts remain invalid; a manual remove-only direct-start control compiles without changing retained responses", { skip: process.env.STUDIO_WORKFLOW_RETAINED_TEST !== "1" }, async () => {
+  const root = join(process.cwd(), ".local/engine-batch-acceptance-20261002l"), paths = ["acceptance-provenance.json", "analysis/evidence.json", "analysis/research.json", "analysis/ui.json", "analysis/model-3-script.json", "analysis/model-4-script.json", "analysis/script-response-rejection.json"];
+  const bytes = await Promise.all(paths.map(path => readFile(join(root, path)))), values = bytes.map(value => JSON.parse(value.toString()));
+  const input = values[0].input as WorkerInput, evidence = values[1] as Evidence, research = values[2] as Research, ui = { documents: values[3].documents as UiDocument[], sha256: stageDigest(values[3]) }, options = { requireDirection: true, requireRecipes: true, maxScenes: 6 };
+  for (const raw of values.slice(4, 6)) assert.throws(() => compileScript(raw, input, evidence, research, undefined, ui, options), error => error instanceof PipelineError && error.code === "invalid_generated_script");
+  assert.ok(values[6].diagnostics.behaviorIssues.some((issue: { code: string }) => issue.code === "state_has_no_visible_change"));
+  const inventory = launchSequenceInventory(ui.documents)[0];
+  assert.equal(inventory.initialContextAllowsDirectClick, true);
+  assert.deepEqual(inventory.directStartActions, [{ kind: "click", targetId: "item-1", evidenceId: "fact-10" }, { kind: "state", stateId: "state-result", evidenceId: "fact-10" }]);
+  // Explicitly manual offline control: remove the rejected no-op, never rewrite a provider artifact.
+  const manual = structuredClone(values[4]); manual.scenes[2].presentation.actions.shift();
+  const compiled = compileScript(manual, input, evidence, research, undefined, ui, options);
+  assert.equal(assertLaunchWorkflowDepth(compiled, ui).length, 1);
+  assert.equal(assertLaunchOutcomeContinuity(compiled, ui).completedWorkflows.length, 1);
+  const prompt = scriptRequest(input, evidence, research, undefined, ui, true, true);
+  assert.equal(prompt.includes("Reach its beforeStateId"), false);
+  assert.ok(prompt.includes(`LAUNCH DEPTH REQUIREMENT: ${launchDepthInstruction}`));
+  assert.ok(prompt.includes("No visit to beforeStateId is required."));
+  assert.ok(prompt.indexOf('"directStartActions"') < prompt.indexOf("Write the on-screen script"));
+  // A second explicit manual control retains the correction's own concept binding;
+  // the remaining scene evidence still executes that fact through the UI proof.
+  const correctedControl = structuredClone(values[5]); correctedControl.scenes[2].presentation.actions.shift();
+  const correctedCompiled = compileScript(correctedControl, input, evidence, research, undefined, ui, options);
+  assert.equal(correctedCompiled.creativeDirection!.evidenceId, values[5].creativeDirection.evidenceId);
+  assert.equal(assertLaunchWorkflowDepth(correctedCompiled, ui).length, 1);
+  assert.equal(assertLaunchOutcomeContinuity(correctedCompiled, ui).completedWorkflows.length, 1);
   for (const [index, path] of paths.entries()) assert.deepEqual(await readFile(join(root, path)), bytes[index]);
 });
