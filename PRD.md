@@ -156,7 +156,7 @@ This section defines responsibilities. Hosting vendor selection and implementati
 
 | Component | Responsibility |
 |---|---|
-| Web application and API | Private-beta access, form validation, job submission, status, preview, and download |
+| Web application and API | Public studio entry with private workspace ownership, form validation, job submission, status, preview, and download |
 | Database | Users, ownership, job states, source metadata, output locations, costs, and failure reasons |
 | Private object storage | Uploaded assets, captured visuals, intermediate files, and finished videos |
 | Durable job queue | Dispatch, concurrency limits, retries, and recovery after worker interruption |
@@ -224,7 +224,7 @@ Do not set unmeasured delivery-speed or per-video cost promises. Set rollout tar
 
 ## 11. Release model and remaining settings
 
-Free beta with public studio entry. The owner removed the invitation requirement on October 1, 2026. Opening the studio creates an isolated browser session; existing authenticated users keep their own workspace. No checkout, paid plan, or signup form in the first release. Generation remains separately gated until hosted acceptance passes.
+Free beta with public studio entry. The owner removed the invitation requirement on October 1, 2026. Opening the studio creates an isolated browser session; existing authenticated users keep their own workspace. No checkout, paid plan, or signup form in the first release. Generation is enabled at the owner's request. Each result still requires all mandatory quality checks before delivery; enabled generation is not certification of the complete beta acceptance matrix.
 
 Before opening access, configure and document:
 
@@ -237,16 +237,10 @@ Until these limits are configured, do not accept unrestricted jobs. They are lau
 
 ## 12. Current repository status and build order
 
-The repository contains a unified skill, shared job contract, media utilities, an optional ElevenLabs helper, and limited renderer validation. It is a toolkit foundation, not a deployed SaaS or a validated automatic software-launch product.
+The repository now implements and deploys the submission/status/preview/download application, private storage and ownership checks, durable job runner, bounded public-product capture, source-grounded research and scripting, HTML/CSS/GSAP motion composition, MP4 export, ElevenLabs instrumental music and SFX, and technical and semantic quality review. Generated voiceover/TTS remains unavailable.
 
-The current audio helper supports TTS and SFX; MVP music generation still needs its adapter. TTS must remain unavailable in the beta. Product capture, live reference ingestion, semantic review, authentication, storage, queue, and worker deployment require implementation and end-to-end validation. See [docs/VALIDATION.md](docs/VALIDATION.md) for actual checks and limitations.
+The default motion direction is derived from the supplied 660-frame reference analysis in [docs/reference-motion-breakdown.md](docs/reference-motion-breakdown.md). Research, scripts, compositions, provider usage, and quality evidence are retained separately. Failed jobs remain failed until required checks actually pass; new runtime versions do not silently replace saved job pins or replenish budgets.
 
-Build in this order:
-
-1. Prove one real product-input → launch-video job locally with accurate visuals and audio.
-2. Add the durable job runner, storage, access controls, budgets, and recovery.
-3. Add the single submission/status/preview/download interface.
-4. Validate the feature-demo path, format choices, references, and failure handling.
-5. Enable generation after hosted acceptance, then use real output quality, repeat usage, and cost data to prioritize [ROADMAP.md](ROADMAP.md).
+Continue validating the complete Section 10 acceptance matrix, including PRD inputs, feature-demo outputs, supplied references, interruption recovery, and private media delivery. Renderer verification across all three formats does not certify every end-to-end input mode. Use measured output quality, repeat usage, and cost data to prioritize [ROADMAP.md](ROADMAP.md).
 
 Do not implement the deferred editing workflow while building this MVP.

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Providers, qualityAudioEnvelope, qualityDefaultStyle, qualityOriginalSourceLabel, qualityRepairEnvelope, qualityReviewPrompt, qualitySceneVisibility, type AudioRuntime, type QualityRequest } from "./providers";
-import { realVisualsPassed, reviewBatch, wholeFilmProofInventory } from "./quality";
+import { parseReview, realVisualsPassed, reviewBatch, wholeFilmProofInventory } from "./quality";
 import { PipelineError, type Asset, type Evidence, type Hooks, type Plan, type Transcript, type WorkerInput } from "./types";
 
 const input: WorkerInput = { jobId: "quality-budget", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "auto", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200_000, maxModelOutputTokens: 30_000 } };
@@ -171,4 +171,70 @@ test("whole-film proof outside a typography batch is context only and never over
   assert.equal(realVisualsPassed([],inventory),false);
   value.plan.scenes[2].presentation.template="offer";
   assert.equal(realVisualsPassed([{realVisualsPassed:true}],wholeFilmProofInventory(value.plan)),false);
+});
+
+test("title-only cards retain explicit empty bodies and full source quotes without inventing required copy", () => {
+  const value=fixture(2),scene=value.plan.scenes[0];
+  scene.presentation={template:"features",theme:"light",transition:"cut",cards:[
+    {title:"Links",body:"",evidenceId:"fact-1",evidence:"The original source explains how links connect notes."},
+    {title:"Graph",body:"Explore connections",evidenceId:"fact-1",evidence:"The original source describes a graph."},
+  ]};
+  const request=context(value),visibility=qualitySceneVisibility(request.plan,request.motion),prompt=qualityReviewPrompt(request);
+  assert.deepEqual(visibility[0].expectedVisibleCopy.cards,[{title:"Links",body:""},{title:"Graph",body:"Explore connections"}]);
+  assert.equal(prompt.split('"body":""').length-1,1);
+  assert.ok(prompt.includes(scene.presentation.cards![0].evidence!));
+  assert.ok(!JSON.stringify(visibility).includes("The original source"));
+  const flags={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,notes:[]};
+  const missingRequiredBody={severity:"major",check:"readability",sceneId:scene.id,timeSeconds:2,message:"The required Graph body is missing at the reading hold.",evidence:"Hold frame 60 lacks the required Explore connections text.",repair:"extend_hold"};
+  assert.throws(()=>parseReview({...flags,findings:[missingRequiredBody]}),/contradicts/);
+  assert.deepEqual(parseReview({...flags,readabilityPassed:false,findings:[missingRequiredBody]}).findings,[missingRequiredBody]);
+});
+
+test("incoming seams come from the preceding full-film scene, while cuts retain independent entry timing", () => {
+  const value=fixture(6);
+  value.plan.scenes[1].presentation={template:"brand",theme:"dark",transition:"lift"};
+  value.plan.scenes[2].presentation={template:"proof",theme:"light",transition:"cut"};
+  value.plan.scenes[3].presentation={template:"features",theme:"light",transition:"cut",cards:[{title:"Links",body:"",evidenceId:"fact-1",evidence:"Verified product facts."}]};
+  const selected=value.plan.scenes.slice(2,4),batch=reviewBatch(value.plan,selected.map(s=>({sceneId:s.id,path:`${s.id}.jpg`,label:"ACTUAL RENDER"})));
+  assert.deepEqual(batch.motion.map(s=>s.incomingTransition),[{fromSceneId:"scene-2",kind:"lift",frames:12},{fromSceneId:"scene-3",kind:"cut",frames:0}]);
+  assert.deepEqual(batch.motion.map(s=>s.outgoingTransitionFrames),[0,0]);
+  assert.deepEqual(batch.motion.map(s=>s.entrySettledByFrame),[321,475]);
+  const request={...context(value),plan:batch.plan,motion:batch.motion},prompt=qualityReviewPrompt(request);
+  assert.ok(prompt.includes(JSON.stringify(batch.motion[0].incomingTransition)));
+  assert.ok(prompt.includes('"entrySettledByFrame":475'));
+  const first=reviewBatch(value.plan,[{sceneId:"scene-1",path:"first.jpg",label:"ACTUAL RENDER"}]);
+  assert.deepEqual(first.motion[0].incomingTransition,{fromSceneId:null,kind:"none",frames:0});
+});
+
+test("same-film remainder reserve covers complete exact future requests, images and output under fallback", async t => {
+  environment(t); const value=fixture(2),{providers,path}=await provider(t,value);
+  const requests=[{prompt:qualityReviewPrompt(context(value)),images:[{path:"new-proof.jpg",label:qualityOriginalSourceLabel("new-proof",["scene-1"])}]},{prompt:"A complete final batch with unchanged source evidence.",images:[{path:"another-proof.jpg",label:"ACTUAL RENDER final hold"}]}];
+  t.mock.method(globalThis,"fetch",async()=>{throw new Error("Gateway reserve must be offline");});
+  const reserve=await providers.qualityRemainderReserve(requests);
+  assert.equal(reserve.calls,2);assert.equal(reserve.outputTokens,6000);assert.equal(providers.ledger.modelCalls,0);
+  t.mock.method(globalThis,"fetch",async()=>new Response(JSON.stringify({content:[{type:"text",text:"{}"}],usage:{input_tokens:1000,output_tokens:20}})));
+  let reservedInputs=0;
+  for(const [i,request]of requests.entries()){
+    await providers.claude("review",request.prompt,request.images,{policy:"quality-review-v1"});
+    const audit=JSON.parse(await readFile(join(path,`analysis/model-${i+1}-review-budget.json`),"utf8"));
+    reservedInputs+=audit.reservation.inputTokens;
+    assert.equal(audit.reservation.outputTokens,3000);
+  }
+  assert.equal(reserve.inputTokens,reservedInputs);
+});
+
+test("schema re-review preserves future calls and full output rather than shrinking a charged review", async t => {
+  environment(t);const value=fixture(2),{providers}=await provider(t,value);
+  t.mock.method(globalThis,"fetch",async()=>{throw new Error("No provider request expected");});
+  const requests=[{prompt:"Required final batch",images:[]}];
+  providers.ledger.modelCalls=9;
+  await assert.rejects(providers.qualityRemainderReserve(requests),issue);
+  providers.ledger.modelCalls=4;providers.ledger.outputTokens=24_001;
+  await assert.rejects(providers.qualityRemainderReserve(requests),issue);
+  assert.equal(providers.ledger.modelCalls,4);
+  providers.ledger.outputTokens=24_000;
+  const reserve=await providers.qualityRemainderReserve(requests);
+  assert.equal(reserve.outputTokens,3000);
+  assert.equal(typeof await providers.prepareClaude("review","Fresh complete review",[],{policy:"quality-review-v1",reserve}),"function");
+  assert.equal(providers.ledger.modelCalls,4);assert.equal(providers.ledger.reservedOutputTokens,0);
 });
