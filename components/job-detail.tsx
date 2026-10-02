@@ -49,7 +49,7 @@ export function JobDetail({ id }: { id: string }) {
   const stopped = !active && !ready;
   const needsSource = job.status === "needs_input";
   const processingStop = !needsSource ? processingStops[job.error?.code || ""] : undefined;
-  const serviceIssue = !needsSource && ["audio_unavailable", "audio_rate_limited", "audio_quota_exceeded", "audio_access_denied", "model_unavailable", "audio_review_unavailable", "provider_not_configured", "audio_payment_uncertain", "missing_model_usage", "invalid_model_output", "invalid_quality_review", "silent_generated_audio", "WORKER_START_FAILED"].includes(job.error?.code || "");
+  const serviceIssue = !needsSource && ["audio_unavailable", "audio_rate_limited", "audio_quota_exceeded", "audio_access_denied", "model_unavailable", "audio_review_unavailable", "provider_not_configured", "audio_payment_uncertain", "missing_model_usage", "invalid_model_output", "invalid_generated_script", "invalid_quality_review", "silent_generated_audio", "WORKER_START_FAILED"].includes(job.error?.code || "");
   const canStartNew = needsSource || job.status === "cancelled";
   const stageIndex = STAGES.indexOf(job.status as typeof STAGES[number]);
   const end = active ? now : new Date(job.completedAt || job.updatedAt).getTime();

@@ -50,10 +50,27 @@ DEFAULT MOTION DIRECTION: ${JSON.stringify(referenceStyle)}
 USER REFERENCE STYLE (when present takes precedence within supported techniques): ${JSON.stringify(evidence.reference || null)}${repair ? `
 BOUNDED REPAIR: fix only these concrete findings. Do not increase scene count (${repair.plan.scenes.length}), total frames (${repair.plan.output.duration_frames}), canvas or generated audio requests. Keep unchanged facts and successful beats. Recheck neighbors after moving/changing an asset. OLD PLAN: ${JSON.stringify(repair.plan)} FINDINGS: ${JSON.stringify(repair.findings)}` : ""}`;
 }
-function compileScript(raw: unknown, input: WorkerInput, evidence: Evidence, research: Research, repair?: Repair): Script {
-  const sufficiency = z.object({ sufficientEvidence: z.boolean(), reason: z.string() }).parse(raw);
-  if (!sufficiency.sufficientEvidence) throw new PipelineError("insufficient_product_evidence", sufficiency.reason.slice(0, 400), "Supply clear product screenshots or a screen recording showing the requested capability.", "needs_input");
-  const draft = scriptDraftSchema.parse(raw);
+/** Non-rendered notes are bounded independently; provider-written visible copy and production parameters stay strict. */
+function boundedScriptMetadata(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const value = raw as Record<string, unknown>, bound = (text: unknown, max: number) => typeof text === "string" ? text.slice(0, max) : text;
+  return {
+    ...value, summary: bound(value.summary, 500),
+    assumptions: Array.isArray(value.assumptions) ? value.assumptions.map(note => bound(note, 1000)) : value.assumptions,
+    scenes: Array.isArray(value.scenes) ? value.scenes.map(scene => scene && typeof scene === "object" && !Array.isArray(scene) ? { ...scene, purpose: bound(scene.purpose, 800), referenceTechnique: bound(scene.referenceTechnique, 800) } : scene) : value.scenes,
+  };
+}
+const invalidScript = (error: z.ZodError) => new PipelineError("invalid_generated_script", `The generated video script did not meet the supported contract (${[...new Set(error.issues.map(issue => issue.path.join(".") || "script"))].slice(0, 5).join(", ")}).`, "Ask the administrator to inspect the retained script response. No repeat generation was started.", "needs_review");
+
+/** Pure compilation also protects offline recovery from accepting changed source quotes. */
+export function compileScript(raw: unknown, input: WorkerInput, evidence: Evidence, research: Research, repair?: Repair): Script {
+  validateResearch(research, input, evidence, research.evidenceSha256);
+  const sufficiency = z.object({ sufficientEvidence: z.boolean(), reason: z.string() }).safeParse(raw);
+  if (!sufficiency.success) throw invalidScript(sufficiency.error);
+  if (!sufficiency.data.sufficientEvidence) throw new PipelineError("insufficient_product_evidence", sufficiency.data.reason.slice(0, 400), "Supply clear product screenshots or a screen recording showing the requested capability.", "needs_input");
+  const parsed = scriptDraftSchema.safeParse(boundedScriptMetadata(raw));
+  if (!parsed.success) throw invalidScript(parsed.error);
+  const draft = parsed.data;
   const script = scriptSchema.parse({ ...draft, version: 1, jobId: input.jobId, evidenceSha256: research.evidenceSha256, researchSha256: stageDigest(research) });
   validateScript(script, input, evidence, research, repair); return script;
 }
