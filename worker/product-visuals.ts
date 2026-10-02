@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { frameIndex, probe, writeJson } from "./media";
 import { safeDestination } from "./security";
 import type { Asset } from "./types";
+import { captureUiSource, uiSourceFromObservation, type UiSourceBudget } from "./ui-sources";
 
 /** Complete public-page product images, with conservative selection and recorded provenance. */
 export interface ProductImageCandidate {
@@ -34,6 +35,7 @@ export interface ProductVisualOptions {
   maxFileBytes?: number;
   /** Do not start another candidate after this scheduling limit. Not a hard in-flight timeout. */
   schedulingLimitMs?: number;
+  uiSources?: UiSourceBudget;
 }
 interface SourceRecord {
   selector: string; url: string; alt: string; status: "accepted" | "skipped";
@@ -45,18 +47,22 @@ interface SourceRecord {
 export interface ProductPanelCandidate {
   selector: string; clues: string; heading: string; visible: boolean;
   x: number; y: number; width: number; height: number; children: number; media: number;
+  mechanismAdjacent?: boolean; controls?: number; editableControls?: number;
 }
 /** Candidate labels are discovery hints only; downstream visual research must confirm real UI. */
 export function rankProductPanelCandidates(input: ProductPanelCandidate[]) {
-  const clues = /(?:^|[\s_-])(?:app|application|screenshot|screen|demo|editor|workspace|canvas|graph|kanban|interface|mockup|preview|window)(?:$|[\s_-])/i;
+  const clues = /(?:^|[\s_-])(?:app|application|screenshot|screen|demo|editor|workspace|canvas|graph|kanban|interface|mockup|preview|window|ui)(?:$|[\s_-])/i;
   const ranked = input.slice(0, 100).filter(candidate => candidate.visible && clues.test(candidate.clues) &&
     !/logo|testimonial|pricing|cookie|consent|login|sign[-_ ]?in/i.test(candidate.clues) &&
     candidate.width >= 260 && candidate.height >= 170 && candidate.width <= 2000 && candidate.height <= 1500 &&
     candidate.width * candidate.height >= 120_000 && candidate.width / candidate.height >= .35 && candidate.width / candidate.height <= 4 &&
     (candidate.children >= 3 || candidate.media > 0))
     .sort((a, b) => b.width * b.height - a.width * a.height || a.selector.localeCompare(b.selector));
+  // One feature-adjacent control example outranks area; preserve large overview proof next.
+  const mechanism = ranked.filter(candidate => candidate.mechanismAdjacent && (candidate.controls || 0) > 0)
+    .sort((a, b) => Number(!!b.editableControls) - Number(!!a.editableControls) || a.selector.localeCompare(b.selector))[0];
   const selected: ProductPanelCandidate[] = [];
-  for (const candidate of ranked) {
+  for (const candidate of mechanism ? [mechanism, ...ranked.filter(item => item !== mechanism)] : ranked) {
     const overlaps = selected.some(other => {
       const width = Math.max(0, Math.min(candidate.x + candidate.width, other.x + other.width) - Math.max(candidate.x, other.x));
       const height = Math.max(0, Math.min(candidate.y + candidate.height, other.y + other.height) - Math.max(candidate.y, other.y));
@@ -68,16 +74,16 @@ export function rankProductPanelCandidates(input: ProductPanelCandidate[]) {
   return selected;
 }
 
-async function productPanels(page: Page, workspace: string, pageUrl: string, prefix: string, pageKind: NonNullable<Asset["provenance"]>["pageKind"], limit: number, deadline: number) {
+async function productPanels(page: Page, workspace: string, pageUrl: string, prefix: string, pageKind: NonNullable<Asset["provenance"]>["pageKind"], limit: number, deadline: number, uiSources?: UiSourceBudget) {
   const candidates = await page.evaluate<ProductPanelCandidate[]>(`(() => {
     const result=[];const nodes=Array.from(document.querySelectorAll('figure,section,[role=img],[class],[id],[aria-label]')).slice(0,1800);
     for(const node of nodes){
       const clues=[node.id,node.getAttribute('class'),node.getAttribute('aria-label')].join(' ').slice(0,600);
-      if(!/(?:^|[\\s_-])(?:app|application|screenshot|screen|demo|editor|workspace|canvas|graph|kanban|interface|mockup|preview|window)(?:$|[\\s_-])/i.test(clues))continue;
+      if(!/(?:^|[\\s_-])(?:app|application|screenshot|screen|demo|editor|workspace|canvas|graph|kanban|interface|mockup|preview|window|ui)(?:$|[\\s_-])/i.test(clues))continue;
       const box=node.getBoundingClientRect(),style=getComputedStyle(node);if(box.width<260||box.height<170)continue;
       const parts=[];let item=node;while(item&&item!==document.documentElement&&parts.length<20){if(item.id){parts.unshift('#'+CSS.escape(item.id));break;}const tag=item.tagName.toLowerCase(),siblings=item.parentElement?Array.from(item.parentElement.children).filter(s=>s.tagName===item.tagName):[];parts.unshift(siblings.length>1?tag+':nth-of-type('+(siblings.indexOf(item)+1)+')':tag);item=item.parentElement;}
-      let section=node,heading='';for(let i=0;section&&i<5;i++,section=section.parentElement){const title=section.querySelector('h1,h2,h3');if(title){heading=title.textContent.replace(/\\s+/g,' ').trim().slice(0,160);break;}}
-      result.push({selector:parts.join(' > ').slice(0,1200),clues,heading,visible:style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0,x:box.x+scrollX,y:box.y+scrollY,width:box.width,height:box.height,children:node.children.length,media:node.querySelectorAll('img,svg,canvas,video').length});if(result.length>=100)break;
+      let section=node,heading='',mechanismAdjacent=false;for(let i=0;section&&i<5;i++,section=section.parentElement){const title=section.querySelector('h2,h3,h4,dt'),bounds=section.getBoundingClientRect();if(title&&bounds.width<=Math.max(box.width*1.5,850)&&bounds.height<=box.height+350){heading=title.textContent.replace(/\\s+/g,' ').trim().slice(0,160);const description=section.querySelector('dd,p')?.textContent||'';mechanismAdjacent=/\\b(create|write|link|connect|find|search|organize|edit|compare|select|build|visualize|manage|track|share)\\b/i.test(description.slice(0,600));break;}}
+      result.push({selector:parts.join(' > ').slice(0,1200),clues,heading,mechanismAdjacent,controls:node.querySelectorAll('input,button,select,textarea,[contenteditable=true],[role=button],[role=option],[role=tab]').length,editableControls:node.querySelectorAll('textarea,[contenteditable=true],input:not([type=button]):not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=password])').length,visible:style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0,x:box.x+scrollX,y:box.y+scrollY,width:box.width,height:box.height,children:node.children.length,media:node.querySelectorAll('img,svg,canvas,video').length});if(result.length>=100)break;
     }return result;
   })()`);
   const assets: Asset[] = [], artifactPaths: string[] = [], sources: SourceRecord[] = [];
@@ -92,9 +98,14 @@ async function productPanels(page: Page, workspace: string, pageUrl: string, pre
       const width = Math.max(2, Math.floor(Math.min(1600, 1600 * media.width / media.height) / 2) * 2);
       await frameIndex(join(workspace, path), join(workspace, preview), 0, width);
       const previewMedia = await probe(join(workspace, preview));
-      assets.push({ id, path, preview, kind: "image", usage: "output", width: media.width, height: media.height, source: pageUrl,
+      const asset: Asset = { id, path, preview, kind: "image", usage: "output", width: media.width, height: media.height, source: pageUrl,
         rights: "Unaltered element capture of a product-related panel published on a public page; a visual candidate, not an authenticated workflow or proof of interaction.",
-        provenance: { pageUrl, pageKind, method: "element", role: pageKind === "pricing" ? "marketing" : "product-ui-candidate", selector: candidate.selector, sectionHeading: candidate.heading } });
+        provenance: { pageUrl, pageKind, method: "element", role: pageKind === "pricing" ? "marketing" : "product-ui-candidate", selector: candidate.selector, sectionHeading: candidate.heading } };
+      assets.push(asset);
+      if (uiSources && uiSources.sources.length < 3) {
+        try { uiSources.add(await captureUiSource(page, asset, candidate.selector)); }
+        catch { uiSources.add(uiSourceFromObservation(asset, candidate.selector)); }
+      }
       artifactPaths.push(path, preview);Object.assign(record,{status:"accepted",outputPath:path,previewPath:preview,outputWidth:media.width,outputHeight:media.height,previewWidth:previewMedia.width,previewHeight:previewMedia.height});
     } catch (error) { record.reason = error instanceof Error ? error.message.slice(0,300) : "Product panel unavailable"; }
   }
@@ -185,7 +196,7 @@ export async function extractProductVisuals(page: Page, workspace: string, pageU
   await mkdir(join(workspace, "assets"), { recursive: true });
   await mkdir(join(workspace, "analysis"), { recursive: true });
   if ((options.maxPanels ?? 2) > 0 && pageKind !== "pricing") {
-    try { const panels = await productPanels(page, workspace, pageUrl, prefix, pageKind, Math.min(2,maxAssets,options.maxPanels ?? 2), started + schedulingLimit);
+    try { const panels = await productPanels(page, workspace, pageUrl, prefix, pageKind, Math.min(3,maxAssets,options.maxPanels ?? 2), started + schedulingLimit, options.uiSources);
       result.assets.push(...panels.assets);result.artifactPaths.push(...panels.artifactPaths);result.diagnostics.sources.push(...panels.sources);
     } catch (error) { result.diagnostics.sources.push({ selector: "", url: pageUrl, alt: "", method: "element", status: "skipped", reason: error instanceof Error ? error.message.slice(0,300) : "Optional product panels unavailable" }); }
   }
@@ -228,6 +239,7 @@ export async function extractProductVisuals(page: Page, workspace: string, pageU
       result.artifactPaths.push(normalized, preview);
       result.assets.push({ id: `${prefix}-image-${index}`, path: normalized, preview, kind: "image", usage: "output", width: output.width, height: output.height, rights: "Complete image linked by a public product page; a visual candidate, not an authenticated application recording.", source: download.url,
         provenance: { pageUrl, pageKind, method: "source-image", role: pageKind === "pricing" ? "marketing" : "product-ui-candidate", selector: candidate.selector, assetUrl: download.url, sectionHeading: candidate.alt.slice(0,160) } });
+      options.uiSources?.add(uiSourceFromObservation(result.assets.at(-1)!, ""));
       Object.assign(source, { status: "accepted", originalPath: original, outputPath: normalized, previewPath: preview, sha256, sourceWidth: media.width, sourceHeight: media.height, outputWidth: output.width, outputHeight: output.height, previewWidth: previewMedia.width, previewHeight: previewMedia.height });
     } catch (error) {
       source.reason = error instanceof Error ? error.message.slice(0, 350) : "Source image could not be used";

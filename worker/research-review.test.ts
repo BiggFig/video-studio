@@ -3,10 +3,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { compileResearch, evidenceIdentity, researchProduct, researchRequest, sourceFacts } from "./research";
+import { compileResearch as compileResearchCurrent, evidenceIdentity, researchProduct as researchProductCurrent, researchRequest, sourceFacts } from "./research";
 import { compileResearchWithRetry, RESEARCH_RETRY_PATH, researchResponseDiagnostics, type ResearchRetryOptions } from "./research-review";
 import type { Providers } from "./providers";
 import { PipelineError, type Evidence, type Hooks, type Ledger, type WorkerInput } from "./types";
+
+const researchProduct: typeof researchProductCurrent = (input,evidence,providers,hooks,workspace,options) => researchProductCurrent(input,evidence,providers,hooks,workspace,options || {version:2});
+
+const compileResearch: typeof compileResearchCurrent = (input,evidence,raw,hash,options) => compileResearchCurrent(input,evidence,raw,hash,options || {version:2});
 
 const input: WorkerInput = { jobId: "research-retry", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "16:9", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200000, maxModelOutputTokens: 30000 } };
 const evidence: Evidence = { text: "Atlas helps researchers organize sources.\n\nCreate linked notes.\n\nFind relationships in a graph.\n\nDownload Atlas.\n\nInstall optional plugins.", assets: [{ id: "editor", kind: "image", path: "assets/editor.png", usage: "output", rights: "Source fixture", width: 1000, height: 600 }] };
@@ -44,10 +48,44 @@ function options(root: string, response: unknown = draft()) {
       return async () => { events.push("paid"); calls++; usage.modelCalls++; return response; };
     },
   } as unknown as Providers;
-  const value: ResearchRetryOptions = { input, evidence, evidenceSha256, workspace: root, ...request, providers, hooks: { persist: async paths => { events.push(...paths); } } };
+  const value: ResearchRetryOptions = { input, evidence, evidenceSha256, contractVersion: 2, workspace: root, ...request, providers, hooks: { persist: async paths => { events.push(...paths); } } };
   return { value, usage, events, get calls() { return calls; }, get prepared() { return prepared; }, get prompt() { return capturedPrompt; } };
 }
 async function marker(root: string) { return JSON.parse(await readFile(join(root, RESEARCH_RETRY_PATH), "utf8")) as Record<string, unknown>; }
+
+function verboseUiResearch() {
+  return { ...draft(), documentTargets: [{ id: "linked-notes", sourceAssetIds: ["editor"], capabilityFactIds: ["fact-2"], goal: "Document the supported note-linking workflow. Describe the visible source controls and illustrative selection states. ".repeat(4) }] };
+}
+
+test("long UI documentation notes are bounded without mutating raw research or spending the correction allowance", async t => {
+  const root = await workspace(t), raw = verboseUiResearch(), original = JSON.stringify(raw), rawPath = join(root, "analysis/model-1-research.json");
+  await writeFile(rawPath, original);
+  const fixture = options(root); delete fixture.value.contractVersion;
+  const result = await compileResearchWithRetry(raw, fixture.value);
+  assert.equal(result.version, 3);
+  assert.deepEqual(result.documentTargets, raw.documentTargets.map(target => ({ ...target, goal: target.goal.slice(0, 240) })));
+  assert.deepEqual(result.story, raw.story); assert.deepEqual(result.visuals, raw.visuals);
+  assert.deepEqual(result.facts.map(fact => ({ id: fact.evidenceId, quote: fact.quote })), sourceFacts(evidence).map(fact => ({ id: fact.id, quote: fact.text })));
+  assert.equal(JSON.stringify(raw), original); assert.equal(await readFile(rawPath, "utf8"), original);
+  assert.equal(fixture.prepared, 0); assert.equal(fixture.calls, 0);
+  await assert.rejects(readFile(join(root, RESEARCH_RETRY_PATH)), { code: "ENOENT" });
+});
+
+test("bounding documentation goals leaves source, capability, identifier and story checks strict", () => {
+  for (const change of [
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.documentTargets[0].sourceAssetIds = ["unavailable"]; },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.documentTargets[0].capabilityFactIds = ["fact-999"]; },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.documentTargets[0].capabilityFactIds = ["fact-4"]; },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.documentTargets[0].id = "x".repeat(61); },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.documentTargets[0].goal = ""; },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.story.mechanism.text = "x".repeat(161); },
+    (raw: ReturnType<typeof verboseUiResearch>) => { raw.visuals[0].regions[0].supportsFactIds = ["fact-4"]; },
+  ]) {
+    const raw = verboseUiResearch(); change(raw); const original = JSON.stringify(raw);
+    assert.throws(() => compileResearchCurrent(input, evidence, raw, evidenceSha256));
+    assert.equal(JSON.stringify(raw), original);
+  }
+});
 
 test("one correction identifies both binding failures, preserves original evidence and canonical quotes, and persists before generation", async t => {
   const root = await workspace(t), raw = invalidDraft(), original = JSON.stringify(raw), corrected = { ...draft(), facts: draft().facts.map(fact => ({ ...fact, quote: "Untrusted rewritten quote" })) }, fixture = options(root, corrected);

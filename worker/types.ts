@@ -1,5 +1,7 @@
 import type { InputMode, JobStatus, OutputFormat, StudioLimits, VideoType } from "../lib/contracts";
 import type { ResearchStory } from "./research";
+import type { UiDocument, UiAction } from "./ui-reconstruction";
+import type { UiSource } from "./ui-sources";
 
 export type FileInput = { id: string; name: string; kind: "prd" | "asset" | "reference"; url: string; mimeType: string; size?: number };
 export interface WorkerInput {
@@ -25,7 +27,7 @@ export interface BrandEvidence {
   typography: { family: string; weight: string; role: "heading" | "body" | "label"; selector: string }[];
   logoAssetIds: string[]; limitations: string[];
 }
-export interface Evidence { text: string; assets: Asset[]; brand?: BrandEvidence; reference?: { aspect: number; description: unknown; measurements: unknown }; capturedUrl?: string }
+export interface Evidence { text: string; assets: Asset[]; brand?: BrandEvidence; uiSources?: UiSource[]; reference?: { aspect: number; description: unknown; measurements: unknown }; capturedUrl?: string }
 export interface Presentation {
   template: "hook" | "brand" | "proof" | "features" | "offer" | "cta";
   theme: "light" | "dark";
@@ -36,7 +38,8 @@ export interface Presentation {
     | { kind: "showcase" }
     | { kind: "focus"; regionId: string; region?: { x: number; y: number; width: number; height: number } }
     | { kind: "panels"; secondaryAssetId: string; secondaryEvidenceId: string; secondaryEvidence?: string }
-    | { kind: "connections"; nodes: { label: string; evidenceId: string; evidence?: string }[] };
+    | { kind: "connections"; nodes: { label: string; evidenceId: string; evidence?: string }[] }
+    | { kind: "ui-demo"; documentId: string; actions: UiAction[] };
 }
 export interface Scene {
   id: string; start_frame: number; duration_frames: number; asset_id: string; source_in_seconds: number;
@@ -49,12 +52,14 @@ export interface Plan {
   version: 1; job_id: string; mode: "create"; renderer: "ffmpeg" | "hyperframes";
   output: { width: number; height: number; fps: 30; duration_frames: number };
   product: string; summary: string; accent: string; background: "light" | "dark";
+  audienceLabel?: string;
   brand?: { logoAssetId?: string; background: string; foreground: string; accent: string; sourceUrl: string };
   story?: ResearchStory;
+  uiDocuments?: UiDocument[];
   assets: Asset[]; scenes: Scene[]; captions: never[];
   audio: { asset_id: string; start_frame: number; duration_frames: number; source_in_seconds: number; playback_rate: 1; gain_db: number; role: "music" | "sfx" }[];
   music_prompt: string; sfx_prompt: string; assumptions: string[];
-  production?: { researchSha256: string; scriptSha256: string; evidenceSha256: string };
+  production?: { researchSha256: string; scriptSha256: string; evidenceSha256: string; uiSha256?: string };
 }
 export interface Finding { severity: "critical" | "major" | "minor"; sceneId?: string; timeSeconds?: number; message: string; repair?: "shorten_copy" | "simplify_copy" | "change_asset" | "extend_hold" }
 export interface QC { status: "passed" | "needs_review"; passed: boolean; checks: Record<string,{passed:boolean;performed:boolean;evidence:string}>; technical: Record<string, unknown>; visual: unknown; audio: unknown; findings: Finding[]; repairs: string[]; evidence: string[] }

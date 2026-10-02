@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import {mkdtemp,mkdir,readFile,rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join,dirname,resolve} from "node:path";
-import {compileResearch,sourceFacts,stageDigest} from "./research";
+import {compileResearch as compileResearchCurrent,sourceFacts,stageDigest} from "./research";
 import {compileScript,scriptVisibleText,scriptVisibleWords} from "./scripting";
 import {brandFromEvidence,compilePlan} from "./planning";
 import {PipelineError,type Evidence,type Hooks,type WorkerInput} from "./types";
+
+const compileResearch: typeof compileResearchCurrent = (input,evidence,raw,hash,options) => compileResearchCurrent(input,evidence,raw,hash,options || {version:2});
 
 const input:WorkerInput={jobId:"story-contract",ownerId:"fixture",mode:"url",productUrl:"https://example.com",videoType:"launch",format:"16:9",files:[]};
 const hooks:Hooks={persist:async()=>{},state:async()=>{},complete:async()=>{}};

@@ -1,51 +1,49 @@
-# Product story and branded HTML motion
+# Product story and editable HTML motion
 
-A launch film must explain who the product helps, what the user does, and why that matters. A successful export or attractive pricing slide does not establish that explanation.
+A launch film must explain who the product helps, what the user does, and why that matters. The planner chooses a workflow before choosing scenes. Source captures guide reconstruction; they do not substitute for a demonstrated interaction.
 
-## 1. Collect real evidence
+## 1. Collect source and brand evidence
 
-Start with the submitted public URL. Retain source text and viewport screenshots, then inspect visible product images and complete DOM panels. Follow at most two observed feature, help, documentation or demo links; pricing has lower priority. Public child hosts are eligible only when linked from the submitted site. Every request and redirect still passes public-address validation and the shared capture budget.
+Start with the submitted public URL. Retain source text, screenshots, genuine logos, and focused product examples. Follow at most two observed feature, help, documentation or demo links. Every request and redirect passes public-address validation and the shared capture budget.
 
-The capture inventory has at most four focused product candidates, two genuine logo captures, two homepage viewports and two follow-up viewports. Each asset records its page, capture method, page kind and role. A candidate is not automatically verified application UI. Marketing pages can contain authentic product screens, but a pricing-page viewport and a logo cannot demonstrate the product mechanism.
+The inventory holds at most four focused product candidates, two logos, two homepage viewports and two follow-up viewports. Each asset records its origin and role. A screenshot is not automatically verified product UI. Up to three bounded UI inventories retain observed element geometry, text, styles and states; inaccessible pixels remain explicitly limited evidence. No login, private form values or application credentials are collected.
 
-Brand evidence records observed colors, text styles, language, headings and calls to action. It is not a claim that an official brand manual was discovered. Logos retain their original pixels; supplied reference footage remains style evidence and cannot enter the output asset list.
+Observed colors, typography, language and calls to action guide the film. Reference footage supplies motion and storytelling direction, not reusable brand assets or music.
 
-## 2. Research before scripting
+## 2. Research what to demonstrate
 
-Research version 2 selects canonical source passages and builds a brief with a primary audience, problem, mechanism, outcome, differentiator and CTA. Mechanism steps bind an action, fact and actual source visual. Missing audience, mechanism, outcome, CTA or usable product UI stops with a request for better source material before audio generation.
+Fresh research version 3 selects canonical source passages and defines a primary audience, problem, mechanism, outcome, differentiator and CTA. It selects one or two documentation targets: a specific workflow, its supported capability facts, and the actual source UI to reconstruct. Prefer one clear use case over a tour of unrelated features.
 
-Audience, problem and outcome may be narrow, labelled editorial inferences. Mechanisms, differentiators and CTAs require explicit evidence. The script addresses an inferred audience as “For …”; it cannot turn that targeting choice into a claim about existing customers.
+Audience, problem and outcome may be narrow editorial inferences. Capabilities and calls to action need explicit evidence. Missing usable product UI or an evidenced mechanism stops before audio generation. Research may receive one durably recorded correction within the original job limits; missing evidence cannot be repaired by invention.
 
-A returned research response with invalid structure or visual bindings may receive one correction using the same evidence. Its allowance is durably consumed before the call, and all original checks still apply. Missing evidence is not repaired by inventing associations. Interrupted or invalid correction state cannot restart paid work. The correction stays within the same job limits and preserves capacity for a complete script and the maximum required review outputs; later requests still have their own exact input-budget checks.
+## 3. Rebuild editable UI before scripting
 
-## 3. Write one product story
+The separate UI documentation stage saves `analysis/ui.json`. Each document contains source-bound elements, bounded geometry and styles, an observed initial state, and supported later states. Later states may illustrate user input and a supported interaction; they must not invent controls, product features or claims of a completed live session.
 
-Narrative roles are separate from layouts. The script must include a visible mechanism, concrete outcome and exactly one closing CTA. Pricing is optional and may appear in only one beat. The target is 20–28 seconds and 35–42 generated visible words, with a hard maximum of 48. Reading time and complete original speech take precedence over the target duration.
+The model returns data, never executable HTML, CSS or JavaScript. Trusted components create the DOM and SVG. Documents permit at most 48 elements, eight shared styles, four states and two source images. IDs, source regions, labels, state visibility and capability references are validated. The full document is bound to the job, evidence and research hashes and retained across script repairs.
 
-The visible-copy audit counts headlines, details, card and connection labels, and repeated product names. Source pixels, source quotes and logo artwork are excluded from that generated-copy count. The renderer never cuts essential source speech to reach a duration target.
+The initial production path reconstructs still product captures and DOM examples. Recording-derived reconstruction requires an explicit still-source contract before it can be treated independently of existing speech and playback rules.
 
-Creative direction establishes the product within the first two beats, follows one evidenced use case and asks each beat to add information. An image should recur only when a different region supplies useful proof. Redundant diagrams and repeated product names in the closing action waste the short running time.
+## 4. Script one product story and its actions
 
-Direct Claude Sonnet 4.6 and Opus 4.6 script calls use a constrained JSON shape with role-specific canonical fact choices, included in the exact token-count request and conservative fallback reservation. The original compiler still validates all claims, roles, copy limits and source regions. Other configured transports retain the same application validation. One definitively returned invalid initial script can receive a durably recorded correction within the existing limits; this does not add repair attempts or restart interrupted stages. Insufficient evidence cannot be corrected into invented evidence.
+The script must include a visible mechanism, a concrete outcome and exactly one closing CTA. Establish the product within the first two beats. Each beat adds information. Pricing is optional and appears at most once. Target 20–28 seconds and 35–42 generated marketing words, with a hard maximum of 48. Full source speech and readable holds take precedence over the target duration.
 
-## 4. Compose bounded HTML motion
+The compiler adds the canonical audience label to the first scene. This label counts toward the copy budget. Source UI labels are evidence; illustrative typed content receives separate reading time.
 
-The model returns validated scene data. Trusted HTML/GSAP components create the film:
+A UI demonstration references a saved document and schedules up to six actions: pointer movement, clicking, typing, selection and state transitions. Actions use validated visible element IDs and supported capability facts. They begin after a readable initial frame, cannot overlap, and leave a final reading hold after the last action. Click feedback and typing have minimum visible durations. A mechanism cannot consist only of pointer movement.
 
-| Treatment | Purpose | Evidence requirement |
-| --- | --- | --- |
-| Showcase | Make the product screen the dominant visual | Confirmed actual UI |
-| Focus | Direct attention to a useful part of a still | Research-bound region inside the original image |
-| Panels | Compare or connect two real product views | Two distinct, fact-bound source images |
-| Connections | Explain relationships between concepts | Each label bound to a canonical fact; graphic is not app UI |
-| Brand / CTA | Give the film a recognisable close | Observed palette and an optional genuine logo |
+Direct supported Claude calls use constrained output shapes for UI documentation and scripting. The application still checks semantics, provenance, copy and timing. Exact token reservations include those schemas and the unchanged review allowance. A definitively invalid initial script may receive one durably recorded correction; runtime or quota restarts do not create additional allowances.
 
-Camera movement over a screenshot is not evidence of clicking, typing or a completed workflow. Such actions need an actual recording. The public collector does not sign into applications or access private user data; authenticated demonstrations require supplied assets or a separately authorised demo capture.
+## 5. Render deterministic HTML motion
 
-## 5. Review the exported film
+The same frame clock drives UI content, selection, pointer position, click feedback and character-by-character typing. Seeking backward or repeating a frame reconstructs exactly the same state. UI demonstration scenes contain editable DOM/SVG rather than a full screenshot background.
 
-Quality review sees actual decoded entry, entrance, hold and seam frames, plus every required source image and logo. Story clarity is an additional mandatory performed check for version 2 plans. A planned role, nonempty proof inventory or passing technical export cannot satisfy it.
+Other supported treatments include actual-image showcases, source-bound focus crops, two-image panels, conceptual relationships, and brand/CTA frames. They serve the story around the demonstrated workflow. An illustrative HTML interaction is not a claim that the application was operated in an authenticated session.
 
-Deterministic seeks, local font/image loading, source hashes, layout bounds, actual-frame comparisons, full decode, audio measurements and transcript checks remain required. Additional sources are included in repair reservations. Model, audio, repair and execution limits remain unchanged; a stopped job cannot regain spent allowances by restarting.
+## 6. Review what was actually exported
 
-Retained version 1 stages remain explicitly compatible, but cannot introduce version 2 visual treatments. New releases do not rewrite completed or failed historical jobs.
+Quality review sees decoded frames and original source images. UI scenes include the fully visible initial state, every action outcome or click midpoint, and the final hold. Two additional mandatory checks assess reconstruction fidelity and visible behavior. A valid document, planned action or successful export cannot satisfy either check by itself.
+
+Story clarity, audience, claims, branding, layout, reading time and audio checks remain mandatory. Deterministic seeks, local assets, source hashes, full decode, and exported-frame comparisons remain required. Review reservations cover the additional action frames and original references; requests are never silently truncated.
+
+Versions 1 and 2 remain explicitly compatible. New code does not rewrite historical jobs or restore spent model, audio, repair or execution allowances. Unresolved required checks retain the draft and specific failures as `needs_review`.

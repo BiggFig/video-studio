@@ -40,7 +40,7 @@ Describe cut rhythm, framing, typography, colors, motion, sound, and narrative f
 
 ### 3. Write one executable plan
 
-For this application's URL/PRD software-video pipeline, read `references/url-research-script-motion.md`: persist source-grounded research, then an on-screen script, before compiling the authoritative plan and trusted HTML motion composition.
+For this application's URL/PRD software-video pipeline, read `references/url-research-script-motion.md`: persist source-grounded research, editable UI documents for the chosen workflow, and an on-screen script with timed interactions before compiling the authoritative plan and trusted HTML motion composition.
 
 Write `plan.json` and `STORYBOARD.md` using the contract. Every scene has an exact asset or concrete graphic construction, timeline placement, purpose, and source range where applicable. Bind text, effects, audio, and reference techniques to it.
 

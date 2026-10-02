@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compileResearch, researchProduct, sourceFacts, stageDigest, validateResearch, type Research } from "./research";
+import { compileResearch as compileResearchCurrent, researchProduct as researchProductCurrent, sourceFacts, stageDigest, validateResearch, type Research } from "./research";
 import { compileScript, loadCompletedProductionStages, validateScript, writeScript, type Script } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
 import { Providers } from "./providers";
 import { RepairBudget } from "./repairs";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
+
+const researchProduct: typeof researchProductCurrent = (input,evidence,providers,hooks,workspace,options) => researchProductCurrent(input,evidence,providers,hooks,workspace,options || {version:2});
+
+const compileResearch: typeof compileResearchCurrent = (input,evidence,raw,hash,options) => compileResearchCurrent(input,evidence,raw,hash,options || {version:2});
 
 const input: WorkerInput = { jobId: "research-test", ownerId: "private-owner", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "16:9", files: [] };
 const evidence: Evidence = { text: "Orbit organizes your notes.\n\nShare documents with your team.\n\nThe free plan is available today.", assets: [{ id: "screen", path: "assets/screen.jpg", preview: "assets/screen.jpg", kind: "image", usage: "output", rights: "Supplied fixture", width: 1440, height: 960 }] };

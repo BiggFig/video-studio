@@ -8,6 +8,7 @@ import type { Providers } from "./providers";
 import { extractProductVisuals } from "./product-visuals";
 import { enrichProductResearch, researchDestination } from "./url-research";
 import { extractBrandEvidence } from "./brand-evidence";
+import { UiSourceBudget, type UiSource } from "./ui-sources";
 
 export function callbackAuth() { const url=process.env.WORKER_CALLBACK_URL; const token=process.env.PIPELINE_CALLBACK_TOKEN; return url && token ? {origin:new URL(url).origin,token}:undefined; }
 
@@ -93,7 +94,7 @@ export async function ingest(input:WorkerInput,workspace:string,providers:Provid
   }
   if(input.mode==="url") {
     if(!input.productUrl) throw new PipelineError("missing_url","A product URL is required.","Enter a public product URL.","needs_input");
-    const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;evidence.brand=captured.brand;
+    const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;evidence.brand=captured.brand;evidence.uiSources=captured.uiSources;
     await hooks.persist(captured.artifactPaths);
   } else if(evidence.text.trim().length<100 || !evidence.assets.some(a=>a.usage==="output")) throw new PipelineError("insufficient_prd","The PRD needs readable product information and at least one usable visual.","Upload a text-based PRD plus product screenshots or a screen recording.","needs_input");
   if(input.referenceUrl) {
@@ -139,7 +140,7 @@ export async function ingestMedia(relative:string,id:string,usage:"output"|"refe
   return asset;
 }
 
-export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;brand?:BrandEvidence;artifactPaths:string[]}> {
+export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;brand?:BrandEvidence;uiSources:UiSource[];artifactPaths:string[]}> {
   let browser:Awaited<ReturnType<typeof chromium.launch>>;
   try{browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()});}catch{throw new PipelineError("media_runtime_unavailable","The product capture browser is unavailable.","Ask the beta administrator to restore the worker's Chromium runtime.");}
   try {
@@ -182,24 +183,25 @@ export async function captureProduct(url:string,workspace:string,dependencies:{d
     let brand:BrandEvidence|undefined;
     try{const branding=await extractBrandEvidence(page,workspace,homepageUrl);brand=branding.brand;assets.push(...branding.assets);artifactPaths.push(...branding.artifactPaths);}
     catch(error){diagnostics.errors.push(`Optional public brand extraction unavailable: ${error instanceof Error?error.message.slice(0,350):"unknown error"}`);}
-    let focusedAssets=0;
+    let focusedAssets=0;const uiSources=new UiSourceBudget();
     const focusedDownload=async(source:string,maxBytes:number)=>{
         if(++requests>500)throw new Error("Capture request budget exhausted");
         const result=await downloads.run(reservation=>download(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
     };
     try{
-      const originals=await extractProductVisuals(page,workspace,homepageUrl,{download:focusedDownload,maxAssets:3,maxPanels:2});
+      const originals=await extractProductVisuals(page,workspace,homepageUrl,{download:focusedDownload,maxAssets:3,maxPanels:3,uiSources});
       focusedAssets+=originals.assets.length;assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
     }catch(error){diagnostics.errors.push(`Complete product image extraction unavailable: ${error instanceof Error?error.message.slice(0,400):"unknown error"}`);}
     researchHomepage=homepageUrl;
     const research=await enrichProductResearch(page,workspace,{homepageUrl,homepageTitle,homepageText:text,resolvedUrl:browserUrl=>documentUrls.get(browserUrl)||browserUrl,
       captureVisuals:async(researchPage,pageUrl,pageKind,index,schedulingMs)=>{
         if(focusedAssets>=4)return{assets:[],artifactPaths:[]};
-        const result=await extractProductVisuals(researchPage,workspace,pageUrl,{download:focusedDownload,maxAssets:4-focusedAssets,maxPanels:1,prefix:`research-${index}`,pageKind,schedulingLimitMs:schedulingMs});
+        const result=await extractProductVisuals(researchPage,workspace,pageUrl,{download:focusedDownload,maxAssets:4-focusedAssets,maxPanels:1,prefix:`research-${index}`,pageKind,schedulingLimitMs:schedulingMs,uiSources});
         focusedAssets+=result.assets.length;return result;
       }});
     text=research.text;assets.push(...research.assets);artifactPaths.push(...research.artifactPaths);
+    await writeJson(join(workspace,"analysis/ui-sources.json"),uiSources.sources);artifactPaths.push("analysis/ui-sources.json");
     await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,requests,bytes});
-    return{text,assets,brand,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
+    return{text,assets,brand,uiSources:uiSources.sources,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
   } finally {await browser.close();}
 }

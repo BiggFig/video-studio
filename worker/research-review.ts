@@ -27,10 +27,12 @@ export interface ResearchRequest { prompt: string; images: { path: string; label
 export interface ResearchRetryOptions extends ResearchRequest {
   input: WorkerInput; evidence: Evidence; evidenceSha256: string; workspace: string;
   hooks: Pick<Hooks, "persist">; providers: Pick<Providers, "prepareClaude" | "ledger">;
+  /** Programmatic compatibility for retained v2 fixtures, never a job/provider option. */
+  contractVersion?: 2;
 }
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
-const fields = new Set(["sufficientEvidence", "reason", "product", "summary", "facts", "evidenceId", "kind", "kinds", "label", "visuals", "assetId", "description", "supportsFactIds", "showsProductUi", "role", "regions", "id", "rect", "x", "y", "width", "height", "story", "primaryAudience", "problem", "mechanism", "outcome", "differentiator", "cta", "text", "basis", "evidenceIds", "steps", "action", "limitations"]);
+const fields = new Set(["sufficientEvidence", "reason", "product", "summary", "facts", "evidenceId", "kind", "kinds", "label", "visuals", "assetId", "description", "supportsFactIds", "showsProductUi", "role", "regions", "id", "rect", "x", "y", "width", "height", "story", "primaryAudience", "problem", "mechanism", "outcome", "differentiator", "cta", "text", "basis", "evidenceIds", "steps", "action", "limitations", "documentTargets", "sourceAssetIds", "capabilityFactIds", "goal"]);
 
 /** Trusted constraint names and schema paths only; validator text and received values are never instructions. */
 export function researchResponseDiagnostics(raw: unknown, evidence: Evidence, error: z.ZodError | PipelineError): Diagnostic[] {
@@ -92,7 +94,7 @@ export async function assertResearchRetryUnused(workspace: string, jobId: string
 function correctionReserve(options: ResearchRetryOptions): ModelReserve {
   // Unknown future input cannot be promised. Protect one full script and the
   // maximum four required review batches; every later request still gets its exact guard.
-  const reserve = { calls: 5, inputTokens: 0, outputTokens: 5000 + 4 * 3000 };
+  const reserve = { calls: options.contractVersion === 2 ? 5 : 6, inputTokens: 0, outputTokens: (options.contractVersion === 2 ? 0 : 6000) + 5000 + 4 * 3000 };
   const ledger = options.providers.ledger;
   if (ledger.modelCalls + 1 + reserve.calls > Math.min(options.input.budgets?.maxModelCalls || 10, 12) || ledger.outputTokens + ledger.reservedOutputTokens + 3500 + reserve.outputTokens > (options.input.budgets?.maxModelOutputTokens || 35000)) throw new PipelineError("model_budget", "The remaining model allowance cannot cover a full research correction, script and required reviews.", "Ask the administrator to inspect the retained research response. No correction was started.", "needs_review");
   return reserve;
@@ -103,7 +105,7 @@ export async function compileResearchWithRetry(raw: unknown, options: ResearchRe
   await assertResearchRetryUnused(options.workspace, options.input.jobId, options.evidenceSha256);
   if (raw === undefined) throw stageFailure("There is no confirmed research response to correct.");
   let rejected: z.ZodError | PipelineError;
-  try { return compileResearch(options.input, options.evidence, raw, options.evidenceSha256); }
+  try { return compileResearch(options.input, options.evidence, raw, options.evidenceSha256, { version: options.contractVersion || 3 }); }
   catch (error) {
     if (record(raw).sufficientEvidence === false && error instanceof z.ZodError) throw insufficientResponse();
     if (!(error instanceof z.ZodError) && !(error instanceof PipelineError && error.code === "production_stage_changed")) throw error;
@@ -119,7 +121,7 @@ export async function compileResearchWithRetry(raw: unknown, options: ResearchRe
   await options.hooks.persist([RESEARCH_RETRY_PATH]);
   const corrected = await perform();
   let result: Research;
-  try { result = compileResearch(options.input, options.evidence, corrected, options.evidenceSha256); }
+  try { result = compileResearch(options.input, options.evidence, corrected, options.evidenceSha256, { version: options.contractVersion || 3 }); }
   catch (error) {
     await complete("invalid", corrected);
     if (record(corrected).sufficientEvidence === false && error instanceof z.ZodError) throw insufficientResponse();

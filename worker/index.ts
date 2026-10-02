@@ -11,6 +11,7 @@ import { callbackAuth, ingest,type IngestDependencies } from "./ingest";
 import { compilePlan, preparePlanRepair, savePlan, validateTimeline } from "./planning";
 import { researchProduct, stageDigest, stageFailure } from "./research";
 import { writeScript } from "./scripting";
+import { buildUiDocuments } from "./ui-reconstruction";
 import { render } from "./render";
 import { quality, repairableFindings } from "./quality";
 import { assertCompatibleRuntime } from "./runtime";
@@ -77,11 +78,13 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(providers.ledger.modelCalls)throw stageFailure("The source evidence for previous paid work is missing.");evidence=await ingest(input,workspace,providers,hooks,dependencies);}
   deadline();await hooks.state("reading",{stage:"research"});
   const research=await researchProduct(input,evidence,providers,hooks,workspace);
+  deadline();await hooks.state("planning",{stage:"ui-documentation",researchSha256:stageDigest(research)});
+  const uiBundle=research.version===3?await buildUiDocuments(input,evidence,research,providers,hooks,workspace):undefined;
   deadline();await hooks.state("planning",{stage:"script",researchSha256:stageDigest(research)});
-  const script=await writeScript(input,evidence,research,providers,hooks,workspace);
+  const script=await writeScript(input,evidence,research,providers,hooks,workspace,uiBundle);
   deadline();
   let plan:Plan;
-  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research and script.");}
+  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||plan.production?.uiSha256!==uiBundle?.sha256||(uiBundle&&stageDigest(plan.uiDocuments)!==stageDigest(uiBundle.documents))||plan.audienceLabel!==script.audienceLabel||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research, UI documents and script.");}
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
