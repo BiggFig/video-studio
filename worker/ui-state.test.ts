@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
 import { expectedUiState,uiActionSampleFrames } from "./ui-state";
-import { uiEvaluatorSource,uiDocumentHtml } from "./ui-composition";
+import { uiEvaluatorSource,uiDocumentHtml,uiCompositionCss } from "./ui-composition";
 import { motionTimingForPresentation,uiActionEndFrame } from "./motion-timing";
 import { motionHtml } from "./motion-composition";
 import { motionUsage } from "./motion-assets";
@@ -39,10 +39,15 @@ test("pointer/click/select and full snapshot changes reach precise frame boundar
 });
 test("UI samples include the click pulse and every other result, with full action-tail settlement",()=>{
  const {document,actions}=fixture(),plan=planFixture(document,actions),scene=plan.scenes[0];scene.start_frame=300;
- assert.equal(uiActionEndFrame(actions),120);assert.equal(motionTimingForPresentation(scene.presentation,false).entryFrames,120);
+ assert.equal(uiActionEndFrame(actions),120);assert.equal(motionTimingForPresentation(scene.presentation,false).entryFrames,132);
  assert.deepEqual(uiActionSampleFrames(scene),[345,375,390,396,408,420]);scene.duration_frames=100;assert.deepEqual(uiActionSampleFrames(scene),[345,375,390,396,399]);
  assert.equal(expectedUiState(document,actions,29).stateId,"observed");assert.ok(expectedUiState(document,actions,96).pointer.clickProgress>.99);
  assert.deepEqual(uiActionSampleFrames({...scene,presentation:undefined}),[]);
+});
+test("effective frame/text provenance follows typing and selection and resets only with a full observed snapshot",()=>{
+ const {document,actions}=fixture();assert.equal(expectedUiState(document,actions,0).elements.input.textBasis,"source-ui");assert.equal(expectedUiState(document,actions,65).basis,"illustrative");assert.equal(expectedUiState(document,actions,65).elements.input.textBasis,"example-content");
+ const selection=expectedUiState(document,[{kind:"select",atFrame:30,durationFrames:6,targetId:"choice",evidenceId:"fact-1"}],36);assert.equal(selection.basis,"illustrative");assert.equal(selection.elements.choice.textBasis,"source-ui");
+ const restored=expectedUiState(document,[...actions,{kind:"state",atFrame:132,durationFrames:6,stateId:"observed",evidenceId:"fact-1"}],138);assert.equal(restored.basis,"observed");assert.equal(restored.elements.input.text,"Observed value");assert.equal(restored.elements.input.textBasis,"source-ui");
 });
 test("editable DOM is escaped and reconstructed sources are never reported as rendered source pixels",()=>{
  const {document,actions}=fixture();document.elements[0].text='</script><script>alert("bad")</script>';const plan=planFixture(document,actions),html=motionHtml(plan,{source:"assets/source.png"});
@@ -54,4 +59,23 @@ test("trusted audience label appears only at absolute frame zero, including part
  const {document,actions}=fixture(),plan=planFixture(document,actions);plan.audienceLabel='For writers <developing ideas>';
  assert.match(motionHtml(plan,{source:'assets/source.png'}),/class="audience-label" data-essential>For writers &lt;developing ideas&gt;/);
  plan.scenes[0].start_frame=300;assert.doesNotMatch(motionHtml(plan,{source:'assets/source.png'}),/class="audience-label" data-essential/);
+});
+
+test("large CSS pill radii resolve to the element bounds without changing source geometry",()=>{
+ const {document}=fixture();document.styles[0].radius=999;
+ const before=JSON.stringify(document),html=uiDocumentHtml(document,0,{width:800,height:500});
+ assert.match(html,/border-radius:37\.5px/);assert.equal(JSON.stringify(document),before);
+ document.styles[0].radius=Number.POSITIVE_INFINITY;
+ assert.throws(()=>uiDocumentHtml(document,0,{width:800,height:500}),/supported range/);
+});
+
+test("selection preserves observed styling instead of imposing the video brand color",()=>{
+ const {document}=fixture();document.styles.push({...document.styles[0],id:"selected",fill:"#343434",borderColor:"#565656",fontWeight:600});
+ document.elements[1].selectedStyleId="selected";
+ const before=JSON.stringify(document),html=uiDocumentHtml(document,0,{width:800,height:500});
+ assert.match(html,/data-ui-element="choice"[^>]*--ui-selected-fill:#343434/);
+ assert.match(html,/data-ui-element="input"[^>]*--ui-selected-fill:#202020/);
+ assert.doesNotMatch(uiCompositionCss,/data-selected[^}]+var\(--accent\)/);
+ assert.equal(JSON.stringify(document),before);
+ document.elements[1].selectedStyleId="missing";assert.throws(()=>uiDocumentHtml(document,0,{width:800,height:500}),/selected style missing/);
 });

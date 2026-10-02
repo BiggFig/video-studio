@@ -14,6 +14,7 @@ import { motionBrowserArgs,motionBrowserPath } from "./motion-browser";
 import { motionAssetIds,motionUsage } from "./motion-assets";
 import { logoGeometryMatches } from "./motion-primitives";
 import { expectedUiState,uiActionSampleFrames } from "./ui-state";
+import { expectedUiCamera,uiStageViewport } from "./ui-camera";
 import { PipelineError,type Hooks,type Plan } from "./types";
 
 const require=createRequire(import.meta.url);
@@ -86,12 +87,16 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
       if(visual?.kind==="ui-demo"){
         const document=plan.uiDocuments!.find(document=>document.id===visual.documentId)!;
         for(const frame of [...new Set([scene.start_frame,scene.start_frame+Math.min(29,scene.duration_frames-1),...uiActionSampleFrames(scene),hold])]){
-          await seek(frame);const expected=expectedUiState(document,visual.actions,frame-scene.start_frame);
-          const actual=await page.locator(`#ui-document-${index}`).evaluate(container=>({stateId:(container as HTMLElement).dataset.uiState,elements:[...container.querySelectorAll('[data-ui-element]')].map(element=>{const node=element as HTMLElement,text=node.querySelector('[data-ui-text]'),bounds=node.getBoundingClientRect();return{id:node.dataset.uiElement!,text:text?.textContent||"",visible:node.style.visibility==="visible",selected:node.dataset.selected==="true",typing:node.dataset.typing==="true",overflow:!!text&&(node.scrollWidth>node.clientWidth+2||node.scrollHeight>node.clientHeight+2),font:Number.parseFloat(getComputedStyle(node).fontSize),left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom};})}));
-          const matches=actual.stateId===expected.stateId&&actual.elements.length===document.elements.length&&actual.elements.every(value=>{const state=expected.elements[value.id];return !!state&&state.text===value.text&&state.visible===value.visible&&state.selected===value.selected&&state.typing===value.typing;});
-          const readable=actual.elements.every(value=>!value.visible||!value.text||(!value.overflow&&value.font>=16&&value.left>=24&&value.top>=24&&value.right<=plan.output.width-24&&value.bottom<=plan.output.height-24));
-          findings.push({scene:scene.id,frame,uiDocumentId:document.id,expected,actual,matches,readable,passed:matches&&readable});await writeJson(join(workspace,"analysis/layout.json"),findings);
-          if(!matches||!readable)throw new PipelineError("ui_state_mismatch","The reconstructed UI did not reach its planned readable frame state.","Inspect the retained document, frame state and layout measurements.","needs_review");
+          await seek(frame);const expected=expectedUiState(document,visual.actions,frame-scene.start_frame),camera=expectedUiCamera(document,visual.actions,frame-scene.start_frame,uiStageViewport(plan.output.width,plan.output.height,!scene.detail));
+          const actual=await page.locator(`#ui-document-${index}`).evaluate(container=>{const v=container.parentElement!.getBoundingClientRect(),matrix=new DOMMatrix(getComputedStyle(container).transform);return{stateId:(container as HTMLElement).dataset.uiState,basis:(container as HTMLElement).dataset.uiBasis,camera:{x:matrix.e,y:matrix.f,scale:matrix.a},viewport:{left:v.left,top:v.top,right:v.right,bottom:v.bottom},elements:[...container.querySelectorAll('[data-ui-element]')].map(element=>{const node=element as HTMLElement,text=node.querySelector('[data-ui-text]'),bounds=node.getBoundingClientRect();return{id:node.dataset.uiElement!,text:text?.textContent||"",textBasis:node.dataset.textBasis,visible:node.style.visibility==="visible",selected:node.dataset.selected==="true",typing:node.dataset.typing==="true",overflow:!!text&&(node.scrollWidth>node.clientWidth+2||node.scrollHeight>node.clientHeight+2),font:Number.parseFloat(getComputedStyle(node).fontSize),left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom};})};});
+          const matches=actual.stateId===expected.stateId&&actual.basis===expected.basis&&actual.elements.length===document.elements.length&&actual.elements.every(value=>{const state=expected.elements[value.id];return !!state&&state.text===value.text&&state.textBasis===value.textBasis&&state.visible===value.visible&&state.selected===value.selected&&state.typing===value.typing;});
+          const targetIds=new Set(visual.actions.flatMap(action=>action.targetId?[action.targetId]:[])),viewport=actual.viewport;
+          const inside=(value:{left:number;top:number;right:number;bottom:number})=>value.left>=viewport.left-2&&value.top>=viewport.top-2&&value.right<=viewport.right+2&&value.bottom<=viewport.bottom+2;
+          const readable=actual.elements.every(value=>!value.visible||((!value.text||(!value.overflow&&value.font>=16))&&((camera.phase!=="wide"&&!targetIds.has(value.id))||inside(value))));
+          const cameraMatches=Math.abs(actual.camera.x-camera.x)<.001&&Math.abs(actual.camera.y-camera.y)<.001&&Math.abs(actual.camera.scale-camera.scale)<.00001;
+          const cameraBounds=viewport.left>=24&&viewport.top>=24&&viewport.right<=plan.output.width-24&&viewport.bottom<=plan.output.height-24&&!inspection.some(copy=>Math.min(viewport.right,copy.right)-Math.max(viewport.left,copy.x)>3&&Math.min(viewport.bottom,copy.bottom)-Math.max(viewport.top,copy.y)>3);
+          findings.push({scene:scene.id,frame,uiDocumentId:document.id,expected,camera,actual,matches,readable,cameraMatches,cameraBounds,passed:matches&&readable&&cameraMatches&&cameraBounds});await writeJson(join(workspace,"analysis/layout.json"),findings);
+          if(!matches||!readable||!cameraMatches||!cameraBounds)throw new PipelineError("ui_state_mismatch","The reconstructed UI did not reach its planned readable frame state and camera bounds.","Inspect the retained document, frame state and layout measurements.","needs_review");
           const sample=`${project.directory}/ui-${index}-${frame}.png`;await page.screenshot({path:join(workspace,sample)});screenshots.push(sample);
         }
       }

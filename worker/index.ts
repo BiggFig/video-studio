@@ -13,6 +13,7 @@ import { researchProduct, stageDigest, stageFailure } from "./research";
 import { writeScript } from "./scripting";
 import { buildUiDocuments } from "./ui-reconstruction";
 import { render } from "./render";
+import { prepareMotionProject, inspectMotionProject } from "./motion-render";
 import { quality, repairableFindings } from "./quality";
 import { assertCompatibleRuntime } from "./runtime";
 import { RepairBudget } from "./repairs";
@@ -88,6 +89,18 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
+    if(plan.renderer==="hyperframes"&&plan.uiDocuments?.length){
+      deadline();await hooks.state("planning",{stage:"ui-preflight"});
+      const project=await prepareMotionProject(plan,workspace,repairBudget.consumed);await hooks.persist(project.paths);
+      try{const inspected=await inspectMotionProject(plan,workspace,project);await hooks.persist([...inspected,"analysis/layout.json"]);}
+      catch(error){
+        if(await stat(join(workspace,"analysis/layout.json")).catch(()=>null))await hooks.persist(["analysis/layout.json"]);
+        // Editorial copy keeps its existing bounded repair path after audio is attached.
+        // Invalid UI geometry/state stops before any audio generation is purchased.
+        if(!(error instanceof PipelineError&&error.code==="copy_overflow"))throw error;
+      }
+      deadline();
+    }
     const music=await providers.audio("music",plan.music_prompt,plan.output.duration_frames/30),sfx=await providers.audio("sfx",plan.sfx_prompt,1.2);
     const musicProbe=await probe(join(workspace,music)),sfxProbe=await probe(join(workspace,sfx));
     plan.assets.push({id:"generated-music",path:music,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; instrumental-only request.",width:0,height:0,duration_seconds:musicProbe.duration,has_audio:true},{id:"generated-sfx",path:sfx,kind:"audio",usage:"output",rights:"Generated using the configured ElevenLabs account; no speech requested.",width:0,height:0,duration_seconds:sfxProbe.duration,has_audio:true});

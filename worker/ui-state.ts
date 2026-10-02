@@ -3,7 +3,7 @@ import type { Scene } from "./types";
 
 export interface UiFrameState {
  stateId:string;basis:string;
- elements:Record<string,{text:string;visible:boolean;selected:boolean;typing:boolean}>;
+ elements:Record<string,{text:string;textBasis:"source-ui"|"example-content";visible:boolean;selected:boolean;typing:boolean}>;
  pointer:{visible:boolean;x:number;y:number;clickProgress:number};
 }
 
@@ -11,11 +11,11 @@ export interface UiFrameState {
 export function expectedUiState(document:UiDocument,actions:UiAction[],localFrame:number):UiFrameState {
  if(!Number.isInteger(localFrame)||localFrame<0)throw new Error("UI frame must be a nonnegative integer");
  const elements:UiFrameState["elements"]=Object.create(null);
- for(const element of document.elements)elements[element.id]={text:element.text,visible:element.initiallyVisible,selected:false,typing:false};
+ for(const element of document.elements)elements[element.id]={text:element.text,textBasis:element.textBasis,visible:element.initiallyVisible,selected:false,typing:false};
  const initial=document.states[0];
  if(!initial)throw new Error("UI document needs an initial state");
  for(const element of document.elements){elements[element.id].visible=initial.visibleElementIds.includes(element.id);elements[element.id].selected=initial.selectedElementIds.includes(element.id);}
- for(const value of initial.textValues)elements[value.elementId].text=value.text;
+ for(const value of initial.textValues){elements[value.elementId].text=value.text;elements[value.elementId].textBasis=value.textBasis;}
  let stateId=initial.id,basis:string=initial.basis;
  const pointer={visible:false,x:.5,y:.85,clickProgress:0};
  for(const action of actions){
@@ -31,16 +31,16 @@ export function expectedUiState(document:UiDocument,actions:UiAction[],localFram
    pointer.x=target.rect.x+target.rect.width/2;pointer.y=target.rect.y+target.rect.height/2;pointer.visible=true;pointer.clickProgress=progress<1?Math.sin(progress*Math.PI):0;
   }else if(action.kind==="type"){
    if(!target)throw new Error("UI typing target missing");
-   const characters=Array.from(action.text||"");elements[target.id].text=characters.slice(0,Math.floor(characters.length*progress)).join("");elements[target.id].typing=progress<1;
+   const characters=Array.from(action.text||"");elements[target.id].text=characters.slice(0,Math.floor(characters.length*progress)).join("");elements[target.id].textBasis="example-content";elements[target.id].typing=progress<1;basis="illustrative";
   }else if(action.kind==="select"){
    if(!target)throw new Error("UI selection target missing");
-   if(localFrame>=end)for(const element of document.elements)elements[element.id].selected=element.id===target.id;
+   if(localFrame>=end){for(const element of document.elements)elements[element.id].selected=element.id===target.id;basis="illustrative";}
   }else if(action.kind==="state"&&localFrame>=end){
    let snapshot:UiDocument["states"][number]|undefined;for(const candidate of document.states)if(candidate.id===action.stateId)snapshot=candidate;
    if(!snapshot)throw new Error("UI state target missing");
    stateId=snapshot.id;basis=snapshot.basis;
-   for(const element of document.elements)elements[element.id]={text:element.text,visible:snapshot.visibleElementIds.includes(element.id),selected:snapshot.selectedElementIds.includes(element.id),typing:false};
-   for(const value of snapshot.textValues)elements[value.elementId].text=value.text;
+   for(const element of document.elements)elements[element.id]={text:element.text,textBasis:element.textBasis,visible:snapshot.visibleElementIds.includes(element.id),selected:snapshot.selectedElementIds.includes(element.id),typing:false};
+   for(const value of snapshot.textValues){elements[value.elementId].text=value.text;elements[value.elementId].textBasis=value.textBasis;}
   }
  }
  return{stateId,basis,elements,pointer};

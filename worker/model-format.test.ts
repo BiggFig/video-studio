@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SCRIPT_OUTPUT_SCHEMA, scriptOutputConfig, constrainedScriptSchema, type ScriptConstraints } from "./model-format";
+import { SCRIPT_OUTPUT_SCHEMA, UI_OUTPUT_SCHEMA, scriptOutputConfig, constrainedScriptSchema, constrainedUiSchema, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
 
 type Schema = { type?: string; properties?: Record<string, Schema>; required?: string[]; additionalProperties?: boolean; items?: Schema; anyOf?: Schema[]; enum?: string[]; $ref?: string; $defs?: Record<string, Schema> };
 const constraints: ScriptConstraints = {
@@ -103,4 +103,65 @@ test("all source asset, card, panel and connection-node choices stay inside veri
   assert.throws(() => constrainedScriptSchema({ ...constraints, assetIds: [] }), /verified source IDs/);
   assert.throws(() => constrainedScriptSchema({ ...constraints, selectedFactIds: [] }), /verified source IDs/);
   for (const role of ["mechanism", "outcome", "cta"]) assert.throws(() => constrainedScriptSchema({ ...constraints, roleEvidenceIds: { ...constraints.roleEvidenceIds, [role]: [] } }), /verified story roles/);
+});
+
+test("UI design grammar keeps each target's sources and state capabilities in its own namespace", () => {
+  const constraints: UiDesignConstraints = { targets: [
+    { id: "wikilink-autocomplete", sourceAssetIds: ["product-panel-0"], capabilityFactIds: ["fact-10", "fact-12"] },
+    { id: "graph-view", sourceAssetIds: ["product-panel-1"], capabilityFactIds: ["fact-16"] },
+  ] };
+  const before = JSON.stringify({ schema: UI_OUTPUT_SCHEMA, constraints }), schema = constrainedUiSchema(constraints) as Schema;
+  const keyed = schema.properties!.documentsById;
+  assert.deepEqual(keyed.required, constraints.targets.map(target => target.id));
+  assert.equal(keyed.additionalProperties, false);
+  assert.equal(schema.properties!.documents, undefined);
+  const variants = constraints.targets.map(target => keyed.properties![target.id]);
+  assert.equal(variants.length, 2);
+  for (let index = 0; index < variants.length; index++) {
+    const properties = variants[index].properties!, target = constraints.targets[index];
+    assert.deepEqual(properties.id.enum, [target.id]);
+    assert.deepEqual(properties.sourceAssetIds.items!.enum, target.sourceAssetIds);
+    assert.deepEqual(properties.capabilityFactIds.items!.enum, target.capabilityFactIds);
+    assert.deepEqual(properties.elements.items!.properties!.sourceAssetId.enum, target.sourceAssetIds);
+    assert.deepEqual(properties.states.items!.properties!.sourceAssetId.enum, target.sourceAssetIds);
+    assert.deepEqual(properties.states.items!.properties!.evidenceIds.items!.enum, target.capabilityFactIds);
+  }
+  const graph = variants[1].properties!;
+  assert.equal(graph.capabilityFactIds.items!.enum!.includes("fact-10"), false);
+  assert.equal(graph.states.items!.properties!.evidenceIds.items!.enum!.includes("fact-10"), false);
+  assert.equal(graph.elements.items!.properties!.sourceAssetId.enum!.includes("product-panel-0"), false);
+  assert.deepEqual(scriptOutputConfig("claude-sonnet-4-6", true, "ui-design-v1", undefined, constraints)?.format.schema, schema);
+  assert.deepEqual(scriptOutputConfig("claude-sonnet-4-6", true, "ui-design-v1")?.format.schema, UI_OUTPUT_SCHEMA);
+  assert.equal(JSON.stringify({ schema: UI_OUTPUT_SCHEMA, constraints }), before);
+  let unions = 0, references = 0;
+  const inspect = (node: Schema) => {
+    if (node.type === "object") { assert.equal(node.additionalProperties, false); Object.values(node.properties!).forEach(inspect); }
+    if (node.items) inspect(node.items);
+    if (node.anyOf) { unions++; node.anyOf.forEach(inspect); }
+    if (node.$ref) { references++; assert.ok(schema.$defs![node.$ref.slice("#/$defs/".length)]); }
+    Object.values(node.$defs || {}).forEach(inspect);
+  };
+  inspect(schema);
+  assert.equal(unions, 0); assert.equal(references, 8);
+  assert.throws(() => constrainedUiSchema({ targets: [] }), /verified target IDs/);
+  assert.throws(() => constrainedUiSchema({ targets: [constraints.targets[0], constraints.targets[0]] }), /verified target IDs/);
+  assert.throws(() => constrainedUiSchema({ targets: [{ ...constraints.targets[0], capabilityFactIds: [] }] }), /verified source and capability IDs/);
+  assert.throws(() => constrainedUiSchema({ targets: [{ ...constraints.targets[0], sourceAssetIds: ["same", "same"] }] }), /verified source and capability IDs/);
+});
+
+test("two-document script grammar is flat while role citations remain indivisible verified choices", () => {
+  const ui = ["editor", "graph"].map(id => ({ id, elementIds: [`${id}-input`, `${id}-button`], editableElementIds: [`${id}-input`], stateIds: [`${id}-initial`, `${id}-result`], capabilityFactIds: ["fact-10", "fact-16"] }));
+  const schema = constrainedScriptSchema({ ...constraints, uiDocuments: ui }) as Schema;
+  const scene = schema.properties!.scenes.items!, presentation = scene.properties!.presentation;
+  assert.deepEqual(schema.properties!.transportVersion.enum, ["flat-script-v1"]);
+  assert.ok(scene.properties!.storyEvidence.enum!.includes("mechanism:fact-16"));
+  assert.ok(!scene.properties!.storyEvidence.enum!.includes("outcome:fact-16"));
+  assert.equal(scene.properties!.storyRole, undefined); assert.equal(scene.properties!.evidenceId, undefined);
+  assert.deepEqual(presentation.properties!.visual.properties!.documentId.enum, ["", "editor", "graph"]);
+  let unions = 0, optional = 0;
+  const inspect = (node: Schema) => {
+    if (node.type === "object") { assert.equal(node.additionalProperties, false); optional += Object.keys(node.properties!).filter(key => !node.required!.includes(key)).length; Object.values(node.properties!).forEach(inspect); }
+    if (node.items) inspect(node.items); if (node.anyOf) { unions++; node.anyOf.forEach(inspect); }
+  };
+  inspect(schema); assert.equal(unions, 0); assert.equal(optional, 0);
 });

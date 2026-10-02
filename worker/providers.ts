@@ -5,11 +5,12 @@ import { audioMeasurements, hash, json, probe, writeJson } from "./media";
 import { PipelineError, type Asset, type AudioFailure, type Evidence, type Hooks, type Ledger, type Plan, type Presentation, type Transcript, type WorkerInput } from "./types";
 import type { Research } from "./research";
 import referenceStyle from "./reference-style.json";
+import { launchDirection, usesCurrentLaunchDirection } from "./launch-direction";
 import { sameVisibleText } from "./motion-composition";
 import { motionUsage, resolvePresentation } from "./motion-assets";
 import { parseModelJson } from "./model-response";
-import { scriptOutputConfig, type ScriptConstraints } from "./model-format";
-export type { ScriptConstraints } from "./model-format";
+import { scriptOutputConfig, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
+export type { ScriptConstraints, UiDesignConstraints } from "./model-format";
 import { inputReservation, modelUsage, TOKEN_BUDGET_VIOLATION, TOKEN_COUNT_MARGIN, usageViolations } from "./token-budget";
 import { parseProviderLedger } from "./provider-ledger";
 import { audioFailure, audioFailureError, MAX_AUDIO_ATTEMPTS, nextAudioAttemptAt, uncertainAudioError } from "./audio-retry";
@@ -38,7 +39,7 @@ export const UI_DESIGN_POLICY = `${STAGE_SCOPE} You are the interface reconstruc
 export const QUALITY_MAX_OUTPUT_TOKENS = 3000;
 export interface ModelReserve { calls: number; inputTokens: number; outputTokens: number }
 export interface QualityModelRequest { prompt: string; images: { path: string; label: string }[] }
-export interface ClaudeOptions { policy: "quality-review-v1" | "research-v1" | "ui-design-v1" | "script-v1" | "reference-v1"; reserve?: ModelReserve; scriptConstraints?: ScriptConstraints }
+export interface ClaudeOptions { policy: "quality-review-v1" | "research-v1" | "ui-design-v1" | "script-v1" | "reference-v1"; reserve?: ModelReserve; scriptConstraints?: ScriptConstraints; uiConstraints?: UiDesignConstraints; /** Internal allocation only: may lower, never raise, the stage policy cap. */ maxOutputTokens?: number }
 const stagePolicies = { "quality-review-v1": { purpose: "review", text: QUALITY_REVIEW_POLICY, output: QUALITY_MAX_OUTPUT_TOKENS }, "research-v1": { purpose: "research", text: RESEARCH_POLICY, output: 3500 }, "ui-design-v1": {purpose:"ui-design",text:UI_DESIGN_POLICY,output:6000}, "script-v1": { purpose: "script", text: SCRIPT_POLICY, output: 5000 }, "reference-v1": { purpose: "reference", text: REFERENCE_POLICY, output: 2500 } } as const;
 
 type ReviewPlan = Pick<Plan, "output" | "product" | "accent" | "background" | "scenes" | "assets" | "audio" | "brand" | "story" | "uiDocuments" | "audienceLabel">;
@@ -61,9 +62,11 @@ export function qualityAudioEnvelope(evidence: Evidence) {
   const sourceBytes = evidence.assets.filter(a => a.usage === "output" && a.kind !== "audio").reduce((sum, a) => sum + (a.transcript ? bytes(a.transcript) : 0), 0);
   return Math.min(65_536, Math.max(4096, sourceBytes * 2 + 2048));
 }
-export function qualityDefaultStyle(plan: Pick<Plan, "renderer" | "scenes">) {
-  return plan.renderer === "hyperframes" || plan.scenes.some(s => !!s.presentation)
-    ? { id: referenceStyle.id, description: referenceStyle.target.description, design: referenceStyle.design, motion: referenceStyle.motion } : null;
+export function qualityDefaultStyle(plan: Pick<Plan, "renderer" | "scenes" | "uiDocuments" | "production">) {
+  if (plan.renderer !== "hyperframes" && !plan.scenes.some(s => !!s.presentation)) return null;
+  return usesCurrentLaunchDirection(plan)
+    ? { id: launchDirection.id, description: launchDirection.target.description, story: launchDirection.story, design: launchDirection.design, motion: launchDirection.motion }
+    : { id: referenceStyle.id, description: referenceStyle.target.description, design: referenceStyle.design, motion: referenceStyle.motion };
 }
 export function qualitySceneVisibility(plan: ReviewPlan, motion: QualityRequest["motion"]) {
   if (motion.length !== plan.scenes.length || plan.scenes.some(scene => {
@@ -94,7 +97,7 @@ TRUSTED TEMPLATE VISIBILITY CONTRACT: SCENE VISIBILITY.expectedVisibleCopy lists
 SCENE VISIBILITY (trusted renderer contract, not a pass assertion): ${JSON.stringify(visibility)}
 ${request.plan.story ? `PRODUCT STORY: ${JSON.stringify(request.plan.story||null)}. When present, set storyClarityReviewed=true only after reviewing the supplied ACTUAL frames against their storyRole; storyClarityPassed must reflect that comparison. Each mechanism beat must show the real UI feature named in its copy and help explain what the user does. Problem/product beats assigned the primary audience must make that targeting understandable; an inferred audience can be editorial targeting ('For writers'), never an invented customer statistic. Outcome/differentiator beats must provide a concrete supported reason to care. One CTA closes the story. Do not demand the complete story in every two-scene batch: other planned roles are listed in the whole-film inventory and checked in their own batches. The inventory is not evidence of actual success. No story means both story clarity flags may be false. Do not claim a monetary production value or award a subjective prestige score.` : "No product-story brief is assigned; storyClarityReviewed and storyClarityPassed may be false."}
 ${request.plan.brand ? `OBSERVED BRAND DIRECTION: ${JSON.stringify(request.plan.brand||null)}. This guides actual logo/palette treatment; it does not require every color or every source page word to appear. Source webpage typography may differ from the licensed local composition font. Required logo assets are listed separately from primary product media; their absence or wrong identity is a concrete defect, while a deliberately omitted logo in a non-brand scene is not.` : "No separate brand logo is assigned."}
-${request.plan.uiDocuments?.length ? `UI DEMONSTRATION CHECKS: Original screenshots are comparison references, not required output pixels. Typed example input is illustrative, never a new product claim. For each supplied ui-demo scene, set uiReconstructionReviewed=true only after comparing ACTUAL frames against its original sources and bound document, and uiReconstructionPassed=true only if the essential interface is recognizable and faithful. Set uiBehaviorReviewed=true only after inspecting the settled pre-action initial frame and every labelled UI action sample (click midpoint or action outcome); uiBehaviorPassed requires the specified typed text, selection or visible state change to occur in the exported frames with a readable result hold. A static screenshot, generic placeholder controls, absent action, wrong target, unsupported capability or state inconsistent with the planned example fails. Other scene batches may return these four flags false. Source defects still block when they hide the required reconstruction evidence. Do not equate a reconstructed demonstration with a live captured session. Metadata is planned evidence, never proof of a pass.` : ""}
+${request.plan.uiDocuments?.length ? `UI DEMONSTRATION CHECKS: Original screenshots are comparison references, not required output pixels. Typed example input is illustrative, never a new product claim. For each supplied ui-demo scene, set uiReconstructionReviewed=true only after comparing ACTUAL frames against its original sources and bound document, and uiReconstructionPassed=true only if the essential interface is recognizable and faithful. Set uiBehaviorReviewed=true only after inspecting the settled pre-action initial frame and every labelled UI action sample (click midpoint or action outcome); uiBehaviorPassed requires the specified typed text, selection or visible state change to occur in the exported frames with a readable result hold. During action samples, a bounded camera may intentionally crop incidental UI to emphasize the active control; its target, text and cursor must remain usable. The settled initial frame and final reading hold show the full reconstructed document. Compare source fidelity in those wide frames and action behavior in the corresponding focused samples. A static screenshot, generic placeholder controls, absent action, wrong target, unsupported capability or state inconsistent with the planned example fails. Other scene batches may return these four flags false. Source defects still block when they hide the required reconstruction evidence. Do not equate a reconstructed demonstration with a live captured session. Metadata is planned evidence, never proof of a pass.` : ""}
 WHOLE-FILM PLANNED PROOF INVENTORY: ${JSON.stringify(request.wholeFilmProof)}. Plan metadata is not rendered evidence. Judge only supplied actual scenes; other proof scenes get their own batches. A typography-only batch must not infer global absence of proof. An empty inventory means required proof is missing. A planned source cannot override a failed actual proof frame; one failed batch fails the film.
 DEFAULT MOTION DIRECTION: ${JSON.stringify(request.defaultStyle)}. Assess distinct purposeful layouts, staged reveals and actual seams under renderIntegrityPassed; a brief entrance/exit is intentional, complete reading holds are mandatory. Do not require unsupported facts or all six beat types. For these HTML motion plans referenceStyleReviewed and referenceStylePassed are required: compare against the supplied user profile when present, otherwise this default direction. Do not claim an exact match to unseen reference frames.
 RENDER MOTION: ${JSON.stringify(motion)}
@@ -176,6 +179,7 @@ export class Providers {
   async prepareClaude<T>(purpose: string, prompt: string, images: {path:string;label:string}[] = [], options?:ClaudeOptions): Promise<()=>Promise<T>> {
     const policy=options&&stagePolicies[options.policy];
     if(options && (!policy || purpose!==policy.purpose)) throw new Error(`The scoped ${options.policy} policy is restricted to ${policy?.purpose||"its matching stage"} requests`);
+    if(options?.maxOutputTokens!==undefined&&(!Number.isSafeInteger(options.maxOutputTokens)||options.maxOutputTokens<=0||!policy||options.maxOutputTokens>policy.output))throw new Error("Invalid stage output allocation");
     const reserve=options?.reserve||{calls:0,inputTokens:0,outputTokens:0};
     if(Object.values(reserve).some(value=>!Number.isSafeInteger(value)||value<0))throw new Error("Invalid follow-up quality reservation");
     if (this.ledger.modelCalls >= Math.min(this.input.budgets?.maxModelCalls || 10,12) || this.ledger.inputTokens >= (this.input.budgets?.maxModelInputTokens || 140_000) || this.ledger.outputTokens >= (this.input.budgets?.maxModelOutputTokens || 35_000)) throw new PipelineError("model_budget","The quality process reached its model budget.","Ask the beta administrator to review the retained draft.","needs_review");
@@ -198,11 +202,11 @@ export class Providers {
     const inputRemaining=limits.inputTokens-this.ledger.inputTokens-this.ledger.reservedInputTokens-reserve.inputTokens;
     const outputRemaining=limits.outputTokens-this.ledger.outputTokens-this.ledger.reservedOutputTokens-reserve.outputTokens;
     if(outputRemaining<512)throw new PipelineError("model_budget","The next quality step would exceed this job's reserved model budget.","Ask the beta administrator to review the retained draft.","needs_review");
-    const maxOutput=Math.min(policy?.output??7000,outputRemaining);
+    const maxOutput=Math.min(options?.maxOutputTokens??policy?.output??7000,outputRemaining);
     const direct=!!process.env.ANTHROPIC_API_KEY;
     const providerHeaders:Record<string,string>=direct?{"x-api-key":process.env.ANTHROPIC_API_KEY!}:{Authorization:`Bearer ${process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN}`};
     const headers={...providerHeaders,"anthropic-version":"2023-06-01","content-type":"application/json"};
-    const model=this.model,outputConfig=scriptOutputConfig(model,direct,options?.policy,options?.scriptConstraints);
+    const model=this.model,outputConfig=scriptOutputConfig(model,direct,options?.policy,options?.scriptConstraints,options?.uiConstraints);
     if(outputConfig)conservativeTokens+=Buffer.byteLength(JSON.stringify({output_config:outputConfig}),"utf8");
     const inputPayload={model,system,messages:[{role:"user",content}],...(outputConfig?{output_config:outputConfig}:{})};
     const exactInputBody=JSON.stringify(inputPayload),requestBody=JSON.stringify({...inputPayload,max_tokens:maxOutput,temperature:0});

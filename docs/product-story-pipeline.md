@@ -22,11 +22,15 @@ The separate UI documentation stage saves `analysis/ui.json`. Each document cont
 
 The model returns data, never executable HTML, CSS or JavaScript. Trusted components create the DOM and SVG. Documents permit at most 48 elements, eight shared styles, four states and two source images. IDs, source regions, labels, state visibility and capability references are validated. The full document is bound to the job, evidence and research hashes and retained across script repairs.
 
+Each researched target receives its own constrained request. The combined UI output allowance stays at 6,000 tokens. With two targets, the first receives 3,000 and the final target receives the actual unused balance; invalid accounting fails closed. Partial or failed stages cannot repeat automatically. Observed sample text retains source provenance; only newly authored examples are illustrative. Selection can use a documented source style, with no automatic brand-colored replacement.
+
 The initial production path reconstructs still product captures and DOM examples. Recording-derived reconstruction requires an explicit still-source contract before it can be treated independently of existing speech and playback rules.
 
 ## 4. Script one product story and its actions
 
 The script must include a visible mechanism, a concrete outcome and exactly one closing CTA. Establish the product within the first two beats. Each beat adds information. Pricing is optional and appears at most once. Target 20–28 seconds and 35–42 generated marketing words, with a hard maximum of 48. Full source speech and readable holds take precedence over the target duration.
+
+Version 3 uses the causal launch direction derived from the [sampled Addx references](addx-reference-direction.md). It has no mandatory six-beat template or feature/offer slots. Keep each workflow continuous through its result, alternating concise editorial copy with meaningful product proof. Legacy contracts keep their original profile and durable binding.
 
 The compiler adds the canonical audience label to the first scene. This label counts toward the copy budget. Source UI labels are evidence; illustrative typed content receives separate reading time.
 
@@ -34,9 +38,15 @@ A UI demonstration references a saved document and schedules up to six actions: 
 
 Direct supported Claude calls use constrained output shapes for UI documentation and scripting. The application still checks semantics, provenance, copy and timing. Exact token reservations include those schemas and the unchanged review allowance. A definitively invalid initial script may receive one durably recorded correction; runtime or quota restarts do not create additional allowances.
 
+The UI-enabled script transport is flat to stay inside the provider's grammar complexity limit. Paired role/fact choices remain constrained, and the compiler converts this transport into the existing scene and action types before semantic validation.
+
 ## 5. Render deterministic HTML motion
 
 The same frame clock drives UI content, selection, pointer position, click feedback and character-by-character typing. Seeking backward or repeating a frame reconstructs exactly the same state. UI demonstration scenes contain editable DOM/SVG rather than a full screenshot background.
+
+UI camera movement is derived from the documented action targets. It establishes the full document, eases toward relevant controls within a conservative zoom bound, and returns wide before the final reading hold. The cursor and interface share the same transform. Existing action samples and the final hold verify framing without adding model-review images. Short captions give the UI more space when no detail paragraph is present. Authored input updates the frame and element provenance to illustrative; an observed snapshot restores its recorded provenance.
+
+New UI compositions receive a local layout/state preflight before audio generation. UI failures stop there. Editorial copy overflow retains the existing bounded repair path after audio is attached; the full render still performs all layout and export checks.
 
 Other supported treatments include actual-image showcases, source-bound focus crops, two-image panels, conceptual relationships, and brand/CTA frames. They serve the story around the demonstrated workflow. An illustrative HTML interaction is not a claim that the application was operated in an authenticated session.
 
