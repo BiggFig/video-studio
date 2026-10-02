@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SCRIPT_OUTPUT_SCHEMA, UI_OUTPUT_SCHEMA, scriptOutputConfig, constrainedScriptSchema, constrainedUiSchema, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
+import { SCRIPT_OUTPUT_SCHEMA, UI_OUTPUT_SCHEMA, UI_TRANSPORT_VERSION, scriptOutputConfig, constrainedScriptSchema, constrainedUiSchema, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
 
 type Schema = { type?: string; properties?: Record<string, Schema>; required?: string[]; additionalProperties?: boolean; items?: Schema; anyOf?: Schema[]; enum?: string[]; $ref?: string; $defs?: Record<string, Schema> };
 const constraints: ScriptConstraints = {
@@ -126,6 +126,12 @@ test("UI design grammar keeps each target's sources and state capabilities in it
     { id: "graph-view", sourceAssetIds: ["product-panel-1"], capabilityFactIds: ["fact-16"] },
   ] };
   const before = JSON.stringify({ schema: UI_OUTPUT_SCHEMA, constraints }), schema = constrainedUiSchema(constraints) as Schema;
+  for (const current of [schema, UI_OUTPUT_SCHEMA as Schema]) {
+    assert.ok(current.required!.includes("transportVersion"));
+    assert.ok(current.required!.includes("coordinateSpace"));
+    assert.deepEqual(current.properties!.transportVersion.enum, [UI_TRANSPORT_VERSION]);
+    assert.deepEqual(current.properties!.coordinateSpace.enum, ["normalized", "pixels"]);
+  }
   const keyed = schema.properties!.documentsById;
   assert.deepEqual(keyed.required, constraints.targets.map(target => target.id));
   assert.equal(keyed.additionalProperties, false);

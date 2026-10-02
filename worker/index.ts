@@ -20,6 +20,7 @@ import { RepairBudget } from "./repairs";
 import { workerTimeRemainingMs } from "./deadline";
 import { alignAudioToPlan } from "./audio-direction";
 import { validatePlanCreativeDirection } from "./creative-direction";
+import { validatePlanShotRecipes } from "./shot-recipes";
 
 const runtimeInputSchema=z.object({runtimeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),runtimeId:z.string().min(1).max(256).optional(),deadlineAt:z.string().max(64).optional()});
 
@@ -87,9 +88,10 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   const script=await writeScript(input,evidence,research,providers,hooks,workspace,uiBundle);
   deadline();
   let plan:Plan;
-  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||plan.production?.uiSha256!==uiBundle?.sha256||(uiBundle&&stageDigest(plan.uiDocuments)!==stageDigest(uiBundle.documents))||plan.audienceLabel!==script.audienceLabel||stageDigest(plan.creativeDirection??null)!==stageDigest(script.creativeDirection??null)||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research, UI documents and script.");}
+  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||plan.production?.uiSha256!==uiBundle?.sha256||plan.production?.shotRecipeSha256!==script.shotRecipeSha256||(uiBundle&&stageDigest(plan.uiDocuments)!==stageDigest(uiBundle.documents))||plan.audienceLabel!==script.audienceLabel||stageDigest(plan.creativeDirection??null)!==stageDigest(script.creativeDirection??null)||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research, UI documents and script.");}
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
   validatePlanCreativeDirection(plan,research,evidence);
+  validatePlanShotRecipes(plan,research,evidence,uiBundle);
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
     if(plan.renderer==="hyperframes"&&plan.uiDocuments?.length){

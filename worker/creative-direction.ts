@@ -4,6 +4,8 @@ import { z } from "zod";
 import { writeJson } from "./media";
 import { stageDigest, stageFailure, type Research } from "./research";
 import { PipelineError, type Evidence, type Hooks, type Plan, type Presentation } from "./types";
+import { uiDocumentSchema, validateUiActions, validateUiDocuments, type UiDocument } from "./ui-reconstruction";
+import { uiActionBehaviorIssues } from "./script-ui-behavior";
 
 const factId = z.string().regex(/^fact-\d+$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -87,7 +89,35 @@ export function compileShotDirection(scene: DirectedScene): ShotDirection {
   return shotDirectionSchema.parse({ version: 1, job, motion, ...(continuityKey ? { continuityKey } : {}) });
 }
 
-export function validateDirectedStory(direction: CreativeDirection | undefined, scenes: DirectedScene[], research: Research, evidence: Evidence, previous?: { creativeDirection?: CreativeDirection }) {
+/** Only an actual supported action can contribute a second fact to UI execution. */
+function executedFacts(scene: DirectedScene, research: Research, evidence: Evidence, documents: UiDocument[]) {
+  const visual = scene.presentation?.visual;
+  const facts = [scene.evidenceId, ...(visual?.kind === "connections" ? visual.nodes.map(node => node.evidenceId) : visual?.kind === "panels" ? [visual.secondaryEvidenceId] : [])];
+  if (visual?.kind !== "ui-demo" || scene.presentation?.template !== "proof" || scene.preserveAudio) return facts;
+  try {
+    const canonical = z.array(uiDocumentSchema).min(1).max(2).parse(documents);
+    validateUiDocuments(canonical, research, evidence);
+    const document = canonical.find(document => document.id === visual.documentId);
+    if (!document || !document.sourceAssetIds.includes(scene.assetId) || !document.capabilityFactIds.includes(scene.evidenceId)) return facts;
+    const source = research.visuals.find(source => source.assetId === scene.assetId);
+    if (!source?.supportsFactIds.includes(scene.evidenceId)) return facts;
+    validateUiActions(document, visual.actions);
+    if (uiActionBehaviorIssues(document, visual.actions).length) return facts;
+    // Membership, pointer movement and ineffective actions never execute a concept.
+    return [...facts, ...visual.actions.filter(action => action.kind !== "pointer" && source.supportsFactIds.includes(action.evidenceId) && research.facts.some(fact => fact.evidenceId === action.evidenceId)).map(action => action.evidenceId)];
+  } catch {
+    // The full compiler independently rejects malformed/source-invalid documents
+    // and actions. They cannot grant creative execution before that validation.
+    return facts;
+  }
+}
+
+/** Safe diagnostic codes also used by the authoritative execution gate. */
+export function creativeExecutionIssues(direction: Pick<CreativeDirection, "concept" | "evidenceId">, scenes: DirectedScene[], research: Research, evidence: Evidence, documents: UiDocument[] = []) {
+  return scenes.some(scene => scene.direction?.motion === direction.concept && executedFacts(scene, research, evidence, documents).includes(direction.evidenceId)) ? [] : [{ code: "creative_concept_requires_executed_fact", path: ["creativeDirection", "evidenceId"] }];
+}
+
+export function validateDirectedStory(direction: CreativeDirection | undefined, scenes: DirectedScene[], research: Research, evidence: Evidence, previous?: { creativeDirection?: CreativeDirection }, documents: UiDocument[] = []) {
   if (!direction) {
     if (scenes.some(scene => scene.direction) || previous?.creativeDirection) throw stageFailure("A script cannot drop its immutable creative direction or add unbound shot motion.");
     return;
@@ -96,11 +126,7 @@ export function validateDirectedStory(direction: CreativeDirection | undefined, 
   const expected = compileCreativeDirection({ concept: direction.concept, evidenceId: direction.evidenceId }, research, evidence);
   if (stageDigest(direction) !== stageDigest(expected) || (previous?.creativeDirection && stageDigest(previous.creativeDirection) !== stageDigest(direction))) throw stageFailure("The script changed its source-bound creative direction.");
   for (const scene of scenes) if (stageDigest(scene.direction) !== stageDigest(compileShotDirection(scene))) throw stageFailure("A shot changed its compiled motion or source continuity identity.");
-  if (!scenes.some(scene => {
-    const visual = scene.presentation?.visual;
-    const facts = [scene.evidenceId, ...(visual?.kind === "connections" ? visual.nodes.map(node => node.evidenceId) : visual?.kind === "panels" ? [visual.secondaryEvidenceId] : [])];
-    return scene.direction?.motion === direction.concept && facts.includes(direction.evidenceId);
-  })) throw invalid("At least one shot must execute the selected creative concept with its cited product fact and supported visual primitive.");
+  if (creativeExecutionIssues(direction, scenes, research, evidence, documents).length) throw invalid("At least one shot must execute the selected creative concept with its cited product fact and supported visual primitive.");
   if (!scenes.some(scene => scene.direction?.job === "action") || !scenes.some(scene => ["result", "payoff"].includes(scene.direction?.job || ""))) throw invalid("Directed films require a concrete action and a distinct result or payoff job.");
   if (!["hook", "context"].includes(scenes[0]?.direction?.job || "")) throw invalid("A directed film must open with its audience problem or actual product context.");
 }
@@ -108,5 +134,5 @@ export function validateDirectedStory(direction: CreativeDirection | undefined, 
 /** Read-only restart guard: rebind direction and scene identities to retained verified research. */
 export function validatePlanCreativeDirection(plan: Plan, research: Research, evidence: Evidence) {
   if (plan.creativeDirection && plan.scenes.some(scene => !scene.evidence_id || research.facts.find(fact => fact.evidenceId === scene.evidence_id)?.quote !== scene.evidence)) throw stageFailure("A directed plan lost its canonical shot evidence binding.");
-  validateDirectedStory(plan.creativeDirection, plan.scenes.map(scene => ({ storyRole: scene.storyRole, assetId: scene.asset_id, evidenceId: scene.evidence_id || "", preserveAudio: scene.preserve_audio, presentation: scene.presentation, direction: scene.direction })), research, evidence);
+  validateDirectedStory(plan.creativeDirection, plan.scenes.map(scene => ({ storyRole: scene.storyRole, assetId: scene.asset_id, evidenceId: scene.evidence_id || "", preserveAudio: scene.preserve_audio, presentation: scene.presentation, direction: scene.direction })), research, evidence, undefined, plan.uiDocuments);
 }

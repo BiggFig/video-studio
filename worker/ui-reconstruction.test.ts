@@ -7,8 +7,9 @@ import { compileResearch, evidenceIdentity, researchProduct, sourceFacts, stageD
 import { compileResearchWithRetry } from "./research-review";
 import { compileScript, loadCompletedProductionStages, scriptConstraints, scriptVisibleWords, validateScript, writeScript } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
-import { buildUiDocuments, compileUiDocuments, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDesignRequest, uiDocumentReadiness, UI_READINESS_PATH, uiDocumentSchema, validateUiActions, validateUiBundle, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
-import { constrainedScriptSchema, constrainedUiSchema, scriptOutputConfig } from "./model-format";
+import { buildUiDocuments, compileUiDocuments, decodeUiTransport, loadUiDocuments, MAX_UI_RADIUS, uiActionSchema, uiDesignConstraints, uiDesignRequest, uiDocumentReadiness, UI_READINESS_PATH, uiDocumentSchema, uiExampleCopy, validateUiActions, validateUiBundle, type UiAction, type UiDocument, type UiDocumentBundle } from "./ui-reconstruction";
+import { constrainedScriptSchema, constrainedUiSchema, scriptOutputConfig, UI_TRANSPORT_VERSION } from "./model-format";
+import { buildShotRecipeCatalog, RECIPE_SCRIPT_TRANSPORT_VERSION } from "./shot-recipes";
 import type { Providers } from "./providers";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
 
@@ -190,16 +191,25 @@ test("the complete mocked v3 sequence and retained repair keep the same UI bundl
   const root = await workspace(t), calls: string[] = [];
   const base = scriptRaw(), currentScript = { ...base, creativeDirection: { concept: "focus", evidenceId: "fact-2" }, scenes: [
     { ...base.scenes[0], storyRole: "product", headline: "Atlas", presentation: { template: "brand", theme: "dark", transition: "cut" }, direction: { job: "context", motion: "reveal" } },
-    ...base.scenes.map((scene, index) => ({ ...scene, direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
+    ...base.scenes.map((scene, index) => ({ ...scene, ...(index === 1 ? { presentation: { ...scene.presentation, visual: { kind: "showcase" } } } : {}), direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
   ] };
-  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : currentScript; } } as unknown as Providers;
+  let recipeResponse: unknown;
+  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; } } as unknown as Providers;
   const research = await researchProduct(input, evidence, providers, hooks, root), ui = await buildUiDocuments(input, evidence, research, providers, hooks, root);
+  const catalog = buildShotRecipeCatalog(research, evidence, ui!);
+  recipeResponse = { ...currentScript, transportVersion: RECIPE_SCRIPT_TRANSPORT_VERSION, scenes: currentScript.scenes.map(scene => {
+    const { storyRole, assetId, evidenceId, presentation, ...copy } = scene;
+    const visual = (presentation as { visual?: { kind: string; actions?: UiAction[] } }).visual;
+    const recipe = catalog.recipes.find(recipe => recipe.storyRole === storyRole && recipe.assetId === assetId && recipe.evidenceId === evidenceId && recipe.template === presentation.template && recipe.visual.kind === (visual?.kind || "none"));
+    assert.ok(recipe);
+    return { ...copy, recipeId: recipe.id, presentation: { theme: presentation.theme, transition: presentation.transition, cards: [], nodes: [], actions: (visual?.actions || []).map(action => ({ targetId: "", stateId: "", text: "", ...action })) } };
+  }) };
   const script = await writeScript(input, evidence, research, providers, hooks, root, ui), plan = await compilePlan(input, evidence, script, hooks, root);
   assert.deepEqual(calls, ["research", "ui-design", "script"]);
   const restored = await loadCompletedProductionStages(input, evidence, root, plan); assert.deepEqual(restored.ui, ui);
-  const perform = await prepareRetainedPlanRepair(input, evidence, currentScript, hooks, root, { plan, findings: [] }), repaired = await perform();
+  const perform = await prepareRetainedPlanRepair(input, evidence, recipeResponse, hooks, root, { plan, findings: [] }), repaired = await perform();
   assert.equal(repaired.production?.uiSha256, ui!.sha256); assert.deepEqual(repaired.uiDocuments, ui!.documents);
-  const changed = structuredClone(plan); changed.uiDocuments![0].elements[0].text = "Altered controls"; await assert.rejects(prepareRetainedPlanRepair(input, evidence, currentScript, hooks, root, { plan: changed, findings: [] }), blocked);
+  const changed = structuredClone(plan); changed.uiDocuments![0].elements[0].text = "Altered controls"; await assert.rejects(prepareRetainedPlanRepair(input, evidence, recipeResponse, hooks, root, { plan: changed, findings: [] }), blocked);
 });
 test("new research correction reserves the mandatory UI call/output while the UI stage refuses unaffordable work", async t => {
   const root = await workspace(t), research = fixture().research; let called = 0;
@@ -430,4 +440,137 @@ test("successful document readiness distinguishes visible editing from hidden co
   assert.deepEqual(report.targets[0].states[0].editableElementIds, ["note"]);
   const hidden = structuredClone(doc); hidden.elements.push({ ...hidden.elements[0], id: "hidden-input", initiallyVisible: false });
   assert.match(uiDocumentReadiness(hidden).warnings[0], /hidden in every documented state/);
+});
+
+function pixelDraft() {
+  const doc = document();
+  for (const element of doc.elements) element.rect = { x: element.rect.x * doc.viewport.width, y: element.rect.y * doc.viewport.height, width: element.rect.width * doc.viewport.width, height: element.rect.height * doc.viewport.height };
+  return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "pixels", sufficientEvidence: true, reason: "Explicit integer layout coordinates", documentsById: { notes: doc } };
+}
+
+function hiddenResultDocument() {
+  const doc = document();
+  doc.elements[0].text = "[[I thin]]";
+  doc.elements[1].type = "list-item"; doc.elements[1].text = "I think therefore I am";
+  doc.elements[2].type = "text"; doc.elements[2].sourceAssetId = "editor"; doc.elements[2].text = "[[I think therefore I am]]";
+  doc.states = [doc.states[0], { id: "linked", basis: "illustrative", evidenceIds: ["fact-2"], visibleElementIds: ["idea"], selectedElementIds: [], textValues: [] }];
+  return doc;
+}
+const freshDocumentResponse = (doc: UiDocument) => ({ transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Documented workflow", documents: [doc] });
+
+test("fresh UI provenance rejects composed hidden base and repeated override strings while legacy bytes remain valid", () => {
+  const { research } = fixture();
+  for (const override of [false, true]) {
+    const doc = hiddenResultDocument();
+    if (override) doc.states[1].textValues = [{ elementId: "idea", text: doc.elements[2].text, textBasis: "source-ui" }];
+    const raw = freshDocumentResponse(doc), before = JSON.stringify(raw);
+    assert.throws(() => compileUiDocuments(raw, input, evidence, research), /Newly composed input or results must be example-content/);
+    const { transportVersion: _transport, coordinateSpace: _space, ...legacy } = raw;
+    assert.deepEqual(compileUiDocuments(legacy, input, evidence, research).documents, [doc]);
+    assert.equal(JSON.stringify(raw), before);
+    doc.elements[2].textBasis = "example-content";
+    if (override) doc.states[1].textValues[0].textBasis = "example-content";
+    assert.deepEqual(compileUiDocuments(raw, input, evidence, research).documents, [doc]);
+  }
+});
+
+test("fresh UI provenance preserves exact observed and selected DOM reuse, but cannot borrow other sources or hidden observed overrides", () => {
+  const { research } = fixture();
+  const reused = hiddenResultDocument(); reused.elements[2].text = reused.elements[1].text;
+  assert.deepEqual(compileUiDocuments(freshDocumentResponse(reused), input, evidence, research).documents, [reused]);
+  reused.elements[2].text = "";
+  assert.doesNotThrow(() => compileUiDocuments(freshDocumentResponse(reused), input, evidence, research));
+  const doc = hiddenResultDocument(), supplied = structuredClone(evidence);
+  supplied.uiSources = [{ id: "dom-editor", assetId: "editor", basis: "dom", context: "marketing-example", width: 1000, height: 600, elements: [{ id: "result", role: "text", rect: doc.elements[2].sourceRect, text: doc.elements[2].text }], limitations: [] }];
+  assert.doesNotThrow(() => compileUiDocuments(freshDocumentResponse(doc), input, supplied, research));
+  supplied.uiSources[0].assetId = "unselected-source";
+  assert.throws(() => compileUiDocuments(freshDocumentResponse(doc), input, supplied, research), /exactly reuse observed visible text/);
+  const overridden = hiddenResultDocument();
+  overridden.elements[2].text = overridden.elements[0].text;
+  overridden.states[0].textValues = [{ elementId: "note", text: "Actual observed replacement", textBasis: "source-ui" }];
+  assert.throws(() => compileUiDocuments(freshDocumentResponse(overridden), input, evidence, research), /exactly reuse observed visible text/);
+  overridden.elements[2].text = "Actual observed replacement";
+  assert.doesNotThrow(() => compileUiDocuments(freshDocumentResponse(overridden), input, evidence, research));
+});
+
+test("new UI provenance is checked before stage completion and remains a consumed failed stage", async t => {
+  const root = await workspace(t), { research } = fixture(); let calls = 0;
+  const raw = { ...freshDocumentResponse(hiddenResultDocument()), documentsById: { notes: hiddenResultDocument() } };
+  const { documents: _documents, ...keyed } = raw;
+  const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => { calls++; return keyed; } } as unknown as Providers;
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), /Newly composed input or results must be example-content/);
+  const report = JSON.parse(await readFile(join(root, UI_READINESS_PATH), "utf8"));
+  assert.equal(report.status, "stopped"); assert.equal(report.targets[0].status, "failed");
+  await assert.rejects(readFile(join(root, "analysis/ui.json")), { code: "ENOENT" });
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), blocked); assert.equal(calls, 1);
+});
+
+test("UI reading allowance counts later visible examples and overrides, excluding unreachable or overridden base text", async t => {
+  const doc = document(), result = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty";
+  doc.elements[0].text = "Unused base content"; doc.elements[0].textBasis = "example-content";
+  doc.states[0].textValues = [{ elementId: "note", text: "Research note", textBasis: "source-ui" }];
+  doc.elements[2].text = result; doc.elements[2].textBasis = "example-content";
+  doc.states[1].basis = "illustrative";
+  doc.states[1].textValues = [{ elementId: "note", text: "Hidden override", textBasis: "example-content" }];
+  doc.states[2].textValues[0].text = "Unreachable state text";
+  const stateAction: UiAction = { kind: "state", stateId: "relationships", atFrame: 30, durationFrames: 30, evidenceId: "fact-3" };
+  assert.deepEqual(uiExampleCopy(doc, [stateAction]), [result]);
+  assert.deepEqual(uiExampleCopy(doc, []), []);
+  assert.deepEqual(uiExampleCopy(doc, [{ ...actions()[0], text: "Typed example" }, { ...stateAction, atFrame: 90 }]), [result, "Typed example"]);
+  const { research } = fixture(), stage = compileUiDocuments({ sufficientEvidence: true, reason: "Examples", documents: [doc] }, input, evidence, research), ui = { documents: stage.documents, sha256: stageDigest(stage) };
+  const script = compileScript(scriptRaw(), input, evidence, research, undefined, ui), plan = await compilePlan(input, evidence, script, hooks, await workspace(t));
+  assert.ok(plan.scenes[1].duration_frames >= 228 + 60, "20 example words need their complete reading hold after the state action ends");
+});
+
+test("explicit pixel transport normalizes layout exactly once and preserves every source, style, state and input object", () => {
+  const { research, stage } = fixture(), raw = pixelDraft(), before = JSON.stringify(raw);
+  const compiled = compileUiDocuments(raw, input, evidence, research);
+  assert.deepEqual(compiled.documents, stage.documents);
+  assert.equal(JSON.stringify(raw), before);
+  assert.deepEqual(compiled.documents[0].elements.map(element => element.sourceRect), raw.documentsById.notes.elements.map(element => element.sourceRect));
+  const decoded = decodeUiTransport(raw); assert.deepEqual(decodeUiTransport(decoded), decoded);
+  assert.deepEqual(compileUiDocuments({ transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Normalized", documents: [document()] }, input, evidence, research).documents, stage.documents);
+  const { transportVersion: _version, coordinateSpace: _space, ...undeclared } = raw;
+  assert.throws(() => compileUiDocuments(undeclared, input, evidence, research), error => error instanceof PipelineError && error.code === "invalid_ui_document");
+});
+
+test("pixel transport rejects missing or mixed units, overflow and pixel sourceRects without guessing or clamping", () => {
+  const { research } = fixture();
+  for (const mutate of [
+    (raw: ReturnType<typeof pixelDraft>) => { delete (raw as Partial<typeof raw>).transportVersion; },
+    (raw: ReturnType<typeof pixelDraft>) => { delete (raw as Partial<typeof raw>).coordinateSpace; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.transportVersion = "unknown-version"; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.coordinateSpace = "normalized"; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[1].rect = document().elements[1].rect; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[0].rect.x = 999; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[0].rect.width = 0; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[0].rect.x = -1; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[0].rect.y = .5; },
+    (raw: ReturnType<typeof pixelDraft>) => { raw.documentsById.notes.elements[0].sourceRect.width = 1000; },
+  ]) {
+    const raw = pixelDraft(); mutate(raw); const before = JSON.stringify(raw);
+    assert.throws(() => compileUiDocuments(raw, input, evidence, research), error => error instanceof PipelineError && error.code === "invalid_ui_document");
+    assert.equal(JSON.stringify(raw), before);
+  }
+});
+
+test("fresh research corrects two targets once without dropping facts, while canonical retained two-target research stays valid", async t => {
+  const root = await workspace(t), two = twoTargets().research, before = JSON.stringify(two); let initial = 0, corrections = 0;
+  assert.equal(compileResearch(input, evidence, two, two.evidenceSha256).documentTargets!.length, 2);
+  assert.throws(() => compileResearch(input, evidence, two, two.evidenceSha256, { version: 3, singleTarget: true }), /exactly one decisive/);
+  const unscoped = { ...two, documentTargets: [two.documentTargets![0]] };
+  assert.throws(() => compileResearch(input, evidence, unscoped, two.evidenceSha256, { version: 3, singleTarget: true }), /Every fresh mechanism claim and step/);
+  const corrected = researchRaw();
+  const reserve = { policy: "research-v1", reserve: { calls: 6, inputTokens: 0, outputTokens: 23000 } };
+  const providers = { ledger: { modelCalls: 1, outputTokens: 1000, reservedOutputTokens: 0 }, claude: async (_purpose: string, _prompt: string, _images: unknown, options: unknown) => { assert.deepEqual(options, reserve); initial++; return two; }, prepareClaude: async (_purpose: string, prompt: string, _images: unknown, options: unknown) => {
+    assert.match(prompt, /single_target_required/); assert.match(prompt, /exactly one decisive input\/action\/result/);
+    assert.deepEqual(options, reserve);
+    return async () => { corrections++; return corrected; };
+  } } as unknown as Providers;
+  const result = await researchProduct(input, evidence, providers, hooks, root);
+  assert.equal(result.documentTargets!.length, 1); assert.deepEqual(result.facts.map(fact => ({ id: fact.evidenceId, quote: fact.quote })), two.facts.map(fact => ({ id: fact.evidenceId, quote: fact.quote })));
+  assert.equal(JSON.stringify(two), before); assert.equal(initial, 1); assert.equal(corrections, 1);
+  assert.deepEqual(await researchProduct(input, evidence, providers, hooks, root), result); assert.equal(initial, 1); assert.equal(corrections, 1);
+  const marker = JSON.parse(await readFile(join(root, "analysis/research-response-retry.json"), "utf8"));
+  assert.equal(marker.outcome, "valid"); assert.ok(marker.diagnostics.some((diagnostic: { code: string }) => diagnostic.code === "single_target_required"));
 });

@@ -13,8 +13,8 @@ const passed = { readabilityPassed: true, claimsPassed: true, realVisualsPassed:
   referenceStyleReviewed: true, referenceStylePassed: true, audioTranscriptPassed: true, findings: [], notes: [] };
 const finding = { severity: "major", sceneId: "scene-1", message: "Essential copy is missing at the reading hold.",
   check: "readability", evidence: "Reading hold frame 150 omits the required heading.", repair: "change_asset" };
-const rejected = { ...passed, findings: [finding] };
-const failing = { ...rejected, readabilityPassed: false };
+const rejected = { ...passed, findings: [{...finding,evidence:undefined}] };
+const failing = { ...passed, findings:[finding], readabilityPassed: false };
 const markerPath = "analysis/quality-schema-retry.json";
 
 async function fixture(t: TestContext) {
@@ -36,13 +36,13 @@ test("valid primary review uses no schema retry or marker", async t => {
   await assert.rejects(readFile(marker), { code: "ENOENT" });
 });
 
-test("contradiction gets one charged closure after durable reservation; a valid failure stays a failure", async t => {
+test("missing evidence gets one charged closure after durable reservation; a valid failure stays a failure", async t => {
   const { options, marker } = await fixture(t);
   const events: string[] = [];
   options.hooks.persist = async paths => { assert.deepEqual(paths, [markerPath]); events.push(JSON.parse(await readFile(marker, "utf8")).status); };
   options.prepareRetry = async (prompt, images) => {
     events.push("preflight"); assert.ok(prompt.startsWith(options.prompt)); assert.equal(images, options.images);
-    assert.match(prompt, /"code":"custom","path":\["findings",0,"check"\]/);
+    assert.match(prompt, /"code":"custom","path":\["findings",0\]/);
     assert.ok(!prompt.includes(finding.message)); assert.ok(!prompt.includes(finding.evidence));
     return async () => { events.push("paid"); assert.equal(JSON.parse(await readFile(marker, "utf8")).status, "reserved"); return failing; };
   };
@@ -54,7 +54,7 @@ test("contradiction gets one charged closure after durable reservation; a valid 
   assert.equal(events.filter(e => e === "paid").length, 1);
 });
 
-test("second contradictory review stops strictly and retains consumed invalid outcome", async t => {
+test("second structurally invalid review stops strictly and retains consumed invalid outcome", async t => {
   const { options, marker } = await fixture(t);
   let calls = 0;
   options.prepareRetry = async () => async () => { calls++; return rejected; };
@@ -168,4 +168,18 @@ test("quality entry allows fresh and valid-completed state without replenishing 
   await assert.doesNotReject(assertQualityRetryState(options.workspace, options.jobId));
   await assert.rejects(reviewWithSchemaRetry(rejected, options), /already used/);
   assert.equal(paidCalls, 1);
+});
+
+
+test("explicit blockers only downgrade positive flags and never purchase a schema retry",async t=>{
+  const {options,marker}=await fixture(t);
+  options.prepareRetry=async()=>{throw Error("Unexpected paid re-review");};
+  const raw={...passed,renderIntegrityPassed:false,uiReconstructionReviewed:true,uiReconstructionPassed:true,uiBehaviorReviewed:false,uiBehaviorPassed:false,findings:[{...finding,check:"ui_fidelity"}]};
+  const snapshot=JSON.stringify(raw),review=await reviewWithSchemaRetry(raw,options);
+  assert.equal(review.uiReconstructionPassed,false);assert.equal(review.renderIntegrityPassed,false);
+  assert.equal(review.uiBehaviorReviewed,false);assert.equal(review.uiBehaviorPassed,false);
+  assert.deepEqual(review.findings,raw.findings);assert.match(review.notes.at(-1)!,/uiReconstructionPassed true -> false/);
+  assert.equal(JSON.stringify(raw),snapshot);await assert.rejects(readFile(marker),{code:"ENOENT"});
+  assert.throws(()=>parseReview({...raw,uiReconstructionPassed:undefined}),/contradicts/);
+  assert.throws(()=>parseReview({...raw,findings:[{...finding,check:undefined}]}),/failed check/);
 });

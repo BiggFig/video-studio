@@ -19,6 +19,7 @@ test("a valid JSON prefix followed by another fenced document is always ambiguou
 test("wrapper handling never normalizes booleans or waives blocking findings",()=>{
  const value={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,notes:[],findings:[{severity:"major",check:"readability",message:"Essential heading is absent.",evidence:"Scene 1 hold lacks the planned heading."}]};
  const parsed=parseModelJson(`Commentary is not evidence.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``);
- assert.throws(()=>parseReview(parsed),/contradicts/);
+ assert.equal(parseReview(parsed).readabilityPassed,false);
+ assert.deepEqual(parseModelJson(JSON.stringify(value)),value);
  assert.equal((parseModelJson('{"readabilityPassed":"true"}') as {readabilityPassed:unknown}).readabilityPassed,"true");
 });

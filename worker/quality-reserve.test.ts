@@ -200,7 +200,7 @@ test("title-only cards retain explicit empty bodies and full source quotes witho
   assert.ok(!JSON.stringify(visibility).includes("The original source"));
   const flags={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,notes:[]};
   const missingRequiredBody={severity:"major",check:"readability",sceneId:scene.id,timeSeconds:2,message:"The required Graph body is missing at the reading hold.",evidence:"Hold frame 60 lacks the required Explore connections text.",repair:"extend_hold"};
-  assert.throws(()=>parseReview({...flags,findings:[missingRequiredBody]}),/contradicts/);
+  assert.equal(parseReview({...flags,findings:[missingRequiredBody]}).readabilityPassed,false);
   assert.deepEqual(parseReview({...flags,readabilityPassed:false,findings:[missingRequiredBody]}).findings,[missingRequiredBody]);
 });
 
@@ -260,7 +260,7 @@ test("story checks require performed review and reject contradictory passing fin
   assert.deepEqual(assessStoryClarity([{storyClarityReviewed:true,storyClarityPassed:true},{storyClarityReviewed:true,storyClarityPassed:false}]),{performed:true,passed:false});
   assert.deepEqual(assessStoryClarity([{storyClarityReviewed:true,storyClarityPassed:true}]),{performed:true,passed:true});
   const review={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,storyClarityReviewed:true,storyClarityPassed:true,notes:[],findings:[{severity:"major",check:"storytelling",message:"Mechanism is not explained.",evidence:"Scene-1 hold shows only a price, with no named product action."}]};
-  assert.throws(()=>parseReview(review),/contradicts/);
+  assert.equal(parseReview(review).storyClarityPassed,false);
   assert.equal(parseReview({...review,storyClarityPassed:false}).findings[0].check,"storytelling");
 });
 

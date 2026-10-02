@@ -139,6 +139,35 @@ test("call and full-output budgets protect a future script and all four mandator
   await compileResearchWithRetry(invalidDraft(), fixture.value); assert.equal(fixture.calls, 1);
 });
 
+test("research correction protects the exact remaining call count for fresh one-target, historical v3 and v2 jobs", async t => {
+  for (const scope of [
+    { fields: { singleTarget: true as const }, calls: 6, outputTokens: 23000 },
+    { fields: {}, calls: 7, outputTokens: 23000 },
+    { fields: { contractVersion: 2 as const }, calls: 5, outputTokens: 17000 },
+  ]) for (const affordable of [false, true]) {
+    const root = await workspace(t), usage = ledger(); let prepared = 0, calls = 0;
+    const corrected = verboseUiResearch(), rejected = { ...corrected, product: "x".repeat(49) };
+    const exactCallCap = usage.modelCalls + 1 + scope.calls;
+    const value: ResearchRetryOptions = {
+      ...scope.fields, input: { ...input, budgets: { ...input.budgets, maxModelCalls: exactCallCap - Number(!affordable) } }, evidence, evidenceSha256, workspace: root, hooks, ...researchRequest(input, evidence),
+      providers: { ledger: usage, prepareClaude: async (_purpose, _prompt, _images, options) => {
+        prepared++; assert.deepEqual(options, { policy: "research-v1", reserve: { calls: scope.calls, inputTokens: 0, outputTokens: scope.outputTokens } });
+        return async <T>() => { calls++; usage.modelCalls++; return corrected as T; };
+      } },
+    };
+    if (affordable) {
+      const result = await compileResearchWithRetry(rejected, value);
+      assert.equal(result.version, scope.fields.contractVersion === 2 ? 2 : 3);
+      assert.equal(prepared, 1); assert.equal(calls, 1); assert.equal(usage.modelCalls + scope.calls, exactCallCap);
+      assert.equal((await marker(root)).outcome, "valid");
+    } else {
+      await assert.rejects(compileResearchWithRetry(rejected, value), isCode("model_budget"));
+      assert.equal(prepared, 0); assert.equal(calls, 0);
+      await assert.rejects(readFile(join(root, RESEARCH_RETRY_PATH)), { code: "ENOENT" });
+    }
+  }
+});
+
 test("the ordinary exact-input or unresolved-usage guard can deny preflight without consuming the correction", async t => {
   const fixture = options(await workspace(t)); let prepared = 0;
   fixture.value.providers.prepareClaude = async () => { prepared++; throw new PipelineError("model_budget", "Exact request exceeds remaining input", "Review retained evidence", "needs_review"); };

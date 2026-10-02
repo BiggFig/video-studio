@@ -1,6 +1,6 @@
 /** Provider grammar handles shape only; the production compiler still checks all source bindings and limits. */
 type Schema = Record<string, unknown>;
-export interface ScriptConstraints { maxScenes?: number; assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[]; creativeDirection?: { concepts: { concept: "focus" | "connect" | "consolidate"; evidenceIds: string[] }[] } }
+export interface ScriptConstraints { maxScenes?: number; recipeIds?: string[]; assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[]; creativeDirection?: { concepts: { concept: "focus" | "connect" | "consolidate"; evidenceIds: string[] }[] } }
 export interface UiDesignConstraints { targets: { id: string; sourceAssetIds: string[]; capabilityFactIds: string[] }[] }
 export const FLAT_SCRIPT_TRANSPORT_VERSION = "flat-script-v1";
 export const DIRECTED_SCRIPT_TRANSPORT_VERSION = "flat-script-v2";
@@ -36,6 +36,7 @@ export function scriptOutputConfig(model: string, direct: boolean, policy?: stri
 /** Bind narrative choices in the grammar, before the semantic compiler checks actual claims. */
 export function constrainedScriptSchema(constraints: ScriptConstraints): Schema {
   if (constraints.maxScenes !== undefined && (!Number.isSafeInteger(constraints.maxScenes) || constraints.maxScenes < 2 || constraints.maxScenes > 8)) throw new Error("Invalid script scene allowance");
+  if (constraints.recipeIds && (!constraints.creativeDirection || !constraints.uiDocuments?.length)) throw new Error("Shot recipes require the directed UI grammar");
   if (constraints.uiDocuments?.length) return describeSceneAllowance(flatUiScriptSchema(constraints), constraints.maxScenes);
   const schema = structuredClone(SCRIPT_OUTPUT_SCHEMA) as any;
   const scene = schema.properties.scenes.items, presentation = scene.properties.presentation;
@@ -122,13 +123,25 @@ function flatUiScriptSchema(constraints: ScriptConstraints): Schema {
     scene.properties.direction = object({ job: choice("hook", "context", "action", "result", "payoff", "cta"), motion: choice("reveal", "focus", "connect", "consolidate", "hold") });
     scene.required.push("direction");
   }
+  if (constraints.recipeIds) {
+    const ids = constraints.recipeIds;
+    if (!ids.length || ids.length > 64 || new Set(ids).size !== ids.length || ids.some(id => !/^shot-[a-f0-9]{24}$/.test(id))) throw new Error("Invalid trusted shot recipe IDs");
+    schema.properties.transportVersion = choice("flat-script-v3");
+    delete scene.properties.assetId; delete scene.properties.storyEvidence;
+    scene.properties.recipeId = choice(...ids);
+    const old = scene.properties.presentation.properties;
+    scene.properties.presentation = object({ theme: old.theme, transition: old.transition, cards: old.cards, nodes: old.visual.properties.nodes, actions: old.visual.properties.actions });
+    scene.required = Object.keys(scene.properties);
+  }
   return schema;
 }
 
 const rect = object({ x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" } });
 const ids = array(text), basis = choice("source-ui", "example-content");
+export const UI_TRANSPORT_VERSION = "ui-document-v2";
 /** Shape grammar only: source fidelity, references, finite bounds and payload limits remain compiler checks. */
 export const UI_OUTPUT_SCHEMA = object({
+  transportVersion: choice(UI_TRANSPORT_VERSION), coordinateSpace: { ...choice("normalized", "pixels"), description: "Unit of ALL element.rect values. normalized means 0–1 fractions; pixels means integer coordinates inside each document.viewport. sourceRect ALWAYS remains normalized 0–1." },
   sufficientEvidence: { type: "boolean" }, reason: text,
   documents: array(object({
     id: text, sourceAssetIds: ids, capabilityFactIds: ids, viewport: object({ width: { type: "integer" }, height: { type: "integer" } }),
@@ -156,8 +169,8 @@ export function constrainedUiSchema(constraints: UiDesignConstraints): Schema {
     properties.sourceAssetIds = { ...array(choice(...target.sourceAssetIds)), description: "Include every listed source ID exactly once; never add another source." };
     properties.capabilityFactIds = { ...array(choice(...target.capabilityFactIds)), description: "Include every listed capability ID exactly once; never borrow another target's facts." };
     properties.elements.items.properties.sourceAssetId = choice(...target.sourceAssetIds);
-    properties.elements.items.properties.rect = { $ref: "#/$defs/uiRect" };
-    properties.elements.items.properties.sourceRect = { $ref: "#/$defs/uiRect" };
+    properties.elements.items.properties.rect = { $ref: "#/$defs/uiRect", description: "Use the declared coordinateSpace consistently: normalized 0–1, or integer viewport pixels. The complete rectangle must fit inside viewport." };
+    properties.elements.items.properties.sourceRect = { $ref: "#/$defs/uiRect", description: "Always normalized 0–1 relative to the original source image; never viewport pixels." };
     properties.styles.items = { $ref: "#/$defs/uiStyle" };
     properties.states.items.properties.sourceAssetId = choice(...target.sourceAssetIds);
     properties.states.items.properties.evidenceIds = array(choice(...target.capabilityFactIds));
@@ -166,5 +179,5 @@ export function constrainedUiSchema(constraints: UiDesignConstraints): Schema {
   }));
   // An unbounded array of large document unions exceeds the provider's compiled grammar limit.
   // Known target keys remove that union while preserving target-specific provenance enums.
-  return { ...object({ sufficientEvidence: { type: "boolean" }, reason: text, documentsById: object(documents) }), $defs: definitions };
+  return { ...object({ transportVersion: choice(UI_TRANSPORT_VERSION), coordinateSpace: structuredClone((UI_OUTPUT_SCHEMA as any).properties.coordinateSpace), sufficientEvidence: { type: "boolean" }, reason: text, documentsById: object(documents) }), $defs: definitions };
 }

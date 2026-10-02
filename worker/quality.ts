@@ -14,13 +14,22 @@ import { qualityDefaultStyle, qualityOriginalSourceLabel, qualityReviewPrompt, t
 import type { Evidence, Finding, Hooks, Plan, QC, Transcript } from "./types";
 
 const reviewCheckFlags={readability:"readabilityPassed",claims:"claimsPassed",real_visuals:"realVisualsPassed",render_integrity:"renderIntegrityPassed",reference_style:"referenceStylePassed",storytelling:"storyClarityPassed",ui_fidelity:"uiReconstructionPassed",ui_behavior:"uiBehaviorPassed",audio:"audioTranscriptPassed"} as const;
-const reviewSchema=z.object({readabilityPassed:z.boolean(),claimsPassed:z.boolean(),realVisualsPassed:z.boolean(),renderIntegrityPassed:z.boolean(),referenceStyleReviewed:z.boolean(),referenceStylePassed:z.boolean().optional(),audioTranscriptPassed:z.boolean(),storyClarityReviewed:z.boolean().optional(),storyClarityPassed:z.boolean().optional(),uiReconstructionReviewed:z.boolean().optional(),uiReconstructionPassed:z.boolean().optional(),uiBehaviorReviewed:z.boolean().optional(),uiBehaviorPassed:z.boolean().optional(),findings:z.array(z.object({severity:z.enum(["critical","major","minor"]),sceneId:z.string().nullish().transform(v=>v??undefined),timeSeconds:z.number().nullish().transform(v=>v??undefined),message:z.string(),check:z.enum(["readability","claims","real_visuals","render_integrity","reference_style","storytelling","ui_fidelity","ui_behavior","audio"]).nullish().transform(v=>v??undefined),evidence:z.string().min(1).max(1600).nullish().transform(v=>v??undefined),repair:z.enum(["shorten_copy","simplify_copy","change_asset","extend_hold"]).nullish().transform(v=>v??undefined)})),notes:z.array(z.string())}).superRefine((review,context)=>{
+const reviewShape=z.object({readabilityPassed:z.boolean(),claimsPassed:z.boolean(),realVisualsPassed:z.boolean(),renderIntegrityPassed:z.boolean(),referenceStyleReviewed:z.boolean(),referenceStylePassed:z.boolean().optional(),audioTranscriptPassed:z.boolean(),storyClarityReviewed:z.boolean().optional(),storyClarityPassed:z.boolean().optional(),uiReconstructionReviewed:z.boolean().optional(),uiReconstructionPassed:z.boolean().optional(),uiBehaviorReviewed:z.boolean().optional(),uiBehaviorPassed:z.boolean().optional(),findings:z.array(z.object({severity:z.enum(["critical","major","minor"]),sceneId:z.string().nullish().transform(v=>v??undefined),timeSeconds:z.number().nullish().transform(v=>v??undefined),message:z.string(),check:z.enum(["readability","claims","real_visuals","render_integrity","reference_style","storytelling","ui_fidelity","ui_behavior","audio"]).nullish().transform(v=>v??undefined),evidence:z.string().min(1).max(1600).nullish().transform(v=>v??undefined),repair:z.enum(["shorten_copy","simplify_copy","change_asset","extend_hold"]).nullish().transform(v=>v??undefined)})),notes:z.array(z.string())});
+const reviewSchema=reviewShape.superRefine((review,context)=>{
   for(const [index,finding]of review.findings.entries())if(finding.severity!=="minor"){
     if(!finding.check||!finding.evidence)context.addIssue({code:"custom",path:["findings",index],message:"A blocking finding requires its failed check and observed evidence"});
     else if(review[reviewCheckFlags[finding.check]]!==false)context.addIssue({code:"custom",path:["findings",index,"check"],message:"A blocking finding contradicts its passed or unperformed check"});
   }
 });
-export const parseReview=(value:unknown)=>reviewSchema.parse(value);
+/** Contradictory positive flags may only become failures; raw provider artifacts stay untouched. */
+export function parseReview(value:unknown) {
+  const review=reviewShape.parse(value);
+  for(const [index,finding]of review.findings.entries())if(finding.severity!=="minor"&&finding.check&&finding.evidence){
+    const flag=reviewCheckFlags[finding.check];
+    if(review[flag]===true){review[flag]=false;review.notes.push(`Fail-closed normalization: ${flag} true -> false because blocking finding ${index+1} explicitly identifies ${finding.check} with evidence. Original finding and raw response retained.`);}
+  }
+  return reviewSchema.parse(review);
+}
 /** Optional notes never justify paid plan mutation, even if a model supplies a repair tag. */
 export const repairableFindings=(findings:Finding[])=>findings.filter(f=>f.severity!=="minor"&&f.repair!==undefined);
 export function assessReferenceStyle(reviews:{referenceStyleReviewed:boolean;referenceStylePassed?:boolean}[]){

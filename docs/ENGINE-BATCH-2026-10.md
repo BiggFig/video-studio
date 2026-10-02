@@ -36,6 +36,7 @@ Persist a creative brief from the verified audience, workflow, outcome and brand
 Acceptance:
 - Different supported workflows produce eligible, evidence-bound creative choices.
 - Current scripts persist their concept and shot intent, and compile into executable direction.
+- Fresh directed scripts choose from bounded, source-valid shot recipes that bind the narrative role, fact, asset, template and visual treatment before copy or actions are generated; incompatible combinations and unknown recipe IDs are rejected.
 - Unsupported concepts, altered evidence and repair-time identity changes are rejected.
 - Legacy completed scripts and plans retain their original behavior.
 

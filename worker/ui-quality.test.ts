@@ -41,7 +41,7 @@ test("UI quality is fail-closed for missing, unperformed or failed fidelity and 
   assert.equal(assessUiDemonstration([passed,{...passed,uiBehaviorPassed:false}]).behavior.passed,false);
   assert.equal(assessUiDemonstration([{...passed,uiReconstructionReviewed:false}]).fidelity.passed,false);
   const review={...passed,readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,notes:[],findings:[{severity:"major",check:"ui_behavior",message:"The typed result never appears.",evidence:"The action-completion frame remains empty."}]};
-  assert.throws(()=>parseReview(review),/contradicts/);
+  assert.equal(parseReview(review).uiBehaviorPassed,false);
   assert.equal(parseReview({...review,uiBehaviorPassed:false}).findings.length,1);
 });
 
