@@ -11,17 +11,20 @@ import { expectedUiState, type UiFrameState } from "./ui-state";
 import { PipelineError } from "./types";
 
 export type UiLayoutVariant = "compact" | "with-detail";
-export type UiLayoutCode = "text_overflow" | "text_too_small" | "element_outside_viewport" | "invalid_metrics";
+export type UiLayoutCode = "text_overflow" | "text_too_small" | "text_collision" | "element_outside_viewport" | "invalid_metrics";
 export interface UiLayoutMetrics {
   fontSize:number; lineHeight:number; clientWidth:number; clientHeight:number; scrollWidth:number; scrollHeight:number;
   left:number; top:number; right:number; bottom:number;
   viewportLeft:number; viewportTop:number; viewportRight:number; viewportBottom:number;
+  overlapWidth:number; overlapHeight:number;
 }
 export interface UiLayoutIssue {
   documentId:string; stateId:string; elementId:string; layout:UiLayoutVariant; code:UiLayoutCode;
+  otherElementId?:string;
   metrics:Partial<UiLayoutMetrics>;
 }
-export interface UiLayoutMeasurement { elementId:string; visible:boolean; hasText:boolean; metrics:UiLayoutMetrics }
+export interface UiTextBounds { left:number;top:number;right:number;bottom:number }
+export interface UiLayoutMeasurement { elementId:string; visible:boolean; hasText:boolean; metrics:Omit<UiLayoutMetrics,"overlapWidth"|"overlapHeight">; textBounds?:UiTextBounds[] }
 export interface UiLayoutReport {
   version:1; completed:boolean; passed:boolean; width:number; height:number; checkedStates:number; checkedElements:number;
   infrastructureFailure?:boolean;
@@ -32,7 +35,7 @@ export interface UiLayoutResult { passed:boolean; reportPath:string; artifactPat
 export interface UiLayoutOptions { workspace:string; width:number; height:number; reportName:string }
 
 const MAX_ISSUES=64, MAX_FAILURE_IMAGES=4, WALL_MS=45_000;
-const metricKeys:(keyof UiLayoutMetrics)[]=["fontSize","lineHeight","clientWidth","clientHeight","scrollWidth","scrollHeight","left","top","right","bottom","viewportLeft","viewportTop","viewportRight","viewportBottom"];
+const metricKeys:(keyof UiLayoutMeasurement["metrics"])[]=["fontSize","lineHeight","clientWidth","clientHeight","scrollWidth","scrollHeight","left","top","right","bottom","viewportLeft","viewportTop","viewportRight","viewportBottom"];
 const validNumber=(value:unknown):value is number=>typeof value==="number"&&Number.isFinite(value)&&Math.abs(value)<=1_000_000;
 
 /** The same wide-state readability/bounds tolerances used by scene preflight. */
@@ -56,9 +59,76 @@ export function uiDocumentLayoutStates(document:UiDocument):{stateId:string;stat
   return document.states.map(state=>({stateId:state.id,state:expectedUiState(document,[{kind:"state",atFrame:30,durationFrames:1,stateId:state.id,evidenceId:state.evidenceIds[0]}],31)}));
 }
 
+/** Compare browser text-run bounds, never element/background rectangles or blank space. */
+export function assessUiTextCollisions(values:UiLayoutMeasurement[],context:{documentId:string;stateId:string;layout:UiLayoutVariant}):UiLayoutIssue[]{
+  const visible=values.filter(value=>value.visible&&value.hasText),issues:UiLayoutIssue[]=[];
+  if(values.length>48||visible.some(value=>!Array.isArray(value.textBounds)||value.textBounds.length>1024)||visible.reduce((sum,value)=>sum+value.textBounds!.length,0)>8192)throw new Error("UI layout browser metrics are invalid");
+  for(const value of visible)for(const rect of value.textBounds!)if(![rect.left,rect.top,rect.right,rect.bottom].every(validNumber)||rect.right<rect.left||rect.bottom<rect.top)throw new Error("UI layout browser metrics are invalid");
+  for(let a=0;a<visible.length;a++)for(let b=a+1;b<visible.length;b++){
+    let overlap:{width:number;height:number}|undefined;
+    for(const first of visible[a].textBounds||[]){
+      for(const second of visible[b].textBounds||[]){
+        const width=Math.min(first.right,second.right)-Math.max(first.left,second.left),height=Math.min(first.bottom,second.bottom)-Math.max(first.top,second.top);
+        // Range font boxes are not exact raster ink; allow 2px edge contact,
+        // matching the existing overflow/bounds tolerance.
+        if(width>2&&height>2){overlap={width,height};break;}
+      }
+      if(overlap)break;
+    }
+    if(overlap)issues.push({...context,elementId:visible[a].elementId,otherElementId:visible[b].elementId,code:"text_collision",metrics:{overlapWidth:Math.round(overlap.width*1000)/1000,overlapHeight:Math.round(overlap.height*1000)/1000}});
+  }
+  return issues;
+}
+
+/** Self-contained trusted browser callback shared by document and final-frame checks. */
+export function measureUiLayout(container:Element):UiLayoutMeasurement[]{
+  type Rect={left:number;top:number;right:number;bottom:number};
+  const rect=(value:DOMRect):Rect=>({left:value.left,top:value.top,right:value.right,bottom:value.bottom});
+  const intersect=(a:Rect,b:Rect):Rect|undefined=>{const r={left:Math.max(a.left,b.left),top:Math.max(a.top,b.top),right:Math.min(a.right,b.right),bottom:Math.min(a.bottom,b.bottom)};return r.right>r.left&&r.bottom>r.top?r:undefined;};
+  const subtract=(a:Rect,b:Rect):Rect[]=>{
+    const cut=intersect(a,b);if(!cut)return[a];
+    return[{left:a.left,top:a.top,right:a.right,bottom:cut.top},{left:a.left,top:cut.bottom,right:a.right,bottom:a.bottom},{left:a.left,top:cut.top,right:cut.left,bottom:cut.bottom},{left:cut.right,top:cut.top,right:a.right,bottom:cut.bottom}].filter(r=>r.right>r.left&&r.bottom>r.top);
+  };
+  const alpha=(color:string)=>{const match=/^rgba?\(([^)]+)\)$/.exec(color);return match?(match[1].split(",").length===4?Number(match[1].split(",")[3]):1):0;};
+  const viewport=container.parentElement!.getBoundingClientRect(),clip=intersect(rect(viewport),rect(container.getBoundingClientRect()));
+  const nodes=[...container.querySelectorAll<HTMLElement>("[data-ui-element]")].map(node=>({node,bounds:node.getBoundingClientRect(),style:getComputedStyle(node)}));
+  if(nodes.length>48)throw new Error("UI layout text measurement exceeds its bound");
+  let ancestorPainted=true;
+  for(let ancestor:Element|null=container;ancestor;ancestor=ancestor.parentElement){const style=getComputedStyle(ancestor);if(style.visibility!=="visible"||style.display==="none"||Number(style.opacity)===0)ancestorPainted=false;}
+  return nodes.map(({node,bounds,style},index)=>{
+    const text=node.querySelector("[data-ui-text]"),visible=ancestorPainted&&style.visibility==="visible"&&style.display!=="none"&&Number(style.opacity)>0;
+    let textBounds:Rect[]=[];
+    if(visible&&text&&alpha(style.color)>0&&clip){
+      const ownClip=intersect(clip,rect(bounds)),walker=document.createTreeWalker(text,NodeFilter.SHOW_TEXT);
+      if(ownClip)for(let child=walker.nextNode();child;child=walker.nextNode()){
+        // Non-whitespace runs avoid treating an element, a stretched flex span,
+        // inter-word blanks, or the gap between wrapped lines as text coverage.
+        for(const match of child.textContent!.matchAll(/\S+/gu)){
+          const range=document.createRange();range.setStart(child,match.index!);range.setEnd(child,match.index!+match[0].length);
+          for(const fragment of range.getClientRects()){const bounded=intersect(rect(fragment),ownClip);if(bounded)textBounds.push(bounded);}
+        }
+      }
+      // Later opaque surfaces may legitimately cover earlier source text (e.g.
+      // a dropdown). Only guaranteed opaque strips of rounded boxes occlude;
+      // transparent panels and all element backgrounds never become text pairs.
+      for(const later of nodes.slice(index+1)){
+        if(later.style.visibility!=="visible"||later.style.display==="none"||Number(later.style.opacity)!==1||alpha(later.style.backgroundColor)!==1)continue;
+        const scale=later.bounds.width/later.node.offsetWidth,edge=Math.max(Number.parseFloat(later.style.borderLeftWidth),Number.parseFloat(later.style.borderTopWidth))*scale;
+        const r={left:later.bounds.left+edge,top:later.bounds.top+edge,right:later.bounds.right-edge,bottom:later.bounds.bottom-edge};
+        const radius=Math.min(Math.max(...[later.style.borderTopLeftRadius,later.style.borderTopRightRadius,later.style.borderBottomLeftRadius,later.style.borderBottomRightRadius].map(value=>Number.parseFloat(value)*scale)),(r.right-r.left)/2,(r.bottom-r.top)/2);
+        for(const solid of[{...r,left:r.left+radius,right:r.right-radius},{...r,top:r.top+radius,bottom:r.bottom-radius}])if(solid.right>solid.left&&solid.bottom>solid.top){textBounds=textBounds.flatMap(fragment=>subtract(fragment,solid));if(textBounds.length>1024)throw new Error("UI layout text measurement exceeds its bound");}
+      }
+    }
+    return{elementId:node.dataset.uiElement!,visible,hasText:!!text?.textContent,textBounds,metrics:{fontSize:Number.parseFloat(style.fontSize),lineHeight:Number.parseFloat(style.lineHeight),clientWidth:node.clientWidth,clientHeight:node.clientHeight,scrollWidth:node.scrollWidth,scrollHeight:node.scrollHeight,left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom,viewportLeft:viewport.left,viewportTop:viewport.top,viewportRight:viewport.right,viewportBottom:viewport.bottom}};
+  });
+}
+
+/** Name annotations emitted by tsx are local to this trusted callback, never a page global. */
+export const browserUiLayoutMeasurement: (container:Element)=>UiLayoutMeasurement[]=new Function(`return (container)=>{const __name=value=>value;return (${measureUiLayout.toString()})(container);}`)();
+
 /** Invalid browser measurements must not become repairable when diagnostics saturate. */
 export function recordUiLayoutState(report:UiLayoutReport,measurements:UiLayoutMeasurement[],context:{documentId:string;stateId:string;layout:UiLayoutVariant}):UiLayoutIssue[]{
-  const issues=measurements.flatMap(value=>assessUiLayoutElement(value,{...context,elementId:value.elementId}));
+  const issues=[...measurements.flatMap(value=>assessUiLayoutElement(value,{...context,elementId:value.elementId})),...assessUiTextCollisions(measurements,context)];
   if(issues.some(issue=>issue.code==="invalid_metrics"))throw new Error("UI layout browser metrics are invalid");
   report.checkedStates++;report.checkedElements+=measurements.filter(value=>value.visible).length;report.issueCount+=issues.length;
   report.issues.push(...issues.slice(0,Math.max(0,MAX_ISSUES-report.issues.length)));
@@ -112,7 +182,7 @@ export async function inspectUiDocumentLayout(documents:UiDocument[],options:UiL
       if(!loaded)throw new Error("Trusted UI font did not load");
       for(const {stateId,state}of uiDocumentLayoutStates(uiDocument)){
         if(timedOut)throw new Error("UI layout deadline exceeded");
-        const measurements=await page.evaluate(frame=>{
+        await page.evaluate(frame=>{
           const container=document.getElementById("ui-document-0")!;
           for(const node of container.querySelectorAll<HTMLElement>("[data-ui-element]")){
             const value=frame.elements[node.dataset.uiElement!];
@@ -120,12 +190,8 @@ export async function inspectUiDocumentLayout(documents:UiDocument[],options:UiL
             node.style.visibility=value.visible?"visible":"hidden";node.dataset.selected=String(value.selected);node.dataset.typing="false";node.dataset.textBasis=value.textBasis;
             const text=node.querySelector("[data-ui-text]");if(text)text.textContent=value.text;
           }
-          const viewport=container.parentElement!.getBoundingClientRect();
-          return [...container.querySelectorAll<HTMLElement>("[data-ui-element]")].map(node=>{
-            const bounds=node.getBoundingClientRect(),style=getComputedStyle(node),text=node.querySelector("[data-ui-text]");
-            return{elementId:node.dataset.uiElement!,visible:node.style.visibility==="visible",hasText:!!text?.textContent,metrics:{fontSize:Number.parseFloat(style.fontSize),lineHeight:Number.parseFloat(style.lineHeight),clientWidth:node.clientWidth,clientHeight:node.clientHeight,scrollWidth:node.scrollWidth,scrollHeight:node.scrollHeight,left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom,viewportLeft:viewport.left,viewportTop:viewport.top,viewportRight:viewport.right,viewportBottom:viewport.bottom}};
-          });
         },state);
+        const measurements=await page.locator("#ui-document-0").evaluate(browserUiLayoutMeasurement);
         if(measurements.length!==uiDocument.elements.length||measurements.some(value=>!uiDocument.elements.some(element=>element.id===value.elementId)))throw new Error("UI layout measurement inventory changed");
         const issues=recordUiLayoutState(report,measurements,{documentId:uiDocument.id,stateId,layout});
         if(issues.length&&artifactPaths.length<MAX_FAILURE_IMAGES){

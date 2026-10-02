@@ -51,8 +51,10 @@ Acceptance:
 - Compact documentation retains required source, capability and state validation.
 - Observed text and newly authored sample input are classified correctly.
 - Fresh UI documents are measured with the production browser/font/layout rules before scripting. A confirmed layout failure may receive one complete correction within the original 6,000-output-token UI allowance and remaining job budget; original responses and measurements remain retained.
+- Measure text-fragment collisions between separate elements as well as per-element overflow. Reuse the check on actual action/hold states, and separately test legitimate overlays and non-overlapping multi-line labels.
 - Provider ambiguity, invalid provenance, an exhausted allowance or an already reserved correction cannot trigger another paid attempt.
 - Real historical rejection cases receive meaningful regression coverage.
+- A fresh launch declares one source-supported terminal result during the existing UI call. Before paid scripting, verify distinct source-bound states, a supported confirmation control and a material content result beyond query/selection/clear-only changes. Missing result evidence stops with an actionable readiness failure.
 - A fresh automatic URL trial reaches scripting, or records an explicit remaining failure without promoting an invalid response.
 
 ## VS-204 — Render designed surfaces, continuous movement and legible outcomes
@@ -99,7 +101,11 @@ Derive the actual visible context, typed values, selected options and results fr
 
 Acceptance:
 - Actual isolated review rejects the retained contradictory Obsidian example and separately evaluates a coherent control; neither test is relabeled as automatic URL acceptance.
+- Fresh/v2 scripts enforce the current action vocabulary before semantic review: an illustrative state cannot manufacture a new standalone empty graphic without a supported creation gesture. Meaningful UI containers, existing graphics and observed source states retain their normal checks. Test the retained drawing error and legitimate delayed selection separately; a deterministic refusal is not relabeled as model detection.
 - Verdicts cover every used UI scene and cite existing scene/action/element IDs. Missing coverage, invalid references and contradictory pass flags fail closed.
+- A claimed completed operation requires a visible material postcondition. Highlighting an option, formatting a partial query or closing a menu cannot certify linking, sending or another committed result. Honest inspection/search/selection copy remains allowed, and following outcome copy is reviewed too.
+- A fresh launch additionally demonstrates at least one declared terminal result through actual confirmation, state transition and a readable persistent hold. Honest selection alone is insufficient launch depth. Bind this requirement through approvals, repairs and restoration without changing saved historical contracts. This does not replace semantic, source or final-frame review.
+- After that completed workflow, fresh launches must not reuse its original pre-action capture as outcome/result/payoff proof. Use an editorial outcome or genuinely different supported evidence. Enforce this before paid semantic review, preserve the source catalogue, and bind the new rule through repairs/restoration without changing older approvals.
 - A verdict is bound to exact source, document, script and derived context; changes invalidate it, and uncertain reservations cannot replay.
 - A failed sequence can use only the existing unused script correction and then requires another coherence review. Immutable UI/catalogue bindings, current job caps and mandatory QC reserves remain enforced.
 - A fresh runtime-pinned URL trial records its actual outcome and receives independent creative review.

@@ -15,6 +15,7 @@ import { motionAssetIds,motionUsage } from "./motion-assets";
 import { logoGeometryMatches } from "./motion-primitives";
 import { expectedUiState,uiActionSampleFrames } from "./ui-state";
 import { expectedUiCamera,uiStageViewport } from "./ui-camera";
+import { assessUiTextCollisions,browserUiLayoutMeasurement } from "./ui-document-layout";
 import { PipelineError,type Hooks,type Plan } from "./types";
 
 const require=createRequire(import.meta.url);
@@ -95,7 +96,9 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
           const readable=actual.elements.every(value=>!value.visible||((!value.text||(!value.overflow&&value.font>=16))&&((camera.phase!=="wide"&&!targetIds.has(value.id))||inside(value))));
           const cameraMatches=Math.abs(actual.camera.x-camera.x)<.001&&Math.abs(actual.camera.y-camera.y)<.001&&Math.abs(actual.camera.scale-camera.scale)<.00001;
           const cameraBounds=viewport.left>=24&&viewport.top>=24&&viewport.right<=plan.output.width-24&&viewport.bottom<=plan.output.height-24&&!inspection.some(copy=>Math.min(viewport.right,copy.right)-Math.max(viewport.left,copy.x)>3&&Math.min(viewport.bottom,copy.bottom)-Math.max(viewport.top,copy.y)>3);
-          findings.push({scene:scene.id,frame,uiDocumentId:document.id,expected,camera,actual,matches,readable,cameraMatches,cameraBounds,passed:matches&&readable&&cameraMatches&&cameraBounds});await writeJson(join(workspace,"analysis/layout.json"),findings);
+          const textCollisions=plan.production?.workflowCoherence?.version===2?assessUiTextCollisions(await page.locator(`#ui-document-${index}`).evaluate(browserUiLayoutMeasurement),{documentId:document.id,stateId:expected.stateId,layout:scene.detail?"with-detail":"compact"}):[];
+          findings.push({scene:scene.id,frame,uiDocumentId:document.id,expected,camera,actual,matches,readable,cameraMatches,cameraBounds,...(plan.production?.workflowCoherence?.version===2?{textCollisions}:{}),passed:matches&&readable&&cameraMatches&&cameraBounds&&textCollisions.length===0});await writeJson(join(workspace,"analysis/layout.json"),findings);
+          if(textCollisions.length)throw new PipelineError("ui_text_collision","Distinct reconstructed UI labels overlap in a rendered action or hold.","Inspect the retained text-pair measurements. Preserve source wording and separate the actual text bounds; no layout was changed automatically.","needs_review");
           if(!matches||!readable||!cameraMatches||!cameraBounds)throw new PipelineError("ui_state_mismatch","The reconstructed UI did not reach its planned readable frame state and camera bounds.","Inspect the retained document, frame state and layout measurements.","needs_review");
           const sample=`${project.directory}/ui-${index}-${frame}.png`;await page.screenshot({path:join(workspace,sample)});screenshots.push(sample);
         }

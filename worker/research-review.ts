@@ -1,4 +1,4 @@
-import { workflowInputReserve } from "./workflow-coherence";
+import { workflowInputReserve, workflowOutputLimit, workflowSceneLimit } from "./workflow-coherence";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -102,8 +102,9 @@ export async function assertResearchRetryUnused(workspace: string, jobId: string
 
 function correctionReserve(options: ResearchRetryOptions): ModelReserve {
   // Unknown future input cannot be promised. Protect one full script and the
-  // maximum four required review batches; every later request still gets its exact guard.
-  const reserve = { calls: options.contractVersion === 2 ? 5 : 7, inputTokens: options.singleTarget ? workflowInputReserve() : 0, outputTokens: (options.contractVersion === 2 ? 0 : 6000) + 5000 + 4 * 3000 + (options.singleTarget ? 768 : 0) };
+  // fresh six-scene maximum or the retained legacy four review batches. Every later request still gets its exact guard.
+  const qualityCalls = options.singleTarget ? Math.ceil(workflowSceneLimit() / 2) : 4;
+  const reserve = { calls: options.contractVersion === 2 ? 5 : options.singleTarget ? 3 + qualityCalls : 7, inputTokens: options.singleTarget ? workflowInputReserve() : 0, outputTokens: (options.contractVersion === 2 ? 0 : 6000) + 5000 + qualityCalls * 3000 + (options.singleTarget ? workflowOutputLimit() : 0) };
   const ledger = options.providers.ledger;
   if (ledger.modelCalls + 1 + reserve.calls > Math.min(options.input.budgets?.maxModelCalls || 10, 12) || ledger.outputTokens + ledger.reservedOutputTokens + 3500 + reserve.outputTokens > (options.input.budgets?.maxModelOutputTokens || 35000)) throw new PipelineError("model_budget", "The remaining model allowance cannot cover a full research correction, script and required reviews.", "Ask the administrator to inspect the retained research response. No correction was started.", "needs_review");
   return reserve;

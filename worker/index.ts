@@ -93,7 +93,7 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
   validatePlanCreativeDirection(plan,research,evidence);
   validatePlanShotRecipes(plan,research,evidence,uiBundle);
-  if(!!plan.production?.workflowCoherence!==!!script.workflowCoherence||(!repairBudget.consumed&&stageDigest(plan.production?.workflowCoherence??null)!==stageDigest(script.workflowCoherence??null)))throw stageFailure("The retained plan changed its workflow coherence contract.");
+  if((plan.production?.workflowCoherence?.version??0)!==(script.workflowCoherence?.version??0)||plan.production?.workflowCoherence?.requireLaunchResult!==script.workflowCoherence?.requireLaunchResult||plan.production?.workflowCoherence?.requireOutcomeContinuity!==script.workflowCoherence?.requireOutcomeContinuity||(!repairBudget.consumed&&stageDigest(plan.production?.workflowCoherence??null)!==stageDigest(script.workflowCoherence??null)))throw stageFailure("The retained plan changed its workflow coherence contract or launch-result requirement.");
   await validatePlanWorkflowCoherence(plan,workspace);
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {

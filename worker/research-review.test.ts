@@ -142,7 +142,7 @@ test("call and full-output budgets protect a future script and all four mandator
 
 test("research correction protects the exact remaining call count for fresh one-target, historical v3 and v2 jobs", async t => {
   for (const scope of [
-    { fields: { singleTarget: true as const }, calls: 7, outputTokens: 23768 },
+    { fields: { singleTarget: true as const }, calls: 6, outputTokens: 22048 },
     { fields: {}, calls: 7, outputTokens: 23000 },
     { fields: { contractVersion: 2 as const }, calls: 5, outputTokens: 17000 },
   ]) for (const affordable of [false, true]) {
@@ -166,6 +166,20 @@ test("research correction protects the exact remaining call count for fresh one-
       assert.equal(prepared, 0); assert.equal(calls, 0);
       await assert.rejects(readFile(join(root, RESEARCH_RETRY_PATH)), { code: "ENOENT" });
     }
+  }
+});
+
+test("fresh research correction retains full thinking, one UI, script and three review outputs at the exact cap", async t => {
+  for (const affordable of [false, true]) {
+    const root = await workspace(t), usage = ledger(); usage.outputTokens = 3500;
+    let prepared = 0, calls = 0;
+    const corrected = verboseUiResearch(), rejected = { ...corrected, product: "x".repeat(49) };
+    const value: ResearchRetryOptions = { singleTarget: true, input: { ...input, budgets: { ...input.budgets, maxModelOutputTokens: 29048 - Number(!affordable) } }, evidence, evidenceSha256, workspace: root, hooks, ...researchRequest(input, evidence), providers: { ledger: usage, prepareClaude: async (_purpose, _prompt, _images, options) => {
+      prepared++; assert.equal(options?.reserve?.outputTokens, 22048); assert.equal(options?.reserve?.calls, 6);
+      return async <T>() => { calls++; return corrected as T; };
+    } } };
+    if (affordable) { await compileResearchWithRetry(rejected, value); assert.equal(prepared, 1); assert.equal(calls, 1); }
+    else { await assert.rejects(compileResearchWithRetry(rejected, value), isCode("model_budget")); assert.equal(prepared, 0); assert.equal(calls, 0); await assert.rejects(readFile(join(root, RESEARCH_RETRY_PATH)), { code: "ENOENT" }); }
   }
 });
 

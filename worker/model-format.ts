@@ -1,8 +1,8 @@
 /** Provider grammar handles shape only; the production compiler still checks all source bindings and limits. */
 type Schema = Record<string, unknown>;
 export interface ScriptConstraints { maxScenes?: number; recipeIds?: string[]; assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[]; creativeDirection?: { concepts: { concept: "focus" | "connect" | "consolidate"; evidenceIds: string[] }[] } }
-export interface UiDesignConstraints { targets: { id: string; sourceAssetIds: string[]; capabilityFactIds: string[] }[] }
-export interface WorkflowConstraints { contextSha256: string; sceneIds: string[] }
+export interface UiDesignConstraints { requireLaunchResult?: true; targets: { id: string; sourceAssetIds: string[]; capabilityFactIds: string[] }[] }
+export interface WorkflowConstraints { contextSha256: string; sceneIds: string[]; version?: 1 | 2; obligationIds?: string[]; taskEntitlementVersion?: 1 }
 export const FLAT_SCRIPT_TRANSPORT_VERSION = "flat-script-v1";
 export const DIRECTED_SCRIPT_TRANSPORT_VERSION = "flat-script-v2";
 const text = { type: "string" };
@@ -30,10 +30,13 @@ export const SCRIPT_OUTPUT_SCHEMA = object({
 });
 /** Only models with verified direct structured-output support use this transport option. */
 export function scriptOutputConfig(model: string, direct: boolean, policy?: string, constraints?: ScriptConstraints, uiConstraints?: UiDesignConstraints, workflowConstraints?: WorkflowConstraints) {
-  if (!direct || !["script-v1", "ui-design-v1", "workflow-coherence-v1"].includes(policy || "") || !/^claude-(?:sonnet-4-6|opus-4-6)(?:-|$)/.test(model)) return undefined;
-  if (policy === "workflow-coherence-v1") {
+  const supported = /^claude-(?:sonnet-4-6|opus-4-6)(?:-|$)/.test(model) || (policy === "workflow-coherence-v2" && /^claude-(?:sonnet|opus)-4-5(?:-\d{8})?$/.test(model));
+  if (!direct || !["script-v1", "ui-design-v1", "workflow-coherence-v1", "workflow-coherence-v2"].includes(policy || "") || !supported) return undefined;
+  if (policy === "workflow-coherence-v1" || policy === "workflow-coherence-v2") {
     if (!workflowConstraints) throw new Error("Workflow review grammar requires bound scene identities");
-    return { format: { type: "json_schema", schema: workflowOutputSchema(workflowConstraints) } };
+    const version = policy === "workflow-coherence-v1" ? 1 : 2;
+    if (workflowConstraints.version && workflowConstraints.version !== version) throw new Error("Workflow grammar differs from its review policy");
+    return { format: { type: "json_schema", schema: workflowOutputSchema({ ...workflowConstraints, version }) } };
   }
   return { format: { type: "json_schema", schema: policy === "ui-design-v1" ? uiConstraints ? constrainedUiSchema(uiConstraints) : UI_OUTPUT_SCHEMA : constraints ? constrainedScriptSchema(constraints) : SCRIPT_OUTPUT_SCHEMA } };
 }
@@ -41,6 +44,13 @@ export function scriptOutputConfig(model: string, direct: boolean, policy?: stri
 /** Compact grammar; complete coverage and per-scene action/element ownership are checked locally. */
 export function workflowOutputSchema(constraints: WorkflowConstraints): Schema {
   if (!/^[a-f0-9]{64}$/.test(constraints.contextSha256) || !constraints.sceneIds.length || constraints.sceneIds.length > 10 || new Set(constraints.sceneIds).size !== constraints.sceneIds.length || constraints.sceneIds.some(id => !/^scene-[1-9][0-9]?$/.test(id))) throw new Error("Invalid workflow review identities");
+  if (constraints.version !== undefined && ![1, 2].includes(constraints.version)) throw new Error("Invalid workflow grammar version");
+  if (constraints.version !== 1) {
+    const ids = constraints.obligationIds;
+    if (!ids?.length || ids.length > 8 || new Set(ids).size !== ids.length || ids.some(id => !/^scene-[1-9][0-9]?-(?:task|(?:content|causal)-[1-6])$/.test(id))) throw new Error("Invalid workflow obligation identities");
+    if (constraints.taskEntitlementVersion !== undefined && constraints.taskEntitlementVersion !== 1) throw new Error("Unsupported workflow task entitlement contract");
+    return object({ contextSha256: choice(constraints.contextSha256), assessments: { ...array(object({ obligationId: choice(...ids), status: choice("supported", "contradictory", "uncertain"), reason: { type: "string", description: "Answer this specific meaning or cause question, preferably 8–12 words/about 80 characters; hard maximum 240 characters. Not an edit inventory." } })), description: `Exactly ${ids.length} assessments, one per required obligation; never omit or duplicate one.` }, ...(constraints.taskEntitlementVersion === 1 ? { taskEntitlementVersion: { type: "integer", enum: [1] }, tasks: { ...array(object({ sceneId: choice(...constraints.sceneIds), promiseExcerpt: { type: "string", description: "Exact decisive visible promise excerpt, at most 160 characters. Include a following outcome's stronger promise when present." }, requiredResult: choice("inspect", "query", "selection", "committed-change"), resultAnswer: choice("visible-result", "preparation-only", "uncertain"), postconditionIds: array({ type: "string", description: "Exact result candidate IDs from this scene; empty if no material committed result is visible." }) })), description: `Exactly ${constraints.sceneIds.length} independent task/result answers. Choosing an option is not completing the operation it prepares. All IDs are locally verified.` } } : {}) });
+  }
   return object({ contextSha256: choice(constraints.contextSha256), scenes: array(object({ sceneId: choice(...constraints.sceneIds), passed: { type: "boolean" } })), findings: { ...array(object({ severity: choice("major", "critical"), sceneId: choice(...constraints.sceneIds), actionId: choice("initial", "action-1", "action-2", "action-3", "action-4", "action-5", "action-6", "final"), elementIds: array(text), code: choice("context_contradiction", "causal_mismatch", "claim_overreach", "unsupported_result"), message: text })), description: "At most three concrete blocking findings, each message at most 320 characters; cite 1–4 actual visible element IDs. Empty for a pass." } });
 }
 
@@ -186,6 +196,10 @@ export function constrainedUiSchema(constraints: UiDesignConstraints): Schema {
     properties.states.items.properties.sourceAssetId = choice(...target.sourceAssetIds);
     properties.states.items.properties.evidenceIds = array(choice(...target.capabilityFactIds));
     properties.states.items.properties.textValues.items = { $ref: "#/$defs/uiTextValue" };
+    if (constraints.requireLaunchResult) {
+      properties.terminalResult = object({ version: { type: "integer", enum: [1] }, beforeStateId: text, afterStateId: text, confirmationElementId: text, resultElementIds: ids, evidenceIds: array(choice(...target.capabilityFactIds)) });
+      variant.required.push("terminalResult");
+    }
     return [target.id, variant];
   }));
   // An unbounded array of large document unions exceeds the provider's compiled grammar limit.

@@ -10,6 +10,7 @@ import { motionTimingForPresentation } from "./motion-timing";
 import { buildUiDocuments, loadUiDocuments, uiExampleCopy, validateUiActions } from "./ui-reconstruction";
 import { alignAudioToPlan, soundCueIssues } from "./audio-direction";
 import { validatePlanWorkflowCoherence, verifyScriptWorkflowBinding, workflowBindingSchema } from "./workflow-stage";
+import { launchResultReadingFrames } from "./workflow-depth";
 export { evidenceCatalog } from "./research";
 
 const directorSchema=scriptDraftSchema;
@@ -63,7 +64,7 @@ export async function prepareRetainedPlanRepair(input:WorkerInput,evidence:Evide
 export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknown,hooks:Hooks,workspace:string,repair?:{plan:Plan;findings:Finding[]}):Promise<Plan> {
   if(repair?.plan.production){
     const script=scriptSchema.safeParse(raw),previous=repair.plan.production;
-    if(!script.success||!!script.data.workflowCoherence!==!!previous.workflowCoherence)throw stageFailure("A repaired plan cannot acquire or drop its workflow coherence contract.");
+    if(!script.success||(script.data.workflowCoherence?.version??0)!==(previous.workflowCoherence?.version??0)||script.data.workflowCoherence?.requireLaunchResult!==previous.workflowCoherence?.requireLaunchResult||script.data.workflowCoherence?.requireOutcomeContinuity!==previous.workflowCoherence?.requireOutcomeContinuity)throw stageFailure("A repaired plan cannot acquire, drop or change its workflow coherence contract version or launch-result requirement.");
     if(!script.success||repair.plan.job_id!==input.jobId||script.data.jobId!==input.jobId||script.data.researchSha256!==previous.researchSha256||script.data.evidenceSha256!==previous.evidenceSha256||script.data.shotRecipeSha256!==previous.shotRecipeSha256||script.data.uiSha256!==previous.uiSha256||stageDigest(script.data.uiDocuments||null)!==stageDigest(repair.plan.uiDocuments||null)||stageDigest(script.data.creativeDirection||null)!==stageDigest(repair.plan.creativeDirection||null))throw stageFailure("A production-bound plan requires a repaired script verified against the same research, creative direction and evidence.");
   }
   const assets=evidence.assets.filter(a=>a.usage==="output"),source=evidence.text+"\n\n"+assets.map(a=>a.transcript?.text||"").join("\n\n"),facts=evidenceCatalog(source);
@@ -154,7 +155,7 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
     const uiVisual=presentation?.visual?.kind==="ui-demo"?presentation.visual:undefined;
     const uiDocument=uiVisual&&script.success?script.data.uiDocuments?.find(document=>document.id===uiVisual.documentId):undefined;
     const uiWords=uiDocument?uiExampleCopy(uiDocument,uiVisual!.actions).reduce((sum,text)=>sum+visibleWordCount(text),0):0;
-    const readingFrames=Math.ceil(((Math.max(words,uiWords)*32+120)*30)/100)+motion.entryFrames+(i===draft.scenes.length-1?0:motion.exitFrames);
+    const readingFrames=uiDocument&&script.success&&script.data.workflowCoherence?.requireLaunchResult?launchResultReadingFrames(uiDocument,{detail:s.detail,presentation},words,i===draft.scenes.length-1,visibleWordCount):Math.ceil(((Math.max(words,uiWords)*32+120)*30)/100)+motion.entryFrames+(i===draft.scenes.length-1?0:motion.exitFrames);
     const duration=Math.max(requestedFrames,readingFrames,speech?Math.ceil((asset.duration_seconds||0)*30):0);
     if(asset.kind==="video" && s.sourceInSeconds+duration/30>(asset.duration_seconds||0)+0.04) throw new Error("Planned scene exceeds actual source duration");
     if(s.preserveAudio&&!asset.has_audio) throw new Error("Plan requests audio absent from source");

@@ -1,3 +1,4 @@
+import { buildWorkflowContext, workflowTaskEvidence } from "./workflow-coherence";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,7 +14,7 @@ import type { Providers } from "./providers";
 import type { Evidence, Hooks, WorkerInput } from "./types";
 import { buildShotRecipeCatalog, RECIPE_SCRIPT_TRANSPORT_VERSION, SHOT_RECIPES_PATH } from "./shot-recipes";
 
-const input: WorkerInput = { jobId: "direction-fixture", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "16:9", files: [] };
+const input: WorkerInput = { jobId: "direction-fixture", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "feature-demo", format: "16:9", files: [] };
 const hooks: Hooks = { persist: async () => {}, state: async () => {}, complete: async () => {} };
 const claim = (text: string, evidenceId: string) => ({ text, basis: "explicit", evidenceIds: [evidenceId] });
 function fixture() {
@@ -146,6 +147,20 @@ test("fresh directed scripts reject ineffective typing and expose exact safe cor
   assert.deepEqual(scriptCorrectionDiagnostics(raw,failure as never,f.research,f.evidence,f.ui).behaviorIssues,[{code:"typing_has_no_net_change",path:["scenes",1,"presentation","visual","actions",0]}]);
 });
 
+test("fresh directed compilation reports an implicit typed rollback while retained compilation stays compatible",()=>{
+  const f=fixture(),document=f.ui.documents[0];
+  document.states.push({...document.states[0],id:"hover",basis:"illustrative",sourceAssetId:undefined});
+  const stage=compileUiDocuments({sufficientEvidence:true,reason:"Source-bound fixture",documents:[document]},input,f.evidence,f.research);
+  f.ui={documents:stage.documents,sha256:stageDigest(stage)};
+  const raw=flat(f.raw);raw.scenes[1].presentation.visual.actions.push({kind:"state",atFrame:66,durationFrames:6,targetId:"",stateId:"hover",text:"",evidenceId:"fact-2"});
+  const before=JSON.stringify({raw,ui:f.ui});
+  assert.doesNotThrow(()=>compileScript(raw,input,f.evidence,f.research,undefined,f.ui));
+  let failure:unknown;try{compileScript(raw,input,f.evidence,f.research,undefined,f.ui,{requireDirection:true});}catch(error){failure=error;}
+  assert.ok(failure instanceof Error&&/state_resets_typed_input/.test(failure.message));
+  assert.deepEqual(scriptCorrectionDiagnostics(raw,failure as never,f.research,f.evidence,f.ui,true).behaviorIssues,[{code:"state_resets_typed_input",path:["scenes",1,"presentation","visual","actions",1]}]);
+  assert.equal(JSON.stringify({raw,ui:f.ui}),before);
+});
+
 test("a meaningful supported UI action executes a different concept fact through script, plan and restart", async t => {
   const f = actionFactFixture(), raw = flat(f.raw), before = JSON.stringify(raw);
   const script = compileScript(raw, input, f.evidence, f.research, undefined, f.ui, { requireDirection: true });
@@ -218,13 +233,13 @@ test("durable brief and selected direction are immutable across reuse, source dr
 
 test("brief persistence finishes before script provider work and completed script resumes with no new call", async t => {
   const f = fixture(), path = await workspace(t), events: string[] = []; let calls = 0, reviews = 0;
-  const provider = { ledger: { modelCalls: 0, inputTokens: 0, outputTokens: 0, reservedInputTokens: 0, reservedOutputTokens: 0 }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { reviews++; return { contextSha256: options.workflowConstraints.contextSha256, scenes: options.workflowConstraints.sceneIds.map((sceneId: string) => ({ sceneId, passed: true })), findings: [] }; }; }, claude: async (_purpose: string, prompt: string, _images: unknown, options: any) => { calls++; events.push("model"); assert.match(prompt, /PRODUCT-SPECIFIC CREATIVE BRIEF/); assert.equal(options.scriptConstraints.creativeDirection.concepts[0].concept, "focus"); assert.ok(options.scriptConstraints.recipeIds.length); return recipeResponse(f); } } as unknown as Providers;
+  const provider = { ledger: { modelCalls: 0, inputTokens: 0, outputTokens: 0, reservedInputTokens: 0, reservedOutputTokens: 0 }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { reviews++; return { taskEntitlementVersion: 1, tasks: workflowTaskEvidence(buildWorkflowContext(compileScript(recipeResponse(f), input, f.evidence, f.research, undefined, f.ui), f.ui)).map(scene => ({ sceneId: scene.sceneId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })), contextSha256: options.workflowConstraints.contextSha256, assessments: buildWorkflowContext(compileScript(recipeResponse(f), input, f.evidence, f.research, undefined, f.ui), f.ui).obligations!.map(obligation => ({ obligationId: obligation.id, status: "supported", reason: "The fixture edit supports its visible note task and surrounding context." })) }; }; }, claude: async (_purpose: string, prompt: string, _images: unknown, options: any) => { calls++; events.push("model"); assert.match(prompt, /PRODUCT-SPECIFIC CREATIVE BRIEF/); assert.equal(options.scriptConstraints.creativeDirection.concepts[0].concept, "focus"); assert.ok(options.scriptConstraints.recipeIds.length); return recipeResponse(f); } } as unknown as Providers;
   const localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
   const script = await writeScript(input, f.evidence, f.research, provider, localHooks, path, f.ui);
   assert.ok(events.indexOf(CREATIVE_BRIEF_PATH) < events.indexOf("model")); assert.equal(calls, 1);
   assert.ok(events.indexOf(SHOT_RECIPES_PATH) < events.indexOf("model"));
   assert.deepEqual(await writeScript(input, f.evidence, f.research, provider, localHooks, path, f.ui), script); assert.equal(calls, 1);
-  assert.equal(JSON.parse(await readFile(join(path, "analysis/script-state.json"), "utf8")).binding, scriptBinding(input, f.research, f.ui, true, script.shotRecipeSha256, true));
+  assert.equal(JSON.parse(await readFile(join(path, "analysis/script-state.json"), "utf8")).binding, scriptBinding(input, f.research, f.ui, true, script.shotRecipeSha256, 2));
   assert.equal(reviews, 1);
   const interrupted = await workspace(t);
   await assert.rejects(writeScript(input, f.evidence, f.research, provider, { ...hooks, persist: async () => { throw new Error("checkpoint failed"); } }, interrupted, f.ui), /checkpoint failed/);

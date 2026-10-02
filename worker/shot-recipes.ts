@@ -15,6 +15,18 @@ export type RecipeRole = "problem" | "product" | "mechanism" | "outcome" | "diff
 type RecipeVisual = { kind: "none" | "showcase" | "connections" } | { kind: "focus"; regionId: string } | { kind: "panels"; secondaryAssetId: string; secondaryEvidenceId: string } | { kind: "ui-demo"; documentId: string };
 export interface ShotRecipe { id: string; storyRole: RecipeRole; assetId: string; evidenceId: string; template: Presentation["template"]; visual: RecipeVisual }
 export interface ShotRecipeCatalog { version: 1; researchSha256: string; evidenceSha256: string; uiSha256: string; recipes: ShotRecipe[] }
+
+/** Guidance beside the immutable catalogue; does not change recipe IDs or saved hashes. */
+export function launchOutcomeRecipeGuidance(catalog: ShotRecipeCatalog, ui: UiDocumentBundle) {
+  return {
+    editorialOutcomeRecipeIds: catalog.recipes.filter(recipe => recipe.storyRole === "outcome" && recipe.template !== "proof").map(recipe => recipe.id),
+    rawProofRestrictions: catalog.recipes.filter(recipe => ["outcome", "differentiator"].includes(recipe.storyRole) && recipe.template === "proof" && recipe.visual.kind !== "ui-demo").flatMap(recipe => {
+      const ids = [recipe.assetId, ...(recipe.visual.kind === "panels" ? [recipe.visual.secondaryAssetId] : [])];
+      const documentIds = ui.documents.filter(document => ids.some(id => document.sourceAssetIds.includes(id))).map(document => document.id);
+      return documentIds.length ? [{ recipeId: recipe.id, cannotFollowCompletedDocumentIds: documentIds }] : [];
+    }),
+  };
+}
 const roles: RecipeRole[] = ["problem", "product", "mechanism", "outcome", "differentiator", "cta"];
 const quota: Record<RecipeRole, number> = { problem: 8, product: 16, mechanism: 8, outcome: 12, differentiator: 12, cta: 4 };
 const sorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
