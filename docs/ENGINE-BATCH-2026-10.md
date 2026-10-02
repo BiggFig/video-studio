@@ -12,6 +12,7 @@ Each ticket below is an implementation assignment with measurable acceptance. Ex
 | [VS-204 / #14](https://github.com/BiggFig/video-studio/issues/14) | Surfaces, type, camera and continuity | Interface agent |
 | [VS-205 / #15](https://github.com/BiggFig/video-studio/issues/15) | Event-based sound cues | Root |
 | [VS-206 / #16](https://github.com/BiggFig/video-studio/issues/16) | Automatic URL benchmark | Root + independent team review |
+| [VS-207 / #17](https://github.com/BiggFig/video-studio/issues/17) | Contextual and causal workflow review before rendering | Pipeline + backend agents, independent interface review |
 
 Use [the creative review rubric](ENGINE-CREATIVE-REVIEW.md) on actual exported films. Technical integrity, local provider acceptance and deployment are separate findings.
 
@@ -89,6 +90,19 @@ Acceptance:
 - At least one fresh bounded URL acceptance is attempted after integration; its exact outcome is retained.
 - The report covers audience clarity, demonstrated action/result, source fidelity, composition/materials, continuity, readable holds and sound verification limits.
 - Publish only a genuinely verified automatic result; otherwise keep the engine change in draft with the specific blocker and retained output.
+
+## VS-207 — Review the meaning and causality of the compiled workflow
+
+Owner: pipeline and backend agents, independently reviewed by the interface agent. Priority: P0. Discovered during VS-206 acceptance.
+
+Derive the actual visible context, typed values, selected options and results from the trusted state resolver. Independently review these before audio/rendering, with a small output cap inside the same job budget. Example-content must still make sense in its surrounding prose. A toolbar click cannot silently substitute for drawing, and an empty source image cannot establish a completed diagram. Keep final source-image and delivered-file review; a text-only check cannot certify icon fidelity or animation.
+
+Acceptance:
+- Actual isolated review rejects the retained contradictory Obsidian example and separately evaluates a coherent control; neither test is relabeled as automatic URL acceptance.
+- Verdicts cover every used UI scene and cite existing scene/action/element IDs. Missing coverage, invalid references and contradictory pass flags fail closed.
+- A verdict is bound to exact source, document, script and derived context; changes invalidate it, and uncertain reservations cannot replay.
+- A failed sequence can use only the existing unused script correction and then requires another coherence review. Immutable UI/catalogue bindings, current job caps and mandatory QC reserves remain enforced.
+- A fresh runtime-pinned URL trial records its actual outcome and receives independent creative review.
 
 ## Evaluation order
 

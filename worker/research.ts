@@ -1,3 +1,4 @@
+import { workflowInputReserve } from "./workflow-coherence";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -186,7 +187,7 @@ export async function researchProduct(input: WorkerInput, evidence: Evidence, pr
     await assertResearchRetryUnused(workspace, input.jobId, evidenceSha256);
     if (!options) await persistResearchReadiness(researchReadiness(input, evidence, evidenceSha256, sourceFacts(evidence).map(fact => fact.id)), workspace, hooks);
     await writeJson(join(workspace, "analysis/facts.json"), sourceFacts(evidence)); await hooks.persist(["analysis/facts.json"]);
-    const reserve = { calls: 6, inputTokens: 0, outputTokens: 23000 };
+    const reserve = { calls: 7, inputTokens: workflowInputReserve(), outputTokens: 23768 };
     if (!options && providers.ledger.outputTokens + providers.ledger.reservedOutputTokens + 3500 + reserve.outputTokens > (input.budgets?.maxModelOutputTokens || 35000)) throw new PipelineError("model_budget", "The remaining allowance cannot cover research, UI documentation, script and required reviews.", "No research generation was started; inspect this job's remaining allowance.", "needs_review");
     const raw = await providers.claude("research", request.prompt, request.images, { policy: "research-v1", ...(!options ? { reserve } : {}) });
     return compileResearchWithRetry(raw, { input, evidence, evidenceSha256, workspace, hooks, providers, ...request, ...(options ? { contractVersion: options.version } : { singleTarget: true }) });

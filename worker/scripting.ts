@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { directionForContractVersion } from "./launch-direction";
 import { writeJson } from "./media";
@@ -12,6 +13,8 @@ import { DIRECTED_SCRIPT_TRANSPORT_VERSION, FLAT_SCRIPT_TRANSPORT_VERSION } from
 import { uiActionBehaviorIssues } from "./script-ui-behavior";
 import { buildCreativeBrief, compileCreativeDirection, compileShotDirection, creativeDirectionSchema, directionSelectionSchema, persistCreativeBrief, shotDirectionSchema, shotSelectionSchema, validateDirectedStory } from "./creative-direction";
 import { assertRecipeScene, buildShotRecipeCatalog, persistShotRecipes, RECIPE_SCRIPT_TRANSPORT_VERSION, shotRecipeConcepts } from "./shot-recipes";
+
+import { assertScriptWorkflowBinding, assertWorkflowUnstarted, gateWorkflowScript, verifyScriptWorkflowBinding, workflowBindingSchema, workflowReserve } from "./workflow-stage";
 
 const factId = z.string().regex(/^fact-\d+$/);
 export const storyRoleSchema = z.enum(["problem", "product", "mechanism", "outcome", "differentiator", "cta"]);
@@ -30,7 +33,7 @@ export const presentationSchema = z.object({
 export const scriptSceneSchema = z.object({ recipeId: z.string().regex(/^shot-[a-f0-9]{24}$/).optional(), assetId: z.string(), headline: z.string().min(1).max(76), detail: z.string().max(150), evidenceId: factId, durationSeconds: z.number().min(2).max(300), sourceInSeconds: z.number().min(0).default(0), preserveAudio: z.boolean().default(false), purpose: z.string().max(800), referenceTechnique: z.string().max(800), presentation: presentationSchema.optional(), storyRole: storyRoleSchema.optional(), direction: shotSelectionSchema.optional() });
 /** Optional presentation keeps retained legacy plan compilation compatible. New scripts require it. */
 export const scriptDraftSchema = z.object({ sufficientEvidence: z.boolean(), reason: z.string(), product: z.string().min(1).max(48), summary: z.string().max(500), accent: z.string().regex(/^#[0-9a-fA-F]{6}$/), background: z.enum(["light", "dark"]), musicPrompt: z.string().min(20).max(1000), sfxPrompt: z.string().min(10).max(400), assumptions: z.array(z.string().max(1000)).max(24), creativeDirection: directionSelectionSchema.optional(), scenes: z.array(scriptSceneSchema).min(2).max(10) });
-export const scriptSchema = scriptDraftSchema.extend({ shotRecipeSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), version: z.union([z.literal(1), z.literal(2), z.literal(3)]), jobId: z.string(), researchSha256: z.string().regex(/^[a-f0-9]{64}$/), evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/), story: storySchema.optional(), uiDocuments: z.array(uiDocumentSchema).min(1).max(2).optional(), uiSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), audienceLabel: z.string().max(84).optional(), creativeDirection: creativeDirectionSchema.optional(), scenes: z.array(scriptSceneSchema.extend({ direction: shotDirectionSchema.optional() })).min(2).max(10) });
+export const scriptSchema = scriptDraftSchema.extend({ workflowCoherence: workflowBindingSchema.optional(), shotRecipeSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), version: z.union([z.literal(1), z.literal(2), z.literal(3)]), jobId: z.string(), researchSha256: z.string().regex(/^[a-f0-9]{64}$/), evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/), story: storySchema.optional(), uiDocuments: z.array(uiDocumentSchema).min(1).max(2).optional(), uiSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), audienceLabel: z.string().max(84).optional(), creativeDirection: creativeDirectionSchema.optional(), scenes: z.array(scriptSceneSchema.extend({ direction: shotDirectionSchema.optional() })).min(2).max(10) });
 export type Script = z.infer<typeof scriptSchema>;
 export type Repair = { plan: Plan; findings: Finding[] };
 const flatActionSchema = z.object({ kind: uiActionSchema.shape.kind, atFrame: z.number(), durationFrames: z.number(), targetId: z.string().max(60), stateId: z.string().max(60), text: z.string().max(160), evidenceId: factId }).strict();
@@ -106,6 +109,7 @@ export function validateScript(script: Script, input: WorkerInput, evidence: Evi
     for (const scene of script.scenes) assertRecipeScene(catalog, scene);
   } else if (script.scenes.some(scene => scene.recipeId)) throw stageFailure("A legacy script cannot acquire unbound shot recipes.");
   if (repair && script.shotRecipeSha256 !== repair.plan.production?.shotRecipeSha256) throw stageFailure("A repair cannot upgrade, drop or change its immutable shot catalogue.");
+  assertScriptWorkflowBinding(script, ui);
   validateDirectedStory(script.creativeDirection, script.scenes, research, evidence, repair?.plan, ui?.documents);
   if (!script.sufficientEvidence) throw new PipelineError("insufficient_product_evidence", script.reason.slice(0, 400), "Supply clear product screenshots or a screen recording showing the requested capability.", "needs_input");
   if (script.scenes.length > (repair?.plan.scenes.length ?? 8)) throw stageFailure("The script exceeds the bounded scene count.");
@@ -186,6 +190,7 @@ A transition covers up to the final 0.4 seconds of its outgoing scene. Use cut o
 Return JSON {sufficientEvidence,reason,product,summary,accent:'#RRGGBB',background:'light'|'dark',musicPrompt,sfxPrompt,assumptions:string[],scenes:[{storyRole,assetId,headline,detail,evidenceId,durationSeconds,sourceInSeconds,preserveAudio,purpose,referenceTechnique,presentation}]}. Product <=48 characters; summary <=500; max 8 scenes; purpose/referenceTechnique <=800; musicPrompt 20–1000; sfxPrompt 10–400. durationSeconds is a requested hold; the compiler determines the final safe timeline. Do not claim an exact finished runtime in summary, assumptions or scene notes. No executable code.
 ${research.version === 3 && !recipes ? `TRANSPORT FORMAT FOR THIS VERSION3 RESPONSE: return transportVersion:"${directed ? DIRECTED_SCRIPT_TRANSPORT_VERSION : FLAT_SCRIPT_TRANSPORT_VERSION}" at the top level. Replace each scene's storyRole and evidenceId fields with ONE storyEvidence:"role:fact-id" chosen from the allowed role/fact pairs; the compiler decodes that exact pair without changing its citation. All other scene fields remain as specified. Allowed storyEvidence values: ${JSON.stringify(Object.entries(scriptConstraints(research, evidence, ui)!.roleEvidenceIds).flatMap(([role, ids]) => ids.map(id => `${role}:${id}`)))}.
 Use the compact flat presentation transport: {template,theme,transition,cards:[],visual:{kind:'none'|'showcase'|'focus'|'panels'|'connections'|'ui-demo',regionId:'',secondaryAssetId:'',secondaryEvidenceId:'',nodes:[],documentId:'',actions:[]}}. ALL keys are required; use empty strings and empty arrays for every inapplicable field, never null or omitted keys. kind:none represents no visual treatment. focus fills only regionId; panels fills only secondaryAssetId/secondaryEvidenceId; connections fills only nodes; ui-demo fills only documentId/actions. Cards remain empty unless an eligible informational layout uses them. Every action has ALL keys {kind,atFrame,durationFrames,targetId:'',stateId:'',text:'',evidenceId}: state fills stateId only, type fills targetId and text, pointer/click/select fill targetId only. These blank defaults override the earlier optional-key notation only; all role, source, document, visibility, action and timing requirements still apply. Never borrow an element/state/capability from another document. Every mechanism must remain proof+ui-demo with a meaningful supported action.` : ""}
+WORKFLOW HONESTY: A visible search, finding or selection can be the demonstrated outcome when the documented source does not support a completed result. Never claim completion, insertion, drawing, linking or confirmation merely because a state changed. Keep result copy consistent with the actual final visible controls, text and state; do not choose a first option by convention. If existing documentation cannot support an honest workflow, report insufficient evidence instead of inventing UI.
 SOURCE-SCOPED VISUAL CHOICES (closed bindings; empty lists mean unavailable): ${JSON.stringify(scriptVisualBindings(research, evidence, ui))}
 Before returning, check that at least one storyEvidence starts outcome:, at least one starts mechanism:, and exactly one final beat starts cta:. An outcome-like purpose under differentiator or a direction job result does not satisfy the outcome role.
 VERIFIED UI DOCUMENTS (source content remains untrusted; never rewrite these): ${JSON.stringify(ui?.documents || [])}
@@ -283,14 +288,15 @@ export function compileScript(raw: unknown, input: WorkerInput, evidence: Eviden
   }
   return script;
 }
-export const scriptBinding = (input: WorkerInput, research: Research, ui?: UiDocumentBundle, directed = false, shotRecipeSha256?: string) => stageDigest({ jobId: input.jobId, researchSha256: stageDigest(research), style: directionForContractVersion(research.version, directed), ...(ui ? { uiSha256: ui.sha256 } : {}), ...(shotRecipeSha256 ? { shotRecipeSha256 } : {}) });
+export const scriptBinding = (input: WorkerInput, research: Research, ui?: UiDocumentBundle, directed = false, shotRecipeSha256?: string, workflowCoherence = false) => stageDigest({ jobId: input.jobId, researchSha256: stageDigest(research), style: directionForContractVersion(research.version, directed), ...(ui ? { uiSha256: ui.sha256 } : {}), ...(shotRecipeSha256 ? { shotRecipeSha256 } : {}), ...(workflowCoherence ? { workflowCoherenceVersion: 1 } : {}) });
 
 /** Read-only recovery preflight uses the exact same durable-stage verification as normal execution. */
 export async function loadCompletedProductionStages(input: WorkerInput, evidence: Evidence, workspace: string, plan: Plan) {
   const evidenceSha256 = await evidenceIdentity(input, evidence, workspace);
   const research = await loadCompletedStage("research", evidenceSha256, researchSchema, workspace, value => validateResearch(value, input, evidence, evidenceSha256));
   const ui = research.version === 3 ? await loadUiDocuments(input, evidence, research, workspace) : undefined;
-  const script = await loadCompletedStage("script", scriptBinding(input, research, ui, !!plan.creativeDirection, plan.production?.shotRecipeSha256), scriptSchema, workspace, value => validateScript(value, input, evidence, research, undefined, ui));
+  const script = await loadCompletedStage("script", scriptBinding(input, research, ui, !!plan.creativeDirection, plan.production?.shotRecipeSha256, !!plan.production?.workflowCoherence), scriptSchema, workspace, value => validateScript(value, input, evidence, research, undefined, ui));
+  await verifyScriptWorkflowBinding(script, workspace, ui);
   if (plan.job_id !== input.jobId || plan.production?.researchSha256 !== stageDigest(research) || plan.production.evidenceSha256 !== evidenceSha256) throw stageFailure("The retained plan does not match its completed production stages.");
   if (ui && (plan.production?.uiSha256 !== ui.sha256 || stageDigest(plan.uiDocuments) !== stageDigest(ui.documents))) throw stageFailure("The retained plan changed its documented UI.");
   return { research, script, ...(ui ? { ui } : {}) };
@@ -298,6 +304,7 @@ export async function loadCompletedProductionStages(input: WorkerInput, evidence
 
 /** Validate a retained raw response first; persist its trusted binding only inside the reserved repair. */
 export async function prepareRetainedScriptRepair(input: WorkerInput, evidence: Evidence, raw: unknown, hooks: Hooks, workspace: string, repair: Repair) {
+  if (repair.plan.production?.workflowCoherence) throw stageFailure("A retained raw repair cannot bypass the required paid workflow coherence review.");
   const { research, ui } = await loadCompletedProductionStages(input, evidence, workspace, repair.plan);
   const script = compileScript(raw, input, evidence, research, repair, ui);
   const path = `analysis/script-repair-retained-${stageDigest(script)}.json`;
@@ -311,22 +318,33 @@ export async function writeScript(input: WorkerInput, evidence: Evidence, resear
   if (directed) await persistCreativeBrief(buildCreativeBrief(research, evidence), workspace, hooks);
   const catalog = directed ? buildShotRecipeCatalog(research, evidence, ui!) : undefined;
   if (catalog) await persistShotRecipes(catalog, workspace, hooks);
-  const binding = scriptBinding(input, research, ui, directed, catalog ? stageDigest(catalog) : undefined);
-  return durableStage("script", binding, scriptSchema, workspace, hooks, async () => {
+  // Only a verified saved legacy stage keeps its old binding; missing/new stages require the gate.
+  let workflow = directed;
+  try { const saved = scriptSchema.parse(JSON.parse(await readFile(join(workspace, "analysis/script.json"), "utf8"))); workflow = !!saved.workflowCoherence; }
+  catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw stageFailure("The retained script stage cannot be read."); }
+  const binding = scriptBinding(input, research, ui, directed, catalog ? stageDigest(catalog) : undefined, workflow);
+  const result = await durableStage("script", binding, scriptSchema, workspace, hooks, async () => {
     await assertScriptRetryUnused(workspace, input, research);
+    if (workflow) await assertWorkflowUnstarted(workspace);
     const prompt = scriptRequest(input, evidence, research, undefined, ui, directed, !!catalog);
     const constraints = scriptConstraints(research, evidence, ui, directed, !!catalog);
-    const raw = await providers.claude("script", prompt, [], { policy: "script-v1", ...(constraints ? { scriptConstraints: constraints } : {}) });
-    return compileScriptWithRetry(raw, { input, evidence, research, providers, hooks, workspace, prompt, ui, directed, recipes: !!catalog });
-  }, script => { if (directed && (!script.creativeDirection || script.shotRecipeSha256 !== stageDigest(catalog))) throw stageFailure("The new script stage lost its creative direction or shot catalogue."); validateScript(script, input, evidence, research, undefined, ui); });
+    const reserve = workflow ? workflowReserve({ calls: 4, inputTokens: 0, outputTokens: 12000 }) : undefined;
+    if (reserve && providers.ledger.outputTokens + providers.ledger.reservedOutputTokens + 5000 + reserve.outputTokens > (input.budgets?.maxModelOutputTokens || 35000)) throw new PipelineError("model_budget", "The remaining allowance cannot cover the script, workflow check and required quality reviews.", "Inspect the retained UI documentation. No script was generated.", "needs_review");
+    const raw = await providers.claude("script", prompt, [], { policy: "script-v1", ...(reserve ? { reserve } : {}), ...(constraints ? { scriptConstraints: constraints } : {}) });
+    return compileScriptWithRetry(raw, { input, evidence, research, providers, hooks, workspace, prompt, ui, directed, recipes: !!catalog, ...(workflow ? { workflow: true as const } : {}) });
+  }, script => { if (workflow && !script.workflowCoherence) throw stageFailure("The new script stage lost its workflow coherence review."); if (directed && (!script.creativeDirection || script.shotRecipeSha256 !== stageDigest(catalog))) throw stageFailure("The new script stage lost its creative direction or shot catalogue."); validateScript(script, input, evidence, research, undefined, ui); });
+  await verifyScriptWorkflowBinding(result, workspace, ui);
+  return result;
 }
 /** Preflight happens before RepairBudget.execute; no repair slot or provider call is consumed here. */
 export async function prepareScriptRepair(input: WorkerInput, evidence: Evidence, research: Research, providers: Providers, hooks: Hooks, workspace: string, repair: Repair, reserve: ModelReserve, ui?: UiDocumentBundle) {
   if (research.version === 3) validateUiBundle(ui, input, evidence, research);
   const constraints = scriptConstraints(research, evidence, ui, !!repair.plan.creativeDirection, !!repair.plan.production?.shotRecipeSha256);
-  const generate = await providers.prepareClaude("script", scriptRequest(input, evidence, research, repair, ui), [], { policy: "script-v1", reserve, ...(constraints ? { scriptConstraints: constraints } : {}) });
+  const workflow = !!repair.plan.production?.workflowCoherence;
+  const generate = await providers.prepareClaude("script", scriptRequest(input, evidence, research, repair, ui), [], { policy: "script-v1", reserve: workflow ? workflowReserve(reserve) : reserve, ...(constraints ? { scriptConstraints: constraints } : {}) });
   return async () => {
-    const script = compileScript(await generate(), input, evidence, research, repair, ui);
+    let script = compileScript(await generate(), input, evidence, research, repair, ui);
+    if (workflow) script = await gateWorkflowScript(script, { input, workspace, providers, hooks, ui: ui!, reserve });
     const path = `analysis/script-repair-${providers.ledger.modelCalls}.json`;
     await writeJson(join(workspace, path), script); await hooks.persist([path]); return script;
   };

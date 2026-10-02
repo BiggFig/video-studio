@@ -4,7 +4,7 @@ Implementation and ownership are tracked in [the ticket batch](ENGINE-BATCH-2026
 
 ## Integrated checks
 
-The integrated suite passed 365 tests, with 21 environment-specific integration tests skipped. Type checking and the production build passed. A separate opt-in browser/media run passed all 34 tests, including five integration cases skipped by the default suite. The new UI inspector's separate opt-in suite passed all 11 tests, including five browser cases skipped by default. Database/storage, PDF and other unrelated opt-in checks were not rerun for this batch. Targeted tests cover research/source bindings, compact UI documentation, creative direction, legacy compatibility, repair continuity, camera bounds in three aspect ratios, sound scheduling and benchmark attribution. Independent agent review found and resolved a sound-repair issue: the generated effect now remains available when one repair removes all scheduled cues and another restores them.
+The integrated suite passed 389 tests, with 22 environment-specific integration tests skipped. Type checking and the production build passed. A separate opt-in browser/media run passed all 34 tests, including five integration cases skipped by the default suite. The new UI inspector's separate opt-in suite passed all 11 tests, including five browser cases skipped by default. The workflow/model-format/quality-reserve suite passed all 42 tests with retained-artifact extraction enabled. Database/storage, PDF and other unrelated opt-in checks were not rerun for this batch. Targeted tests cover research/source bindings, compact UI documentation, creative direction, legacy compatibility, repair continuity, camera bounds in three aspect ratios, sound scheduling and benchmark attribution. Independent agent review found and resolved a sound-repair issue: the generated effect now remains available when one repair removes all scheduled cues and another restores them.
 
 ## Renderer evidence
 
@@ -16,11 +16,11 @@ Observed limitations remain: softer CSS materials than the references' volumetri
 
 | Case | Test performed | Observed result | What remains unproven |
 | --- | --- | --- | --- |
-| Obsidian | Fresh provider-backed URL pipeline | Trial 2 reached a complete audiovisual draft with UI defects. Trial 5 passed research, documentation and scripting on first responses, then found actual UI text clipping before audio | Complete automatic quality pass and creative quality |
-| Excalidraw | Public capture and structural readiness only, no model calls | Three assets, one UI candidate and 25 DOM elements; recognizable empty canvas and tools | Supported audience/workflow/outcome research and performed drawing/result |
-| Example.com | Public capture and structural readiness only, no model calls | Two generic viewports, no product UI or workflow | Automatic semantic insufficient-evidence decision; structural readiness alone correctly does not claim product proof |
+| Obsidian | Fresh provider-backed URL pipeline | Trial 6 produced a 27.2-second film and passed all 13 automated checks. Independent review found a contextually incoherent illustrative note result | Creative acceptance and stronger contextual QA; production delivery |
+| Excalidraw | Fresh provider-backed URL pipeline | Complete 28.9-second draft; all three QC batches completed with blocking findings, then repair preflight stopped on the input reserve | Faithful and causal demonstration, affordable bounded repair, creative acceptance |
+| Example.com | Fresh provider-backed negative acceptance | Correct `needs_input` after one research call; no UI, script, render or audio | No output is expected for this case |
 
-Capture observations are retained in `.local/engine-batch-capture-excalidraw-1790957245997` and `.local/engine-batch-capture-insufficient-1790957280803`. Excalidraw's captured brand metadata includes a description that the current source-fact catalog does not use; the capture-only test does not invent missing capability claims.
+Earlier capture-only observations are retained in `.local/engine-batch-capture-excalidraw-1790957245997` and `.local/engine-batch-capture-insufficient-1790957280803`. Excalidraw's captured brand metadata includes a description that the current source-fact catalog does not use. The later provider trial is evaluated separately below.
 
 ## Fresh automatic trial 1
 
@@ -81,6 +81,34 @@ The untouched run ended `needs_review` / `ui_state_mismatch`, with three model c
 The implemented inspector uses the production font, trusted HTML/CSS and state resolver. It checks every declared state in both permitted UI scene layouts, saves bounded measured diagnostics and failure images, blocks browser networking and stops on unavailable or invalid measurements. Actual Chromium tests cover landscape, portrait, square, selected styles, text overrides, inert markup, non-text SVG edges and failures beyond diagnostic truncation. The saved trial-5 document fails in all six state/layout combinations; the isolated height-only copy passes, with the original source hash unchanged. Fresh generation cannot bypass these checks by omitting its transport version; historical compilation and completed-stage loads keep their prior behavior.
 
 Correction tests verify exact provider preflight before the durable attempt marker, one attempt only, shared 6,000-token accounting across targets, preserved future script/review reservations, and no paid correction for schema, provenance, unavailable measurement, uncertain provider or exhausted-budget failures. This is a validated repair mechanism, not a claim that the failed trial recovered automatically.
+
+## Fresh automatic trial 6
+
+Workspace: `.local/engine-batch-acceptance-20261002f`. Runtime hash: `bf16bfcf02fd0b5ea6474bb4afab164df093c153f78ca721300f8b6919af8d62`.
+
+Research used its one bounded correction for a mechanism fact outside the selected workflow. UI documentation passed the new browser check on its first response, without consuming a layout correction. Scripting and scene preflight passed. The unchanged automatic run produced `renders/final.mp4`: 1920×1080, 816 frames, 27.2 seconds. All 13 automated quality checks completed and passed. Usage was seven model calls, 122,979 input tokens, 11,947 output tokens, two audio generations and 27.2 ASR seconds. The read-only benchmark verifies the artifacts and reports `automaticLocalPass: true`, while retaining `productionVerified: false` and requiring independent creative review.
+
+Independent plan and decoded-frame reviews found a material contextual error that automated QC missed. Scene 3 retains a paragraph ending with Descartes arriving at a famous phrase, then inserts the illustrative link `[[Thinking, Fast and Slow]]`. The actions really type, click and change state, and all text fits, but the example makes no sense in its surrounding paragraph. The contradictory final combination is clear in frames 433 and 528. This output is not creatively accepted or promoted as reference-level quality. No failed or passed artifact was rewritten after the finding.
+
+## Second-product acceptance: Excalidraw
+
+Workspace: `.local/engine-batch-acceptance-canvas-20261002`. It uses the same runtime as trial 6. Research, UI documentation, browser layout and scripting passed on their first responses, producing a 28.9-second draft. All three mandatory quality batches completed. Usage was six model calls, 99,465 input tokens, 8,833 output tokens, two audio generations and 28.9 ASR seconds. The final state is `needs_review` / `model_budget`; the benchmark correctly returns `automaticLocalPass: false` and retains the draft.
+
+Independent review of 47 decoded frames confirms real defects. A rectangle appears immediately after the toolbar click, before the pointer reaches the canvas, without a drawing gesture. The outcome shot returns to an empty onboarding capture beneath copy promising a completed diagram. The reconstruction also substitutes bare shortcut letters for the source toolbar's icons. The final delivered-file review identified the outcome mismatch. Its separate inference that the last iris-seam frame proves premature hold removal was unsupported by that sample alone; that does not clear the other findings.
+
+The budget stop occurred before any repair call or repair-slot consumption, after completed QC consumed 66,872 input and 3,267 output tokens. It was not a provider retry or uncertain reservation. The conservative repair envelope permits ten future rendered samples for every scene whenever UI documents exist: five scenes imply fifty rendered images, exceeding 210,000 reserved image tokens before prompt/source costs. The remaining 100,535 input tokens cannot cover that envelope. A future improvement must constrain and validate the legal repair scope or budget the proposed repair's exact review needs; raising the cap or ignoring required review would not fix the design. VS-207's early causal/context review addresses the demonstrated contradictions before audio/rendering, but does not itself solve source-icon fidelity or this broader repair-envelope limitation.
+
+## Insufficient-evidence acceptance
+
+Workspace: `.local/engine-batch-acceptance-negative-20261002`. It uses the same runtime hash as trial 6. The provider correctly identified Example.com as a documentation placeholder with no evidenced software product or workflow and returned `needs_input` / `insufficient_product_evidence`. It consumed one model call, 5,921 input tokens, 851 output tokens and zero audio generations. No UI, script, composition or video was generated. `automaticLocalPass: false` is expected here; that field means a verified finished film, not successful handling of a negative case.
+
+## Workflow coherence implementation
+
+VS-207 derives complete effective visible text, selection styles and action outcomes from the same state evaluator as the renderer. It includes the whole film's visible headlines, details, card text and diagram labels, bound to canonical source, UI and exact script hashes. Each action prefix is evaluated independently so the next action cannot erase its predecessor's result. Context above 32 KiB stops without truncation. The independent provider verdict is limited to 768 output tokens, must cover every UI scene, and must cite real visible element and action IDs. Contradictory positive flags can only become failures.
+
+An exclusive durable reservation precedes the paid review. Incomplete, malformed, orphaned or mismatched proof stops replay; only an explicit valid negative verdict can use the existing unused script correction. Corrected scripts and changed repairs require their own exact-context review. Future review input, output and calls are reserved without increasing job limits. Original/active script approvals and completion records are checked again when compiling, restoring and benchmarking a plan. Legacy completed stages retain their prior contract. Final image QC receives the complete scoped context but still independently checks actual exported frames and original source images.
+
+This text/state gate cannot establish source-icon fidelity, the contents of unseen images or reference-level design. The paid semantic cases and subsequent fresh URL trial are separate acceptance evidence; unit tests alone do not establish reviewer accuracy.
 
 ## Repeatable checks
 

@@ -9,7 +9,10 @@ import { launchDirection, usesCurrentLaunchDirection } from "./launch-direction"
 import { sameVisibleText } from "./motion-composition";
 import { motionUsage, resolvePresentation } from "./motion-assets";
 import { parseModelJson } from "./model-response";
-import { scriptOutputConfig, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
+import { scriptOutputConfig, type ScriptConstraints, type UiDesignConstraints, type WorkflowConstraints } from "./model-format";
+import { WORKFLOW_MAX_OUTPUT_TOKENS, WORKFLOW_COHERENCE_POLICY, WORKFLOW_CONTEXT_MAX_BYTES, assertWorkflowContext, type WorkflowContext } from "./workflow-coherence";
+import { stageDigest } from "./research";
+export { WORKFLOW_COHERENCE_POLICY } from "./workflow-coherence";
 export type { ScriptConstraints, UiDesignConstraints } from "./model-format";
 import { inputReservation, modelUsage, TOKEN_BUDGET_VIOLATION, TOKEN_COUNT_MARGIN, usageViolations } from "./token-budget";
 import { parseProviderLedger } from "./provider-ledger";
@@ -39,8 +42,8 @@ export const UI_DESIGN_POLICY = `${STAGE_SCOPE} You are the interface reconstruc
 export const QUALITY_MAX_OUTPUT_TOKENS = 3000;
 export interface ModelReserve { calls: number; inputTokens: number; outputTokens: number }
 export interface QualityModelRequest { prompt: string; images: { path: string; label: string }[] }
-export interface ClaudeOptions { policy: "quality-review-v1" | "research-v1" | "ui-design-v1" | "script-v1" | "reference-v1"; reserve?: ModelReserve; scriptConstraints?: ScriptConstraints; uiConstraints?: UiDesignConstraints; /** Internal allocation only: may lower, never raise, the stage policy cap. */ maxOutputTokens?: number }
-const stagePolicies = { "quality-review-v1": { purpose: "review", text: QUALITY_REVIEW_POLICY, output: QUALITY_MAX_OUTPUT_TOKENS }, "research-v1": { purpose: "research", text: RESEARCH_POLICY, output: 3500 }, "ui-design-v1": {purpose:"ui-design",text:UI_DESIGN_POLICY,output:6000}, "script-v1": { purpose: "script", text: SCRIPT_POLICY, output: 5000 }, "reference-v1": { purpose: "reference", text: REFERENCE_POLICY, output: 2500 } } as const;
+export interface ClaudeOptions { policy: "quality-review-v1" | "research-v1" | "ui-design-v1" | "script-v1" | "reference-v1" | "workflow-coherence-v1"; reserve?: ModelReserve; scriptConstraints?: ScriptConstraints; uiConstraints?: UiDesignConstraints; workflowConstraints?: WorkflowConstraints; /** Internal allocation only: may lower, never raise, the stage policy cap. */ maxOutputTokens?: number }
+const stagePolicies = { "quality-review-v1": { purpose: "review", text: QUALITY_REVIEW_POLICY, output: QUALITY_MAX_OUTPUT_TOKENS }, "research-v1": { purpose: "research", text: RESEARCH_POLICY, output: 3500 }, "ui-design-v1": {purpose:"ui-design",text:UI_DESIGN_POLICY,output:6000}, "script-v1": { purpose: "script", text: SCRIPT_POLICY, output: 5000 }, "reference-v1": { purpose: "reference", text: REFERENCE_POLICY, output: 2500 }, "workflow-coherence-v1": { purpose: "workflow-coherence", text: WORKFLOW_COHERENCE_POLICY, output: WORKFLOW_MAX_OUTPUT_TOKENS } } as const;
 
 type ReviewPlan = Pick<Plan, "output" | "product" | "accent" | "background" | "scenes" | "assets" | "audio" | "brand" | "story" | "uiDocuments" | "audienceLabel" | "creativeDirection">;
 export interface WholeFilmProof {
@@ -54,6 +57,8 @@ export interface QualityRequest {
   wholeFilmProof: WholeFilmProof;
   evidence: Evidence; defaultStyle: unknown; measurements: unknown; heard: unknown;
   sourceSpeech: { scene: string; transcript?: Transcript }[];
+  /** Derived planned states for only this batch's UI scenes; never an inherited pass. */
+  workflowContext?: WorkflowContext;
 }
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
 const qualityEnvelopeError = () => new PipelineError("model_budget", "The complete quality evidence exceeds this job's bounded review allowance.", "Ask the administrator to inspect the retained source and audio evidence. No required speech was shortened.", "needs_review");
@@ -87,6 +92,17 @@ export function qualitySceneVisibility(plan: ReviewPlan, motion: QualityRequest[
 export function qualityReviewPrompt(request: QualityRequest) {
   if (bytes({ measurements: request.measurements, heard: request.heard }) > qualityAudioEnvelope(request.evidence)) throw qualityEnvelopeError();
   const visibility = qualitySceneVisibility(request.plan, request.motion);
+  if (request.workflowContext) {
+    const context = request.workflowContext;
+    assertWorkflowContext(context);
+    const uiScenes = request.plan.scenes.filter(scene => scene.presentation?.visual?.kind === "ui-demo");
+    if (uiScenes.length !== context.scenes.length || uiScenes.some(scene => {
+      const visual = scene.presentation!.visual!;
+      if (visual.kind !== "ui-demo") return true;
+      const derived = context.scenes.find(value => value.sceneId === scene.id), beat = context.beats.find(value => value.sceneId === scene.id), document = request.plan.uiDocuments?.find(value => value.id === visual.documentId);
+      return !derived || derived.documentId !== visual.documentId || stageDigest(derived.actions.map(({ id: _id, ...action }) => action)) !== stageDigest(visual.actions) || !beat || beat.headline !== scene.headline || beat.detail !== scene.detail || !document || context.documents.find(value => value.id === document.id)?.sha256 !== stageDigest(document);
+    })) throw new PipelineError("invalid_quality_review", "The planned workflow context does not match this batch's actual UI scene inventory.", "Inspect the retained plan and complete workflow evidence.", "needs_review");
+  }
   // Visible copy occurs once, in SCENE VISIBILITY. Source quotes/card bindings
   // remain complete in PLAN GROUNDING and cannot be mistaken for required copy.
   const plan = { ...request.plan, scenes: request.plan.scenes.map(({ purpose: _purpose, reference_technique: _technique, effects: _effects, headline: _headline, detail: _detail, presentation, ...scene }) => ({...scene,...(presentation?{presentation:{...presentation,cards:presentation.cards?.map(({title:_title,body:_body,...grounding})=>grounding)}}:{})})) };
@@ -99,6 +115,7 @@ SCENE VISIBILITY (trusted renderer contract, not a pass assertion): ${JSON.strin
 ${request.plan.story ? `PRODUCT STORY: ${JSON.stringify(request.plan.story||null)}. When present, set storyClarityReviewed=true only after reviewing the supplied ACTUAL frames against their storyRole; storyClarityPassed must reflect that comparison. Each mechanism beat must show the real UI feature named in its copy and help explain what the user does. Problem/product beats assigned the primary audience must make that targeting understandable; an inferred audience can be editorial targeting ('For writers'), never an invented customer statistic. Outcome/differentiator beats must provide a concrete supported reason to care. One CTA closes the story. Do not demand the complete story in every two-scene batch: other planned roles are listed in the whole-film inventory and checked in their own batches. The inventory is not evidence of actual success. No story means both story clarity flags may be false. Do not claim a monetary production value or award a subjective prestige score.` : "No product-story brief is assigned; storyClarityReviewed and storyClarityPassed may be false."}
 ${request.plan.brand ? `OBSERVED BRAND DIRECTION: ${JSON.stringify(request.plan.brand||null)}. This guides actual logo/palette treatment; it does not require every color or every source page word to appear. Source webpage typography may differ from the licensed local composition font. Required logo assets are listed separately from primary product media; their absence or wrong identity is a concrete defect, while a deliberately omitted logo in a non-brand scene is not.` : "No separate brand logo is assigned."}
 ${request.plan.uiDocuments?.length ? `UI DEMONSTRATION CHECKS: Original screenshots are comparison references, not required output pixels. Typed example input is illustrative, never a new product claim. For each supplied ui-demo scene, set uiReconstructionReviewed=true only after comparing ACTUAL frames against its original sources and bound document, and uiReconstructionPassed=true only if the essential interface is recognizable and faithful. Set uiBehaviorReviewed=true only after inspecting the settled pre-action initial frame and every labelled UI action sample (click midpoint or action outcome); uiBehaviorPassed requires the specified typed text, selection or visible state change to occur in the exported frames with a readable result hold. During action samples, a bounded camera may intentionally crop incidental UI to emphasize the active control; its target, text and cursor must remain usable. The settled initial frame and final reading hold show the full reconstructed document. Compare source fidelity in those wide frames and action behavior in the corresponding focused samples. A static screenshot, generic placeholder controls, absent action, wrong target, unsupported capability or state inconsistent with the planned example fails. Other scene batches may return these four flags false. Source defects still block when they hide the required reconstruction evidence. Do not equate a reconstructed demonstration with a live captured session. Metadata is planned evidence, never proof of a pass.` : ""}
+${request.workflowContext ? `PLANNED EFFECTIVE UI CONTEXT: ${JSON.stringify(request.workflowContext)}. This supplies complete visible text and causal order derived from the same state evaluator, not a prior pass. Compare it with ACTUAL source/render frames. Read resulting illustrative content together with persistent surrounding prose, form labels and headings; it must remain meaningful and must not create a false attribution. Example-content is provenance, never immunity. Selecting a toolbar tool or moving a pointer does not itself perform a canvas operation. Search/selection is a legitimate result when copy describes that extent; never force a menu position or invented completion. Fail uiBehaviorPassed for a material contextual/causal contradiction, and claimsPassed too when visible copy or its composition makes a false claim. Cite the actual scene, action sample and visible elements. Whole-film beat copy is context only; do not certify unseen images or another batch's UI. No context metadata waives source-fidelity or rendered checks.` : ""}
 WHOLE-FILM PLANNED PROOF INVENTORY: ${JSON.stringify(request.wholeFilmProof)}. Plan metadata is not rendered evidence. Judge only supplied actual scenes; other proof scenes get their own batches. A typography-only batch must not infer global absence of proof. An empty inventory means required proof is missing. A planned source cannot override a failed actual proof frame; one failed batch fails the film.
 DEFAULT MOTION DIRECTION: ${JSON.stringify(request.defaultStyle)}. Assess distinct purposeful layouts, staged reveals and actual seams under renderIntegrityPassed; a brief entrance/exit is intentional, complete reading holds are mandatory. Do not require unsupported facts or all six beat types. For these HTML motion plans referenceStyleReviewed and referenceStylePassed are required: compare against the supplied user profile when present, otherwise this default direction. Do not claim an exact match to unseen reference frames.
 RENDER MOTION: ${JSON.stringify(motion)}
@@ -140,7 +157,8 @@ export function qualityRepairEnvelope(plan: Plan, evidence: Evidence, research: 
     const visualSlack = plan.story?2*Math.max(bytes({visual:{kind:"connections",nodes:Array.from({length:3},()=>({label:fill(80),evidenceId,evidence:quote}))}}),bytes({visual:{kind:"panels",secondaryAssetId:assetId,secondaryEvidenceId:evidenceId,secondaryEvidence:quote}}),bytes({visual:{kind:"focus",regionId:fill(80),region:{x:1.2345678901234568e-100,y:1.2345678901234568e-100,width:0.9999999999999999,height:0.9999999999999999}}})):0;
     const uiSlack=plan.uiDocuments?.length?2*bytes({visual:{kind:"ui-demo",documentId:fill(60),actions:Array.from({length:6},()=>({kind:"select",atFrame:9000,durationFrames:9000,targetId:fill(60),stateId:fill(60),text:fill(160),evidenceId}))},reconstruction:{documentId:fill(60),sourceAssetIds:[assetId,assetId],mode:"illustrative-html-demonstration"}}):0;
     const directionSlack=plan.creativeDirection?bytes({direction:{version:1,job:"context",motion:"consolidate",continuityKey:fill(300)}}):0;
-    const variableBytes = count*(visualSlack+uiSlack+directionSlack) + Buffer.byteLength(qualityReviewPrompt(maximum), "utf8") - Buffer.byteLength(prompt, "utf8") + qualityAudioEnvelope(evidence) + 512;
+    const workflowSlack = plan.production?.workflowCoherence && plan.uiDocuments?.length ? WORKFLOW_CONTEXT_MAX_BYTES + 2048 : 0;
+    const variableBytes = count*(visualSlack+uiSlack+directionSlack) + workflowSlack + Buffer.byteLength(qualityReviewPrompt(maximum), "utf8") - Buffer.byteLength(prompt, "utf8") + qualityAudioEnvelope(evidence) + 512;
     batches.push({ scenes: count, sourceImages:count*sourcesPerScene, renderedImages:count*(plan.uiDocuments?.length?10:4), variableBytes });
   }
   return { prompt, batches, eligible, variants };
@@ -208,7 +226,7 @@ export class Providers {
     const direct=!!process.env.ANTHROPIC_API_KEY;
     const providerHeaders:Record<string,string>=direct?{"x-api-key":process.env.ANTHROPIC_API_KEY!}:{Authorization:`Bearer ${process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN}`};
     const headers={...providerHeaders,"anthropic-version":"2023-06-01","content-type":"application/json"};
-    const model=this.model,outputConfig=scriptOutputConfig(model,direct,options?.policy,options?.scriptConstraints,options?.uiConstraints);
+    const model=this.model,outputConfig=scriptOutputConfig(model,direct,options?.policy,options?.scriptConstraints,options?.uiConstraints,options?.workflowConstraints);
     if(outputConfig)conservativeTokens+=Buffer.byteLength(JSON.stringify({output_config:outputConfig}),"utf8");
     const inputPayload={model,system,messages:[{role:"user",content}],...(outputConfig?{output_config:outputConfig}:{})};
     const exactInputBody=JSON.stringify(inputPayload),requestBody=JSON.stringify({...inputPayload,max_tokens:maxOutput,temperature:0});

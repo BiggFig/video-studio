@@ -9,6 +9,7 @@ import { explicitPrice, prepareRetainedScriptRepair, prepareScriptRepair, script
 import { motionTimingForPresentation } from "./motion-timing";
 import { buildUiDocuments, loadUiDocuments, uiExampleCopy, validateUiActions } from "./ui-reconstruction";
 import { alignAudioToPlan, soundCueIssues } from "./audio-direction";
+import { validatePlanWorkflowCoherence, verifyScriptWorkflowBinding, workflowBindingSchema } from "./workflow-stage";
 export { evidenceCatalog } from "./research";
 
 const directorSchema=scriptDraftSchema;
@@ -62,6 +63,7 @@ export async function prepareRetainedPlanRepair(input:WorkerInput,evidence:Evide
 export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknown,hooks:Hooks,workspace:string,repair?:{plan:Plan;findings:Finding[]}):Promise<Plan> {
   if(repair?.plan.production){
     const script=scriptSchema.safeParse(raw),previous=repair.plan.production;
+    if(!script.success||!!script.data.workflowCoherence!==!!previous.workflowCoherence)throw stageFailure("A repaired plan cannot acquire or drop its workflow coherence contract.");
     if(!script.success||repair.plan.job_id!==input.jobId||script.data.jobId!==input.jobId||script.data.researchSha256!==previous.researchSha256||script.data.evidenceSha256!==previous.evidenceSha256||script.data.shotRecipeSha256!==previous.shotRecipeSha256||script.data.uiSha256!==previous.uiSha256||stageDigest(script.data.uiDocuments||null)!==stageDigest(repair.plan.uiDocuments||null)||stageDigest(script.data.creativeDirection||null)!==stageDigest(repair.plan.creativeDirection||null))throw stageFailure("A production-bound plan requires a repaired script verified against the same research, creative direction and evidence.");
   }
   const assets=evidence.assets.filter(a=>a.usage==="output"),source=evidence.text+"\n\n"+assets.map(a=>a.transcript?.text||"").join("\n\n"),facts=evidenceCatalog(source);
@@ -72,6 +74,10 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
   // is retained independently. Visible copy, fact IDs and timing stay strict.
   const metadata=raw as Record<string,unknown>,bound=(value:unknown,max:number)=>typeof value==="string"?value.slice(0,max):value;
   const script=scriptSchema.safeParse(raw),current=script.success&&script.data.version>=2;
+  if(metadata.workflowCoherence!==undefined){
+    if(!script.success)throw stageFailure("Workflow approval requires a complete compiled script.");
+    await verifyScriptWorkflowBinding(script.data,workspace);
+  }
   const bounded={...metadata,...(script.success&&script.data.creativeDirection?{creativeDirection:{concept:script.data.creativeDirection.concept,evidenceId:script.data.creativeDirection.evidenceId}}:{}),summary:bound(metadata.summary,500),scenes:Array.isArray(metadata.scenes)?metadata.scenes.map(scene=>scene&&typeof scene==="object"?{...scene,...(script.success&&scene.direction?{direction:{job:scene.direction.job,motion:scene.direction.motion}}:{}),purpose:bound(scene.purpose,800),referenceTechnique:bound(scene.referenceTechnique,800)}:scene):metadata.scenes};
   const draft=directorSchema.parse(bounded);
   if(draft.creativeDirection&&!script.success)throw stageFailure("Creative direction requires a compiled source-bound script.");
@@ -157,10 +163,11 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
   if(output.duration_frames/30>Math.min(300,input.budgets?.maxDurationSeconds||90) || (repair&&output.duration_frames>repair.plan.output.duration_frames)) throw new PipelineError("duration_budget","The plan exceeds this job's duration budget.","Supply a shorter, focused recording or screenshots.","needs_review");
   const brand=current?brandFromEvidence(evidence):undefined;
   const plan:Plan={version:1,job_id:input.jobId,mode:"create",renderer:scenes.some(scene=>scene.presentation)?"hyperframes":"ffmpeg",output,product:draft.product,summary:draft.summary,accent:current?brand?.accent||"#333333":draft.accent,background:current?(brand&&luminance(brand.background)<.179?"dark":"light"):draft.background,...(brand?{brand}:{}),...(current?{story:script.data.story}:{}),...(script.success&&script.data.creativeDirection?{creativeDirection:script.data.creativeDirection}:{}),...(script.success&&script.data.version===3?{uiDocuments:script.data.uiDocuments,audienceLabel:script.data.audienceLabel}:{}),assets:[...evidence.assets,...stillBindings],scenes,captions:[],audio:[],music_prompt:repair?.plan.music_prompt||draft.musicPrompt,sfx_prompt:repair?.plan.sfx_prompt||draft.sfxPrompt,assumptions:draft.assumptions};
-  const binding=z.object({researchSha256:z.string().regex(/^[a-f0-9]{64}$/),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/),uiSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),shotRecipeSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()}).safeParse(raw);
+  const binding=z.object({researchSha256:z.string().regex(/^[a-f0-9]{64}$/),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/),uiSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),shotRecipeSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),workflowCoherence:workflowBindingSchema.optional()}).safeParse(raw);
   if(binding.success)plan.production={...binding.data,scriptSha256:stageDigest(raw)};
   if(repair) { plan.assets.push(...repair.plan.assets.filter(a=>a.kind==="audio")); plan.audio=alignAudioToPlan(plan,repair.plan.audio); }
   if(current){await writeJson(join(workspace,"analysis/copy-audit.json"),{version:1,scriptSha256:stageDigest(raw),visibleWords:scriptVisibleWords({...draft,audienceLabel:script.data.audienceLabel}),maximumVisibleWords:48,targetSeconds:[20,28],actualSeconds:output.duration_frames/30,scenes:draft.scenes.map((scene,index)=>({sceneId:scenes[index].id,storyRole:scene.storyRole,visibleWords:scriptVisibleText(draft.product,scene,index===0?script.data.audienceLabel:undefined).reduce((sum,text)=>sum+visibleWordCount(text),0),durationFrames:scenes[index].duration_frames}))});await hooks.persist(["analysis/copy-audit.json"]);}
+  await validatePlanWorkflowCoherence(plan,workspace);
   await savePlan(plan,workspace,hooks); return plan;
 }
 export async function savePlan(plan:Plan,workspace:string,hooks:Hooks) {

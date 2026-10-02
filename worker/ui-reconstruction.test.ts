@@ -1,3 +1,4 @@
+import { workflowInputReserve } from "./workflow-coherence";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -33,7 +34,7 @@ async function layoutCorrectionFixture(t: TestContext, initialUsage = 3000) {
     prepared++; events.push("prepared");
     assert.equal(_purpose, "ui-design"); assert.match(prompt, /UNTRUSTED MODEL OUTPUT/); assert.match(prompt, /TRUSTED MEASURED DIAGNOSTICS/);
     assert.deepEqual(images, uiDesignRequest(research, evidence, research.documentTargets![0], 6000).images);
-    assert.deepEqual(options.reserve, { calls: 5, inputTokens: 0, outputTokens: 17000 });
+    assert.deepEqual(options.reserve, { calls: 6, inputTokens: workflowInputReserve(), outputTokens: 17768 });
     assert.equal(options.maxOutputTokens, 6000 - initialUsage);
     assert.deepEqual(options.uiConstraints, uiDesignConstraints(research));
     await assert.rejects(readFile(join(root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
@@ -87,7 +88,7 @@ test("exhausted UI allocation and rejected exact provider preflight cannot reser
   }
   for (const message of ["Exact input allowance exhausted", "Remaining call ceiling protects required script and reviews"]) {
     const f = await layoutCorrectionFixture(t); let preflights = 0;
-    f.providers.prepareClaude = async (_purpose, _prompt, _images, options) => { preflights++; assert.deepEqual(options?.reserve, { calls: 5, inputTokens: 0, outputTokens: 17000 }); throw new PipelineError("model_budget", message, "Inspect retained allowance", "needs_review"); };
+    f.providers.prepareClaude = async (_purpose, _prompt, _images, options) => { preflights++; assert.deepEqual(options?.reserve, { calls: 6, inputTokens: workflowInputReserve(), outputTokens: 17768 }); throw new PipelineError("model_budget", message, "Inspect retained allowance", "needs_review"); };
     await assert.rejects(f.run(), error => error instanceof PipelineError && error.code === "model_budget");
     assert.equal(preflights, 1); assert.equal(f.correctedCalls, 0);
     await assert.rejects(readFile(join(f.root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
@@ -172,7 +173,7 @@ test("a two-target correction retains the untouched target allocation and refuse
     const index = initialCalls++; assert.equal(options.maxOutputTokens, 3000);
     ledger.modelCalls++; ledger.outputTokens += index ? 3000 : 1500; return response(documents[index]);
   }, prepareClaude: async (_purpose: string, _prompt: string, _images: unknown, options: any) => {
-    assert.equal(options.maxOutputTokens, 1500); assert.deepEqual(options.reserve, { calls: 6, inputTokens: 0, outputTokens: 20000 });
+    assert.equal(options.maxOutputTokens, 1500); assert.deepEqual(options.reserve, { calls: 7, inputTokens: workflowInputReserve(), outputTokens: 20768 });
     return async () => { corrections++; ledger.modelCalls++; ledger.outputTokens += 1500; return response(documents[0]); };
   } } as unknown as Providers;
   const inspectLayout: NonNullable<UiDocumentDependencies["inspectLayout"]> = async (docs, options) => {
@@ -353,7 +354,7 @@ test("flat script transport preserves exact citations, visible copy and actions 
 test("UI stage persists reservation, document and completion in order, reuses valid bytes and refuses incomplete or changed stages", async t => {
   const root = await workspace(t), research = compileResearch(input, evidence, researchRaw(), await evidenceIdentity(input, evidence, root)); let calls = 0;
   const events: string[] = [], localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
-  const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async (purpose: string, prompt: string, images: { path: string }[], options: unknown) => { calls++; assert.equal(purpose, "ui-design"); assert.match(prompt, /actual product UI/); assert.equal(images.length, 2); assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: 5, inputTokens: 0, outputTokens: 17000 }, maxOutputTokens: 6000, uiConstraints: { targets: [{ id: "notes", sourceAssetIds: ["editor", "graph"], capabilityFactIds: ["fact-2", "fact-3"] }] } }); return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: document() } }; } } as unknown as Providers;
+  const providers = { ledger: { outputTokens: 2000, reservedOutputTokens: 0 }, claude: async (purpose: string, prompt: string, images: { path: string }[], options: unknown) => { calls++; assert.equal(purpose, "ui-design"); assert.match(prompt, /actual product UI/); assert.equal(images.length, 2); assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: 6, inputTokens: workflowInputReserve(), outputTokens: 17768 }, maxOutputTokens: 6000, uiConstraints: { targets: [{ id: "notes", sourceAssetIds: ["editor", "graph"], capabilityFactIds: ["fact-2", "fact-3"] }] } }); return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed", documentsById: { notes: document() } }; } } as unknown as Providers;
   const bundle = await buildUiDocuments(input, evidence, research, providers, localHooks, root); assert.ok(bundle); validateUiBundle(bundle, input, evidence, research);
   assert.deepEqual(events.filter(path => !["analysis/ui-source-readiness.json", UI_READINESS_PATH].includes(path) && !path.startsWith("analysis/ui-layout-")), ["analysis/ui-state.json", "analysis/ui.json", "analysis/ui-state.json"]);
   assert.deepEqual(await buildUiDocuments(input, evidence, research, providers, hooks, root), bundle); assert.equal(calls, 1);
@@ -363,14 +364,14 @@ test("UI stage persists reservation, document and completion in order, reuses va
   await assert.rejects(buildUiDocuments(input, evidence, research, failing, hooks, stopped), /Response lost/);
   await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, stopped), blocked); assert.equal(calls, 1);
 });
-test("the complete mocked v3 sequence and retained repair keep the same UI bundle and all canonical stage bindings", async t => {
+test("the complete mocked v3 sequence binds its workflow review and forbids an unreviewed retained repair", async t => {
   const root = await workspace(t), calls: string[] = [];
   const base = scriptRaw(), currentScript = { ...base, creativeDirection: { concept: "focus", evidenceId: "fact-2" }, scenes: [
     { ...base.scenes[0], storyRole: "product", headline: "Atlas", presentation: { template: "brand", theme: "dark", transition: "cut" }, direction: { job: "context", motion: "reveal" } },
     ...base.scenes.map((scene, index) => ({ ...scene, ...(index === 1 ? { presentation: { ...scene.presentation, visual: { kind: "showcase" } } } : {}), direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
   ] };
   let recipeResponse: unknown;
-  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; } } as unknown as Providers;
+  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { calls.push(purpose); return { contextSha256: options.workflowConstraints.contextSha256, scenes: options.workflowConstraints.sceneIds.map((sceneId: string) => ({ sceneId, passed: true })), findings: [] }; }; } } as unknown as Providers;
   const research = await researchProduct(input, evidence, providers, hooks, root), ui = await buildUiDocuments(input, evidence, research, providers, hooks, root);
   const catalog = buildShotRecipeCatalog(research, evidence, ui!);
   recipeResponse = { ...currentScript, transportVersion: RECIPE_SCRIPT_TRANSPORT_VERSION, scenes: currentScript.scenes.map(scene => {
@@ -381,10 +382,10 @@ test("the complete mocked v3 sequence and retained repair keep the same UI bundl
     return { ...copy, recipeId: recipe.id, presentation: { theme: presentation.theme, transition: presentation.transition, cards: [], nodes: [], actions: (visual?.actions || []).map(action => ({ targetId: "", stateId: "", text: "", ...action })) } };
   }) };
   const script = await writeScript(input, evidence, research, providers, hooks, root, ui), plan = await compilePlan(input, evidence, script, hooks, root);
-  assert.deepEqual(calls, ["research", "ui-design", "script"]);
+  assert.deepEqual(calls, ["research", "ui-design", "script", "workflow-coherence"]);
   const restored = await loadCompletedProductionStages(input, evidence, root, plan); assert.deepEqual(restored.ui, ui);
-  const perform = await prepareRetainedPlanRepair(input, evidence, recipeResponse, hooks, root, { plan, findings: [] }), repaired = await perform();
-  assert.equal(repaired.production?.uiSha256, ui!.sha256); assert.deepEqual(repaired.uiDocuments, ui!.documents);
+  assert.ok(plan.production?.workflowCoherence);
+  await assert.rejects(prepareRetainedPlanRepair(input, evidence, recipeResponse, hooks, root, { plan, findings: [] }), /cannot bypass/);
   const changed = structuredClone(plan); changed.uiDocuments![0].elements[0].text = "Altered controls"; await assert.rejects(prepareRetainedPlanRepair(input, evidence, recipeResponse, hooks, root, { plan: changed, findings: [] }), blocked);
 });
 test("new research correction reserves the mandatory UI call/output while the UI stage refuses unaffordable work", async t => {
@@ -433,7 +434,7 @@ test("two UI targets use separate exact keyed calls within one 6000-token alloca
     assert.equal(purpose, "ui-design"); assert.match(prompt, /This call has 3000 output tokens/);
     assert.ok(prompt.includes(`ASSIGNED TARGET: ${JSON.stringify(target)}`));
     assert.deepEqual(images.map(image => image.path), [`assets/${index ? "graph" : "editor"}.png`]);
-    assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: index ? 5 : 6, inputTokens: 0, outputTokens: index ? 17000 : 20000 }, maxOutputTokens: 3000, uiConstraints: { targets: [{ id: target.id, sourceAssetIds: target.sourceAssetIds, capabilityFactIds: target.capabilityFactIds }] } });
+    assert.deepEqual(options, { policy: "ui-design-v1", reserve: { calls: index ? 6 : 7, inputTokens: workflowInputReserve(), outputTokens: index ? 17768 : 20768 }, maxOutputTokens: 3000, uiConstraints: { targets: [{ id: target.id, sourceAssetIds: target.sourceAssetIds, capabilityFactIds: target.capabilityFactIds }] } });
     assert.equal(JSON.parse(await readFile(join(root, "analysis/ui-state.json"), "utf8")).status, "reserved");
     await assert.rejects(readFile(join(root, "analysis/ui.json")), { code: "ENOENT" });
     ledger.modelCalls++; ledger.outputTokens += 3000;
@@ -455,8 +456,8 @@ test("the final UI target receives unused actual output while total UI usage sta
       const index = calls++, allocation = index ? 6000 - firstUsage : 3000;
       assert.equal(options.maxOutputTokens, allocation); assert.ok(allocation <= 6000);
       assert.ok(prompt.includes(`This call has ${allocation} output tokens`));
-      assert.deepEqual(options.reserve, { calls: index ? 5 : 6, inputTokens: 0, outputTokens: index ? 17000 : 20000 });
-      assert.equal(ledger.outputTokens + allocation + options.reserve.outputTokens, startOutput + 23000);
+      assert.deepEqual(options.reserve, { calls: index ? 6 : 7, inputTokens: workflowInputReserve(), outputTokens: index ? 17768 : 20768 });
+      assert.equal(ledger.outputTokens + allocation + options.reserve.outputTokens, startOutput + 23768);
       ledger.outputTokens += index ? allocation : firstUsage;
       return { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Observed target", documentsById: { [documents[index].id]: documents[index] } };
     } } as unknown as Providers;
@@ -737,7 +738,7 @@ test("fresh research corrects two targets once without dropping facts, while can
   const unscoped = { ...two, documentTargets: [two.documentTargets![0]] };
   assert.throws(() => compileResearch(input, evidence, unscoped, two.evidenceSha256, { version: 3, singleTarget: true }), /Every fresh mechanism claim and step/);
   const corrected = researchRaw();
-  const reserve = { policy: "research-v1", reserve: { calls: 6, inputTokens: 0, outputTokens: 23000 } };
+  const reserve = { policy: "research-v1", reserve: { calls: 7, inputTokens: workflowInputReserve(), outputTokens: 23768 } };
   const providers = { ledger: { modelCalls: 1, outputTokens: 1000, reservedOutputTokens: 0 }, claude: async (_purpose: string, _prompt: string, _images: unknown, options: unknown) => { assert.deepEqual(options, reserve); initial++; return two; }, prepareClaude: async (_purpose: string, prompt: string, _images: unknown, options: unknown) => {
     assert.match(prompt, /single_target_required/); assert.match(prompt, /exactly one decisive input\/action\/result/);
     assert.deepEqual(options, reserve);

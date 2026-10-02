@@ -9,6 +9,7 @@ import { uiActionSampleFrames } from "./ui-state";
 import { soundCues, soundCueIssues } from "./audio-direction";
 import { motionTimingForPresentation } from "./motion-timing";
 import { motionAssetIds, motionUsage } from "./motion-assets";
+import { buildPlanWorkflowContext, scopeWorkflowContext } from "./workflow-coherence";
 import { assertQualityRetryState, reviewWithSchemaRetry } from "./quality-review";
 import { qualityDefaultStyle, qualityOriginalSourceLabel, qualityReviewPrompt, type Providers, type QualityModelRequest, type WholeFilmProof } from "./providers";
 import type { Evidence, Finding, Hooks, Plan, QC, Transcript } from "./types";
@@ -117,13 +118,13 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
       const out=`analysis/qc-${scene.id}-${i}.jpg`;await frameIndex(path,join(workspace,out),index,1600);samples.push({path:out,sceneId:scene.id,label:`ACTUAL RENDER ${scene.id}, frame ${index} / nominal ${(index/30).toFixed(3)} seconds (${label})`});
     }
   }
-  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean})[]=[];
+  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
   for(let i=0;i<plan.scenes.length;i+=2) {
     const sceneIds=new Set(plan.scenes.slice(i,i+2).map(scene=>scene.id));
     const batch=reviewBatch(plan,samples.filter(sample=>sceneIds.has(sample.sceneId)));
     const defaultStyle=qualityDefaultStyle(plan);
     if(batch.images.length>32)throw new Error("Required reconstruction review exceeds the complete image allowance");
-    requests.push({prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
+    requests.push({prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
   }
   for(const [index,request]of requests.entries()){
     const raw=await providers.claude("review",request.prompt,request.images,{policy:"quality-review-v1"});

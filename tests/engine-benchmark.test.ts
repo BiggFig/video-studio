@@ -47,3 +47,19 @@ test("recipe-directed acceptance requires the saved catalogue and matching scrip
   assert.equal(assessBenchmark({ ...run, script: {} }).automaticLocalPass, false);
   assert.equal(assessBenchmark(completed()).automaticLocalPass, true, "Historical runs do not acquire a new catalogue requirement");
 });
+
+test("workflow-gated acceptance requires immutable passed evidence for both the original script and active plan", () => {
+  const binding = { version: 1, contextSha256: "b".repeat(64), verdictSha256: "c".repeat(64), scriptSha256: "d".repeat(64) };
+  const run = { ...completed(), script: { workflowCoherence: binding }, plan: { production: { workflowCoherence: binding } }, workflowVerified: true, workflowArtifacts: ["analysis/workflow-proof.json", "analysis/workflow-state.json"] };
+  run.ledger.providerRequests.push({ operation: "workflow-coherence" });
+  run.verifiedArtifacts.push(...run.workflowArtifacts);
+  assert.equal(assessBenchmark(run).automaticLocalPass, true);
+  assert.equal(assessBenchmark({ ...run, workflowVerified: false }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, workflowArtifacts: [] }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, script: {} }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, plan: {} }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, script: {}, plan: {} }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, verifiedArtifacts: run.verifiedArtifacts.filter(path => path !== run.workflowArtifacts[0]) }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, ledger: { ...run.ledger, providerRequests: run.ledger.providerRequests.filter(request => request.operation !== "workflow-coherence") } }).automaticLocalPass, false);
+  assert.equal(assessBenchmark(completed()).automaticLocalPass, true, "Historical acceptance does not acquire a new paid review requirement");
+});

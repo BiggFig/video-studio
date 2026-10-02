@@ -1,3 +1,4 @@
+import { workflowInputReserve } from "./workflow-coherence";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -141,7 +142,7 @@ test("call and full-output budgets protect a future script and all four mandator
 
 test("research correction protects the exact remaining call count for fresh one-target, historical v3 and v2 jobs", async t => {
   for (const scope of [
-    { fields: { singleTarget: true as const }, calls: 6, outputTokens: 23000 },
+    { fields: { singleTarget: true as const }, calls: 7, outputTokens: 23768 },
     { fields: {}, calls: 7, outputTokens: 23000 },
     { fields: { contractVersion: 2 as const }, calls: 5, outputTokens: 17000 },
   ]) for (const affordable of [false, true]) {
@@ -151,7 +152,7 @@ test("research correction protects the exact remaining call count for fresh one-
     const value: ResearchRetryOptions = {
       ...scope.fields, input: { ...input, budgets: { ...input.budgets, maxModelCalls: exactCallCap - Number(!affordable) } }, evidence, evidenceSha256, workspace: root, hooks, ...researchRequest(input, evidence),
       providers: { ledger: usage, prepareClaude: async (_purpose, _prompt, _images, options) => {
-        prepared++; assert.deepEqual(options, { policy: "research-v1", reserve: { calls: scope.calls, inputTokens: 0, outputTokens: scope.outputTokens } });
+        prepared++; assert.deepEqual(options, { policy: "research-v1", reserve: { calls: scope.calls, inputTokens: "singleTarget" in scope.fields ? workflowInputReserve() : 0, outputTokens: scope.outputTokens } });
         return async <T>() => { calls++; usage.modelCalls++; return corrected as T; };
       } },
     };

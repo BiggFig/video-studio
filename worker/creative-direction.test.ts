@@ -217,14 +217,15 @@ test("durable brief and selected direction are immutable across reuse, source dr
 });
 
 test("brief persistence finishes before script provider work and completed script resumes with no new call", async t => {
-  const f = fixture(), path = await workspace(t), events: string[] = []; let calls = 0;
-  const provider = { claude: async (_purpose: string, prompt: string, _images: unknown, options: any) => { calls++; events.push("model"); assert.match(prompt, /PRODUCT-SPECIFIC CREATIVE BRIEF/); assert.equal(options.scriptConstraints.creativeDirection.concepts[0].concept, "focus"); assert.ok(options.scriptConstraints.recipeIds.length); return recipeResponse(f); } } as unknown as Providers;
+  const f = fixture(), path = await workspace(t), events: string[] = []; let calls = 0, reviews = 0;
+  const provider = { ledger: { modelCalls: 0, inputTokens: 0, outputTokens: 0, reservedInputTokens: 0, reservedOutputTokens: 0 }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { reviews++; return { contextSha256: options.workflowConstraints.contextSha256, scenes: options.workflowConstraints.sceneIds.map((sceneId: string) => ({ sceneId, passed: true })), findings: [] }; }; }, claude: async (_purpose: string, prompt: string, _images: unknown, options: any) => { calls++; events.push("model"); assert.match(prompt, /PRODUCT-SPECIFIC CREATIVE BRIEF/); assert.equal(options.scriptConstraints.creativeDirection.concepts[0].concept, "focus"); assert.ok(options.scriptConstraints.recipeIds.length); return recipeResponse(f); } } as unknown as Providers;
   const localHooks = { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } };
   const script = await writeScript(input, f.evidence, f.research, provider, localHooks, path, f.ui);
   assert.ok(events.indexOf(CREATIVE_BRIEF_PATH) < events.indexOf("model")); assert.equal(calls, 1);
   assert.ok(events.indexOf(SHOT_RECIPES_PATH) < events.indexOf("model"));
   assert.deepEqual(await writeScript(input, f.evidence, f.research, provider, localHooks, path, f.ui), script); assert.equal(calls, 1);
-  assert.equal(JSON.parse(await readFile(join(path, "analysis/script-state.json"), "utf8")).binding, scriptBinding(input, f.research, f.ui, true, script.shotRecipeSha256));
+  assert.equal(JSON.parse(await readFile(join(path, "analysis/script-state.json"), "utf8")).binding, scriptBinding(input, f.research, f.ui, true, script.shotRecipeSha256, true));
+  assert.equal(reviews, 1);
   const interrupted = await workspace(t);
   await assert.rejects(writeScript(input, f.evidence, f.research, provider, { ...hooks, persist: async () => { throw new Error("checkpoint failed"); } }, interrupted, f.ui), /checkpoint failed/);
   assert.equal(calls, 1);

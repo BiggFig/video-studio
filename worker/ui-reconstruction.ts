@@ -1,3 +1,4 @@
+import { workflowInputReserve } from "./workflow-coherence";
 import { z } from "zod";
 import { durableStage, loadCompletedStage, stageDigest, stageFailure, validateResearch, type Research } from "./research";
 import type { Providers, UiDesignConstraints } from "./providers";
@@ -270,7 +271,7 @@ export async function buildUiDocuments(input: WorkerInput, evidence: Evidence, r
       const allocation = remaining ? 6000 / targets.length : 6000 - spentBefore;
       if (allocation <= 0) throw accountingFailure();
       const request = uiDesignRequest(research, evidence, target, allocation);
-      const reserve = { calls: 5 + remaining, inputTokens: 0, outputTokens: 17000 + remaining * (6000 / targets.length) };
+      const reserve = { calls: 6 + remaining, inputTokens: workflowInputReserve(), outputTokens: 17768 + remaining * (6000 / targets.length) };
       if (providers.ledger.outputTokens + providers.ledger.reservedOutputTokens + allocation + reserve.outputTokens > (input.budgets?.maxModelOutputTokens || 35000)) throw new PipelineError("model_budget", "The remaining allowance cannot cover UI documentation, a script and required quality reviews.", "Inspect the retained research and any completed target responses. No further UI generation was started.", "needs_review");
       Object.assign(readiness.targets[index], { status: "requested", outputAllocation: allocation, requestSha256: stageDigest(request) });
       await persistReadiness();

@@ -2,6 +2,7 @@
 type Schema = Record<string, unknown>;
 export interface ScriptConstraints { maxScenes?: number; recipeIds?: string[]; assetIds: string[]; roleEvidenceIds: Record<string, string[]>; selectedFactIds: string[]; uiDocuments?: { id: string; elementIds: string[]; editableElementIds: string[]; stateIds: string[]; capabilityFactIds: string[] }[]; creativeDirection?: { concepts: { concept: "focus" | "connect" | "consolidate"; evidenceIds: string[] }[] } }
 export interface UiDesignConstraints { targets: { id: string; sourceAssetIds: string[]; capabilityFactIds: string[] }[] }
+export interface WorkflowConstraints { contextSha256: string; sceneIds: string[] }
 export const FLAT_SCRIPT_TRANSPORT_VERSION = "flat-script-v1";
 export const DIRECTED_SCRIPT_TRANSPORT_VERSION = "flat-script-v2";
 const text = { type: "string" };
@@ -28,9 +29,19 @@ export const SCRIPT_OUTPUT_SCHEMA = object({
   }, ["storyRole"])),
 });
 /** Only models with verified direct structured-output support use this transport option. */
-export function scriptOutputConfig(model: string, direct: boolean, policy?: string, constraints?: ScriptConstraints, uiConstraints?: UiDesignConstraints) {
-  if (!direct || !["script-v1", "ui-design-v1"].includes(policy || "") || !/^claude-(?:sonnet-4-6|opus-4-6)(?:-|$)/.test(model)) return undefined;
+export function scriptOutputConfig(model: string, direct: boolean, policy?: string, constraints?: ScriptConstraints, uiConstraints?: UiDesignConstraints, workflowConstraints?: WorkflowConstraints) {
+  if (!direct || !["script-v1", "ui-design-v1", "workflow-coherence-v1"].includes(policy || "") || !/^claude-(?:sonnet-4-6|opus-4-6)(?:-|$)/.test(model)) return undefined;
+  if (policy === "workflow-coherence-v1") {
+    if (!workflowConstraints) throw new Error("Workflow review grammar requires bound scene identities");
+    return { format: { type: "json_schema", schema: workflowOutputSchema(workflowConstraints) } };
+  }
   return { format: { type: "json_schema", schema: policy === "ui-design-v1" ? uiConstraints ? constrainedUiSchema(uiConstraints) : UI_OUTPUT_SCHEMA : constraints ? constrainedScriptSchema(constraints) : SCRIPT_OUTPUT_SCHEMA } };
+}
+
+/** Compact grammar; complete coverage and per-scene action/element ownership are checked locally. */
+export function workflowOutputSchema(constraints: WorkflowConstraints): Schema {
+  if (!/^[a-f0-9]{64}$/.test(constraints.contextSha256) || !constraints.sceneIds.length || constraints.sceneIds.length > 10 || new Set(constraints.sceneIds).size !== constraints.sceneIds.length || constraints.sceneIds.some(id => !/^scene-[1-9][0-9]?$/.test(id))) throw new Error("Invalid workflow review identities");
+  return object({ contextSha256: choice(constraints.contextSha256), scenes: array(object({ sceneId: choice(...constraints.sceneIds), passed: { type: "boolean" } })), findings: { ...array(object({ severity: choice("major", "critical"), sceneId: choice(...constraints.sceneIds), actionId: choice("initial", "action-1", "action-2", "action-3", "action-4", "action-5", "action-6", "final"), elementIds: array(text), code: choice("context_contradiction", "causal_mismatch", "claim_overreach", "unsupported_result"), message: text })), description: "At most three concrete blocking findings, each message at most 320 characters; cite 1–4 actual visible element IDs. Empty for a pass." } });
 }
 
 /** Bind narrative choices in the grammar, before the semantic compiler checks actual claims. */

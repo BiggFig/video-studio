@@ -21,6 +21,7 @@ import { workerTimeRemainingMs } from "./deadline";
 import { alignAudioToPlan } from "./audio-direction";
 import { validatePlanCreativeDirection } from "./creative-direction";
 import { validatePlanShotRecipes } from "./shot-recipes";
+import { validatePlanWorkflowCoherence } from "./workflow-stage";
 
 const runtimeInputSchema=z.object({runtimeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),runtimeId:z.string().min(1).max(256).optional(),deadlineAt:z.string().max(64).optional()});
 
@@ -92,6 +93,8 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
   validatePlanCreativeDirection(plan,research,evidence);
   validatePlanShotRecipes(plan,research,evidence,uiBundle);
+  if(!!plan.production?.workflowCoherence!==!!script.workflowCoherence||(!repairBudget.consumed&&stageDigest(plan.production?.workflowCoherence??null)!==stageDigest(script.workflowCoherence??null)))throw stageFailure("The retained plan changed its workflow coherence contract.");
+  await validatePlanWorkflowCoherence(plan,workspace);
   await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
     if(plan.renderer==="hyperframes"&&plan.uiDocuments?.length){
