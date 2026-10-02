@@ -11,6 +11,8 @@ import { safePath } from "./security";
 import { motionHtml,motionSampleFrames,presentation,transitionFrames,MOTION_RENDERER_VERSION } from "./motion-composition";
 import { geistFontBase64 } from "./assets/geist-font";
 import { motionBrowserArgs,motionBrowserPath } from "./motion-browser";
+import { motionAssetIds,motionUsage } from "./motion-assets";
+import { logoGeometryMatches } from "./motion-primitives";
 import { PipelineError,type Hooks,type Plan } from "./types";
 
 const require=createRequire(import.meta.url);
@@ -23,7 +25,7 @@ export async function confinedMotionAsset(workspace:string,path:string){
 export async function prepareMotionProject(plan:Plan,workspace:string,pass:number){
   const directory=`project/motion-${pass}`,root=join(workspace,directory),assets:Record<string,string>={},paths:string[]=[],sourceHashes:Record<string,string>={};
   await mkdir(join(root,"assets"),{recursive:true});
-  for(const id of new Set(plan.scenes.map(s=>s.asset_id))){
+  for(const id of motionAssetIds(plan)){
     const asset=plan.assets.find(a=>a.id===id);
     if(!asset||asset.usage!=="output"||!["image","video"].includes(asset.kind))throw new Error("Motion renderer rejected non-output visual");
     const source=await confinedMotionAsset(workspace,asset.path),extension=extname(source).toLowerCase();
@@ -34,7 +36,7 @@ export async function prepareMotionProject(plan:Plan,workspace:string,pass:numbe
   await copyFile(require.resolve("gsap/dist/gsap.min.js"),join(root,"assets/gsap.min.js"));
   await copyFile(join(here,"assets/Geist-LICENSE.txt"),join(root,"assets/Geist-LICENSE.txt"));
   await writeFile(join(root,"index.html"),motionHtml(plan,assets));
-  await writeJson(join(root,"timeline.json"),{version:MOTION_RENDERER_VERSION,output:plan.output,sourceHashes,scenes:plan.scenes.map((s,i)=>({id:s.id,startFrame:s.start_frame,durationFrames:s.duration_frames,presentation:presentation(s,plan),transitionFrames:transitionFrames(s,plan,i),samples:motionSampleFrames(s,plan,i)}))});
+  await writeJson(join(root,"timeline.json"),{version:MOTION_RENDERER_VERSION,output:plan.output,sourceHashes,scenes:plan.scenes.map((s,i)=>({id:s.id,startFrame:s.start_frame,durationFrames:s.duration_frames,...motionUsage(s,plan),transitionFrames:transitionFrames(s,plan,i),samples:motionSampleFrames(s,plan,i)}))});
   await writeFile(join(root,"README.txt"),"Editable HTML motion composition. Serve this directory with a local static server; open index.html. All assets are local. In the browser console await window.__studioReady; await window.__studio.seekFrame(90). Every frame uses a paused GSAP timeline at 30 fps. Preview playback may advance this API, but export does not use wall-clock time. Source visuals are unmodified local copies; cards are editorial graphics, never reconstructed product controls. No audio is included in this picture composition; the retained production audio mix is applied separately.\n");
   paths.push(...["assets/Geist.woff2","assets/Geist-LICENSE.txt","assets/gsap.min.js","index.html","timeline.json","README.txt"].map(p=>`${directory}/${p}`));
   return {directory,root,paths,sourceHashes};
@@ -71,9 +73,13 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
       const overlaps=inspection.some((a,i)=>inspection.slice(i+1).some(b=>Math.min(a.right,b.right)-Math.max(a.x,b.x)>3&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>3));
       const proof=await page.locator(`#scene-${index} [data-proof]`).evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));
       const proofOverlap=proof.some(a=>inspection.some(b=>Math.min(a.right,b.right)-Math.max(a.x,b.x)>3&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>3));
-      findings.push({scene:scene.id,frame:hold,presentation:presentation(scene,plan),inspection,proof,boundsPassed,overlaps,proofOverlap,passed:boundsPassed&&!overlaps&&!proofOverlap});
+      const logos=await page.locator(`#scene-${index} [data-brand-mark]`).evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height,decoded:(e as HTMLImageElement).complete&&(e as HTMLImageElement).naturalWidth>0};}));
+      const logoAsset=plan.assets.find(asset=>asset.id===motionUsage(scene,plan).logoAssetId);
+      const logoBounds=logos.every(r=>r.decoded&&r.x>=32&&r.y>=32&&r.right<=plan.output.width-32&&r.bottom<=plan.output.height-32&&!!logoAsset&&logoGeometryMatches(logoAsset,plan.output.width,r));
+      const logoOverlap=logos.some(a=>inspection.some(b=>Math.min(a.right,b.right)-Math.max(a.x,b.x)>3&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>3));
+      findings.push({scene:scene.id,frame:hold,...motionUsage(scene,plan),inspection,proof,logos,boundsPassed,overlaps,proofOverlap,logoBounds,logoOverlap,passed:boundsPassed&&!overlaps&&!proofOverlap&&logoBounds&&!logoOverlap});
       await writeJson(join(workspace,"analysis/layout.json"),findings);
-      if(!boundsPassed||overlaps||proofOverlap)throw new PipelineError("copy_overflow","Essential motion copy does not fit a readable, non-overlapping hold.","The retained composition needs shorter copy or an internal layout repair.","needs_review");
+      if(!boundsPassed||overlaps||proofOverlap||!logoBounds||logoOverlap)throw new PipelineError("copy_overflow","Essential motion copy or branding does not fit a readable, non-overlapping hold.","The retained composition needs shorter copy or an internal layout repair.","needs_review");
       const screenshot=`${project.directory}/hold-${index}.png`;await page.screenshot({path:join(workspace,screenshot)});screenshots.push(screenshot);
     }
     // Seek away and back: identical pixels prove the same clock can be replayed.

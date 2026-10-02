@@ -3,10 +3,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { audioMeasurements, command, ffmpeg, frame, mediaEnvironment, probe, writeJson } from "./media";
 import { safeDownload } from "./security";
-import { PipelineError, type Asset, type Evidence, type Hooks, type WorkerInput } from "./types";
+import { PipelineError, type Asset, type BrandEvidence, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
 import { extractProductVisuals } from "./product-visuals";
 import { enrichProductResearch, researchDestination } from "./url-research";
+import { extractBrandEvidence } from "./brand-evidence";
 
 export function callbackAuth() { const url=process.env.WORKER_CALLBACK_URL; const token=process.env.PIPELINE_CALLBACK_TOKEN; return url && token ? {origin:new URL(url).origin,token}:undefined; }
 
@@ -92,7 +93,7 @@ export async function ingest(input:WorkerInput,workspace:string,providers:Provid
   }
   if(input.mode==="url") {
     if(!input.productUrl) throw new PipelineError("missing_url","A product URL is required.","Enter a public product URL.","needs_input");
-    const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;
+    const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;evidence.brand=captured.brand;
     await hooks.persist(captured.artifactPaths);
   } else if(evidence.text.trim().length<100 || !evidence.assets.some(a=>a.usage==="output")) throw new PipelineError("insufficient_prd","The PRD needs readable product information and at least one usable visual.","Upload a text-based PRD plus product screenshots or a screen recording.","needs_input");
   if(input.referenceUrl) {
@@ -138,7 +139,7 @@ export async function ingestMedia(relative:string,id:string,usage:"output"|"refe
   return asset;
 }
 
-export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;artifactPaths:string[]}> {
+export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;brand?:BrandEvidence;artifactPaths:string[]}> {
   let browser:Awaited<ReturnType<typeof chromium.launch>>;
   try{browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()});}catch{throw new PipelineError("media_runtime_unavailable","The product capture browser is unavailable.","Ask the beta administrator to restore the worker's Chromium runtime.");}
   try {
@@ -163,7 +164,7 @@ export async function captureProduct(url:string,workspace:string,dependencies:{d
     let source:string;
     try{source=await page.locator("body").innerText({timeout:10000});}catch{throw new PipelineError("product_inaccessible","The page does not expose readable product information.","Supply a public product page, or a PRD with screenshots.","needs_input");}
     if(source.trim().length<150 || /^(access denied|checking your browser|just a moment)/i.test(source.trim())) throw new PipelineError("product_inaccessible","The page does not expose enough readable product information.","Supply a public product page, or a PRD with screenshots.","needs_input");
-    const homepageUrl=page.url(),homepageTitle=(await page.title()).slice(0,500);
+    const homepageUrl=documentUrls.get(page.url())||page.url(),homepageTitle=(await page.title()).slice(0,500);
     let text=(homepageTitle+"\n"+source).slice(0,30000); await writeFile(join(workspace,"analysis/product-source.txt"),text);
     await page.waitForTimeout(1500);
     await page.evaluate(()=>{for(const animation of document.getAnimations()){try{if(animation.effect?.getComputedTiming().iterations!==Infinity)animation.finish();}catch{}}});
@@ -171,23 +172,34 @@ export async function captureProduct(url:string,workspace:string,dependencies:{d
     // entrances to their hidden base state and capture an apparently blank page.
     await page.addStyleTag({content:"*,*::before,*::after{animation-play-state:paused!important;transition:none!important;caret-color:transparent!important}"});
     const height=await page.evaluate(()=>document.documentElement.scrollHeight), assets:Asset[]=[];
-    for(let i=0;i<Math.min(4,Math.ceil(height/820));i++) {
+    for(let i=0;i<Math.min(2,Math.ceil(height/820));i++) {
       await page.evaluate(y=>window.scrollTo(0,y),i*820); await page.waitForTimeout(250);
       const path=`assets/product-capture-${i}.jpg`; await page.screenshot({path:join(workspace,path),type:"jpeg",quality:90});
-      assets.push({id:`capture-${i}`,path,kind:"image",usage:"output",rights:"Accurate capture of the submitted public product page for the requested video.",width:1440,height:960,preview:path,source:url});
+      assets.push({id:`capture-${i}`,path,kind:"image",usage:"output",rights:"Accurate viewport capture of the submitted public marketing page; not an authenticated product workflow.",width:1440,height:960,preview:path,source:homepageUrl,
+        provenance:{pageUrl:homepageUrl,pageKind:"homepage",method:"viewport",role:"marketing",sectionHeading:homepageTitle}});
     }
     const artifactPaths=assets.map(a=>a.path).concat("analysis/product-source.txt","analysis/capture-diagnostics.json");
-    try{
-      const originals=await extractProductVisuals(page,workspace,page.url(),{download:async(source,maxBytes)=>{
+    let brand:BrandEvidence|undefined;
+    try{const branding=await extractBrandEvidence(page,workspace,homepageUrl);brand=branding.brand;assets.push(...branding.assets);artifactPaths.push(...branding.artifactPaths);}
+    catch(error){diagnostics.errors.push(`Optional public brand extraction unavailable: ${error instanceof Error?error.message.slice(0,350):"unknown error"}`);}
+    let focusedAssets=0;
+    const focusedDownload=async(source:string,maxBytes:number)=>{
         if(++requests>500)throw new Error("Capture request budget exhausted");
         const result=await downloads.run(reservation=>download(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
-      }});
-      assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
+    };
+    try{
+      const originals=await extractProductVisuals(page,workspace,homepageUrl,{download:focusedDownload,maxAssets:3,maxPanels:2});
+      focusedAssets+=originals.assets.length;assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
     }catch(error){diagnostics.errors.push(`Complete product image extraction unavailable: ${error instanceof Error?error.message.slice(0,400):"unknown error"}`);}
     researchHomepage=homepageUrl;
-    const research=await enrichProductResearch(page,workspace,{homepageUrl,homepageTitle,homepageText:text,resolvedUrl:browserUrl=>documentUrls.get(browserUrl)||browserUrl});
+    const research=await enrichProductResearch(page,workspace,{homepageUrl,homepageTitle,homepageText:text,resolvedUrl:browserUrl=>documentUrls.get(browserUrl)||browserUrl,
+      captureVisuals:async(researchPage,pageUrl,pageKind,index,schedulingMs)=>{
+        if(focusedAssets>=4)return{assets:[],artifactPaths:[]};
+        const result=await extractProductVisuals(researchPage,workspace,pageUrl,{download:focusedDownload,maxAssets:4-focusedAssets,maxPanels:1,prefix:`research-${index}`,pageKind,schedulingLimitMs:schedulingMs});
+        focusedAssets+=result.assets.length;return result;
+      }});
     text=research.text;assets.push(...research.assets);artifactPaths.push(...research.artifactPaths);
     await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,requests,bytes});
-    return{text,assets,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
+    return{text,assets,brand,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
   } finally {await browser.close();}
 }

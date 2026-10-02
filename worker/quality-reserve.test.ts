@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Providers, qualityAudioEnvelope, qualityDefaultStyle, qualityOriginalSourceLabel, qualityRepairEnvelope, qualityReviewPrompt, qualitySceneVisibility, type AudioRuntime, type QualityRequest } from "./providers";
-import { parseReview, realVisualsPassed, reviewBatch, wholeFilmProofInventory } from "./quality";
+import { assessStoryClarity, parseReview, realVisualsPassed, reviewBatch, wholeFilmProofInventory } from "./quality";
 import { PipelineError, type Asset, type Evidence, type Hooks, type Plan, type Transcript, type WorkerInput } from "./types";
 
 const input: WorkerInput = { jobId: "quality-budget", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "auto", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200_000, maxModelOutputTokens: 30_000 } };
@@ -237,4 +237,68 @@ test("schema re-review preserves future calls and full output rather than shrink
   assert.equal(reserve.outputTokens,3000);
   assert.equal(typeof await providers.prepareClaude("review","Fresh complete review",[],{policy:"quality-review-v1",reserve}),"function");
   assert.equal(providers.ledger.modelCalls,4);assert.equal(providers.ledger.reservedOutputTokens,0);
+});
+
+
+test("story checks require performed review and reject contradictory passing findings", () => {
+  assert.deepEqual(assessStoryClarity([]),{performed:false,passed:false});
+  assert.deepEqual(assessStoryClarity([{storyClarityPassed:true}]),{performed:false,passed:false});
+  assert.deepEqual(assessStoryClarity([{storyClarityReviewed:true,storyClarityPassed:true},{storyClarityReviewed:true,storyClarityPassed:false}]),{performed:true,passed:false});
+  assert.deepEqual(assessStoryClarity([{storyClarityReviewed:true,storyClarityPassed:true}]),{performed:true,passed:true});
+  const review={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:true,referenceStylePassed:true,audioTranscriptPassed:true,storyClarityReviewed:true,storyClarityPassed:true,notes:[],findings:[{severity:"major",check:"storytelling",message:"Mechanism is not explained.",evidence:"Scene-1 hold shows only a price, with no named product action."}]};
+  assert.throws(()=>parseReview(review),/contradicts/);
+  assert.equal(parseReview({...review,storyClarityPassed:false}).findings[0].check,"storytelling");
+});
+
+test("multi-source proof, real logo and connection copy reach their actual QC batches", () => {
+  const value=fixture(3),claim={text:"Connect your ideas",basis:"explicit" as const,evidenceIds:["fact-1"]};
+  value.plan.story={primaryAudience:{...claim,text:"For writers",basis:"inferred"},problem:claim,mechanism:{...claim,steps:[{action:"Link notes",assetId:"old-small",evidenceId:"fact-1"}]},outcome:claim,differentiator:claim,cta:claim};
+  value.plan.brand={logoAssetId:"another-proof",background:"#111111",foreground:"#ffffff",accent:"#8855cc",sourceUrl:"https://example.com"};
+  value.plan.scenes[0].storyRole="mechanism";
+  value.plan.scenes[0].presentation!.visual={kind:"panels",secondaryAssetId:"new-proof",secondaryEvidenceId:"fact-1",secondaryEvidence:"Canonical secondary quote"};
+  value.plan.scenes[1].presentation={template:"cta",theme:"light",transition:"cut"};
+  value.plan.scenes[1].storyRole="cta";
+  value.plan.scenes[2].presentation={template:"features",theme:"dark",transition:"cut",visual:{kind:"connections",nodes:[{label:"Capture",evidenceId:"fact-1",evidence:"Canonical first node quote"},{label:"Connect",evidenceId:"fact-1",evidence:"Canonical second node quote"}]}};
+  const request=context(value,3),visibility=qualitySceneVisibility(request.plan,request.motion);
+  assert.deepEqual(visibility[0].requiredProofAssetIds,["old-small","new-proof"]);
+  assert.equal(visibility[1].requiredLogoAssetId,"another-proof");
+  assert.deepEqual(visibility[2].expectedVisibleCopy.connectionLabels,["Capture","Connect"]);
+  assert.ok(!JSON.stringify(visibility[2]).includes("Canonical first node quote"));
+  assert.equal(request.plan.brand,value.plan.brand);assert.equal(request.plan.story,value.plan.story);
+  assert.equal(request.plan.assets.length,3);
+  const prompt=qualityReviewPrompt(request);
+  assert.ok(prompt.includes("Canonical secondary quote"));assert.ok(prompt.includes("Canonical first node quote"));
+  assert.match(prompt,/PRODUCT STORY:/);assert.match(prompt,/storyClarityReviewed=true/);
+  assert.deepEqual(wholeFilmProofInventory(value.plan).storyRoles?.slice(0,2),[{sceneId:"scene-1",role:"mechanism"},{sceneId:"scene-2",role:"cta"}]);
+  request.motion[0].presentation={template:"proof",theme:"light",transition:"cut",visual:{kind:"showcase"}};
+  assert.throws(()=>qualitySceneVisibility(request.plan,request.motion),/contradicts/);
+});
+
+test("new story repair reserve includes two originals per scene and an observed logo outside research visuals", async t => {
+  environment(t);const value=fixture(2),claim={text:"Use the product",basis:"explicit" as const,evidenceIds:["fact-1"]};
+  value.plan.story={primaryAudience:claim,problem:claim,mechanism:{...claim,steps:[{action:"Use it",assetId:"old-small",evidenceId:"fact-1"}]},outcome:claim,differentiator:claim,cta:claim};
+  value.plan.brand={logoAssetId:"logo",background:"#111111",foreground:"#ffffff",accent:"#8855cc",sourceUrl:"https://example.com"};
+  const logo=asset("logo",600,200);value.plan.assets.push(logo);
+  value.evidence.brand={version:1,sourceUrl:"https://example.com",title:"Product",headings:[],callsToAction:[],colors:[],typography:[],logoAssetIds:["logo"],limitations:[]};
+  const envelope=qualityRepairEnvelope(value.plan,value.evidence,value.research);
+  assert.deepEqual(envelope.batches.map(b=>b.sourceImages),[4]);
+  assert.ok(envelope.eligible.some(a=>a.id==="logo"));
+  const {providers}=await provider(t,value);
+  const reserve=await providers.qualityRepairReserve(value.plan,value.evidence,value.research);
+  assert.equal(reserve.calls,1);assert.ok(reserve.inputTokens>0);
+  for(const scene of value.plan.scenes)scene.presentation!.visual={kind:"panels",secondaryAssetId:"new-proof",secondaryEvidenceId:"fact-1",secondaryEvidence:value.research.facts[0].quote};
+  const actualBytes=Buffer.byteLength(qualityReviewPrompt(context(value)),"utf8");
+  assert.ok(actualBytes<=Buffer.byteLength(envelope.prompt,"utf8")+envelope.batches[0].variableBytes);
+});
+
+
+test("repair envelope retains every legal repeated event-only source transcript", () => {
+  const value=fixture(4),source=value.evidence.assets[0];
+  source.kind="video";source.has_audio=true;source.duration_seconds=20;
+  source.transcript={text:"Instrumental source ambience.",words:Array.from({length:100},(_,i)=>({text:"A nonverbal atmospheric background event.",start:i/10,end:i/10+.05,type:"audio_event"}))};
+  for(const scene of value.plan.scenes)scene.preserve_audio=true;
+  const envelope=qualityRepairEnvelope(value.plan,value.evidence,value.research),request=context(value);
+  assert.equal(request.sourceSpeech.length,4);
+  const actual=Buffer.byteLength(qualityReviewPrompt(request),"utf8");
+  assert.ok(actual<=Buffer.byteLength(envelope.prompt,"utf8")+envelope.batches[0].variableBytes,`${actual} exceeded retained transcript reserve`);
 });

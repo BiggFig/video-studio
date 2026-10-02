@@ -31,7 +31,7 @@ interface ReviewRetryOptions<T> {
 
 const blocked = (message: string) => new PipelineError("invalid_quality_review", message,
   "Ask the administrator to inspect the retained review and draft. No findings were waived; the bounded review retry cannot be repeated.", "needs_review");
-const topFields = new Set(["readabilityPassed", "claimsPassed", "realVisualsPassed", "renderIntegrityPassed", "referenceStyleReviewed", "referenceStylePassed", "audioTranscriptPassed", "findings", "notes"]);
+const topFields = new Set(["readabilityPassed", "claimsPassed", "realVisualsPassed", "renderIntegrityPassed", "referenceStyleReviewed", "referenceStylePassed", "audioTranscriptPassed", "storyClarityReviewed", "storyClarityPassed", "findings", "notes"]);
 const findingFields = new Set(["severity", "sceneId", "timeSeconds", "message", "check", "evidence", "repair"]);
 
 /** Never feed a model untrusted validator messages, received values, or arbitrary keys. */
