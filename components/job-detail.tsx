@@ -8,7 +8,7 @@ import { formatBytes, formatDate } from "./studio-context";
 import { ACTIVE_STATUSES } from "./job-library";
 import { usePollingResource } from "./use-polling-resource";
 
-const stageDescriptions = { queued: "Your video is in the queue, ready for its turn.", reading: "Reading accessible product information and finding genuine visuals to support the story.", planning: "Shaping supported product facts into a short on-screen script.", rendering: "Bringing your product visuals, typography, motion, and sound together.", checking: "Checking the rendered video’s claims, visual proof, readability, timing, and sound.", ready: "Your video has passed its checks and is ready to share." };
+const stageDescriptions = { queued: "Your video is in the queue, ready for its turn.", reading: "Researching your product, audience, and the workflow to demonstrate.", planning: "Rebuilding the relevant interface and scripting the actions that tell your story.", rendering: "Animating your product’s interface, typography, and sound.", checking: "Checking the exported interactions, product claims, readability, timing, and sound.", ready: "Your video has passed its checks and is ready to share." };
 const processingStops: Record<string, { title: string; message: string; action: string }> = {
   model_budget: {
     title: "Processing reached its limit.",

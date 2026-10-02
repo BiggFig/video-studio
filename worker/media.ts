@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
+import { MOTION_RENDERER_VERSION } from "./motion-composition";
 
 export const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
 export const ffprobe = process.env.FFPROBE_PATH || "ffprobe";
@@ -51,7 +52,7 @@ export async function audioMeasurements(path: string) {
   return { loudness:match ? JSON.parse(match[0]) : null, silence:raw.split(/\r?\n/).filter(x => x.includes("silence_start") || x.includes("silence_end")) };
 }
 export async function doctor(workspace: string, skillRoot: string) {
-  const versions: Record<string,string> = {node:process.version,renderer:"video-studio-html-motion/2.0.0"};
+  const versions: Record<string,string> = {node:process.version,renderer:MOTION_RENDERER_VERSION};
   for(const name of ["hyperframes","gsap"]) versions[name]=JSON.parse(await readFile(join(process.cwd(),"node_modules",name,"package.json"),"utf8")).version;
   versions.ffmpeg=(await command(ffmpeg,["-version"])).split(/\r?\n/)[0];
   versions.ffprobe=(await command(ffprobe,["-version"])).split(/\r?\n/)[0];

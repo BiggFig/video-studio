@@ -22,7 +22,7 @@ test("review null optionals preserve concrete findings and reject unknown repair
 test("blocking findings must identify an observed failed check and cannot coexist with its true flag",()=>{
   const base={readabilityPassed:true,claimsPassed:true,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[]};
   const inconsistent={severity:"major",sceneId:"scene-3",message:"The asset is wrong. Comparing the source confirms it is correct, but a tighter crop would look better.",check:"real_visuals",evidence:"Scene-3 reading hold matches its full contained source.",repair:"change_asset"};
-  assert.throws(()=>parseReview({...base,findings:[inconsistent]}),/contradicts/);
+  assert.equal(parseReview({...base,findings:[inconsistent]}).realVisualsPassed,false);
   assert.throws(()=>parseReview({...base,realVisualsPassed:false,findings:[{...inconsistent,check:undefined}]}),/failed check/);
   assert.throws(()=>parseReview({...base,realVisualsPassed:false,findings:[{...inconsistent,evidence:undefined}]}),/observed evidence/);
   const genuine={...inconsistent,message:"The supplied product is replaced by an unrelated screen.",evidence:"Scene-3 reading hold differs from the labelled original source."};

@@ -3,23 +3,32 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compileResearch, researchProduct, sourceFacts, stageDigest, validateResearch, type Research } from "./research";
+import { compileResearch as compileResearchCurrent, researchProduct as researchProductCurrent, sourceFacts, stageDigest, validateResearch, type Research } from "./research";
 import { compileScript, loadCompletedProductionStages, validateScript, writeScript, type Script } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
 import { Providers } from "./providers";
 import { RepairBudget } from "./repairs";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
 
+const researchProduct: typeof researchProductCurrent = (input,evidence,providers,hooks,workspace,options) => researchProductCurrent(input,evidence,providers,hooks,workspace,options || {version:2});
+
+const compileResearch: typeof compileResearchCurrent = (input,evidence,raw,hash,options) => compileResearchCurrent(input,evidence,raw,hash,options || {version:2});
+
 const input: WorkerInput = { jobId: "research-test", ownerId: "private-owner", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "16:9", files: [] };
 const evidence: Evidence = { text: "Orbit organizes your notes.\n\nShare documents with your team.\n\nThe free plan is available today.", assets: [{ id: "screen", path: "assets/screen.jpg", preview: "assets/screen.jpg", kind: "image", usage: "output", rights: "Supplied fixture", width: 1440, height: 960 }] };
 const hooks: Hooks = { persist: async () => {}, state: async () => {}, complete: async () => {} };
-const draft = () => ({ sufficientEvidence: true, reason: "Actual facts and product visual", product: "Orbit", summary: "Grounded notes software", facts: [{ evidenceId: "fact-1", kind: "feature", label: "Organize notes" }, { evidenceId: "fact-2", kind: "benefit", label: "Share with a team" }, { evidenceId: "fact-3", kind: "pricing", label: "Free plan" }], visuals: [{ assetId: "screen", description: "Actual notes workspace", supportsFactIds: ["fact-1", "fact-2"], showsProductUi: true }], limitations: ["Only the supplied visible product workflow is verified."] });
+const draft = () => ({ sufficientEvidence: true, reason: "Actual facts and product visual", product: "Orbit", summary: "Grounded notes software", story: {primaryAudience:{text:"teams",basis:"inferred",evidenceIds:["fact-2"]},problem:null,mechanism:{text:"Organize notes",basis:"explicit",evidenceIds:["fact-1"],steps:[{action:"Organize notes",evidenceId:"fact-1",assetId:"screen"}]},outcome:{text:"Share documents with your team",basis:"explicit",evidenceIds:["fact-2"]},differentiator:null,cta:{text:"Share documents",basis:"explicit",evidenceIds:["fact-2"]}}, facts: [{ evidenceId: "fact-1", kind: "feature", label: "Organize notes" }, { evidenceId: "fact-2", kind: "benefit", label: "Share with a team" }, { evidenceId: "fact-3", kind: "pricing", label: "Free plan" }], visuals: [{ assetId: "screen", description: "Actual notes workspace", supportsFactIds: ["fact-1", "fact-2"], showsProductUi: true,role:"product_ui" }], limitations: ["Only the supplied visible product workflow is verified."] });
 const scriptDraft = () => ({ sufficientEvidence: true, reason: "Supported", product: "Orbit", summary: "A grounded film", accent: "#4477cc", background: "light", musicPrompt: "Subtle instrumental texture, no vocals", sfxPrompt: "Soft interface reveal", assumptions: [], scenes: [
-  { assetId: "screen", headline: "Organize notes", detail: "", evidenceId: "fact-1", durationSeconds: 4, sourceInSeconds: 0, preserveAudio: false, purpose: "Actual proof", referenceTechnique: "Contained product reveal", presentation: { template: "proof", theme: "light", transition: "cut" } },
-  { assetId: "screen", headline: "Work together", detail: "", evidenceId: "fact-2", durationSeconds: 5, sourceInSeconds: 0, preserveAudio: false, purpose: "Verified benefits", referenceTechnique: "Informational cards", presentation: { template: "features", theme: "light", transition: "cut", cards: [{ title: "Share documents", body: "With your team", evidenceId: "fact-2" }] } },
+  { storyRole:"mechanism",assetId: "screen", headline: "For teams: Organize notes", detail: "", evidenceId: "fact-1", durationSeconds: 4, sourceInSeconds: 0, preserveAudio: false, purpose: "Actual proof", referenceTechnique: "Contained product reveal", presentation: { template: "proof", theme: "light", transition: "cut" } },
+  { storyRole:"outcome",assetId: "screen", headline: "Work together", detail: "", evidenceId: "fact-2", durationSeconds: 5, sourceInSeconds: 0, preserveAudio: false, purpose: "Verified benefits", referenceTechnique: "Informational cards", presentation: { template: "features", theme: "light", transition: "cut", cards: [{ title: "Share documents", body: "With your team", evidenceId: "fact-2" }] } },
+  { storyRole:"cta",assetId:"screen",headline:"Share documents",detail:"",evidenceId:"fact-2",durationSeconds:4,sourceInSeconds:0,preserveAudio:false,purpose:"One supported next step",referenceTechnique:"Held brand",presentation:{template:"cta",theme:"dark",transition:"cut"}},
 ] });
 async function workspace() { const path = await mkdtemp(join(tmpdir(), "video-studio-research-")); await mkdir(join(path, "assets")); await writeFile(join(path, "assets/screen.jpg"), "Exact source bytes; provider mocked"); return path; }
 const isStageFailure = (error: unknown) => error instanceof PipelineError && error.code === "production_stage_changed";
+const invalidResearchProvider = (raw: unknown) => ({
+  ledger: { modelCalls: 1, inputTokens: 1000, outputTokens: 1000, reservedInputTokens: 0, reservedOutputTokens: 0 },
+  claude: async () => raw, prepareClaude: async () => async () => raw,
+}) as unknown as Providers;
 
 test("research binds exact source quotes and bytes and reuses only its confirmed durable stage", async () => {
   const root = await workspace(); let calls = 0; const events: string[] = [];
@@ -52,7 +61,7 @@ test("verbose research notes are bounded without changing raw evidence or durabl
   assert.deepEqual(await researchProduct(input, evidence, provider, hooks, root), result); assert.equal(calls, 1);
   const invalid = structuredClone(raw); invalid.visuals[0].supportsFactIds.push("fact-999");
   const invalidRoot = await workspace();
-  await assert.rejects(researchProduct(input, evidence, { claude: async () => invalid } as unknown as Providers, hooks, invalidRoot), isStageFailure);
+  await assert.rejects(researchProduct(input, evidence, invalidResearchProvider(invalid), hooks, invalidRoot), isStageFailure);
   await assert.rejects(readFile(join(invalidRoot, "analysis/research.json")));
 });
 
@@ -63,7 +72,7 @@ test("pure research compilation coalesces selected IDs, retains supplied categor
     { ...base.facts[0], kind: "benefit", label: "A second category for the same passage" },
     { ...base.facts[2], kind: "benefit", kinds: ["pricing"], quote: "A made-up discount" },
   ] };
-  const original = JSON.stringify(raw), research = compileResearch(input, evidence, raw, digest);
+  const original = JSON.stringify(raw), research = compileResearch(input, evidence, raw, digest, {legacy:true});
   assert.equal(JSON.stringify(raw), original); assert.deepEqual(research.facts.map(f => f.evidenceId), ["fact-1", "fact-3"]);
   assert.equal(research.facts[0].kind, "feature"); assert.deepEqual(research.facts[0].kinds, ["feature", "benefit"]);
   assert.equal(research.facts[1].kind, "benefit"); assert.deepEqual(research.facts[1].kinds, ["benefit", "pricing"]);
@@ -71,18 +80,19 @@ test("pure research compilation coalesces selected IDs, retains supplied categor
   // A visual may refer to another real catalog passage without selecting it for the script.
   assert.deepEqual(research.visuals[0].supportsFactIds, ["fact-1", "fact-2"]);
   const script = { ...scriptDraft(), version: 1, jobId: input.jobId, researchSha256: stageDigest(research), evidenceSha256: digest } as Script;
+  script.scenes=script.scenes.slice(0,2); // Explicit legacy pricing fixture.
   assert.throws(() => validateScript(script, input, evidence, research), /supported presentation, fact or source visual/);
   script.scenes[1] = { ...script.scenes[1], headline: "Free plan", evidenceId: "fact-3", presentation: { template: "offer", theme: "light", transition: "cut", cards: [{ title: "Free plan", body: "Available today", evidenceId: "fact-3" }] } };
   validateScript(script, input, evidence, research); // Supplied pricing category survives coalescence.
-  assert.throws(() => compileResearch(input, evidence, { ...raw, facts: [...raw.facts, { ...base.facts[0], evidenceId: "fact-999" }] }, digest), /unknown source fact ID/);
-  assert.throws(() => compileResearch(input, evidence, { ...raw, visuals: [{ ...base.visuals[0], supportsFactIds: ["fact-999"] }] }, digest), /unknown source fact binding/);
+  assert.throws(() => compileResearch(input, evidence, { ...raw, facts: [...raw.facts, { ...base.facts[0], evidenceId: "fact-999" }] }, digest, {legacy:true}), /unknown source fact ID/);
+  assert.throws(() => compileResearch(input, evidence, { ...raw, visuals: [{ ...base.visuals[0], supportsFactIds: ["fact-999"] }] }, digest, {legacy:true}), /unknown source fact binding/);
   const changed = structuredClone(research); changed.facts[0].quote = "Changed after compilation";
   assert.throws(() => validateResearch(changed, input, evidence, digest), /differs from its canonical source passage/);
 });
 
 test("a supplied pricing category never turns a non-price source quote into an offer", () => {
   const raw = draft();
-  const research = compileResearch(input, evidence, { ...raw, facts: raw.facts.map(f => f.evidenceId === "fact-2" ? { ...f, kinds: ["benefit", "pricing"] } : f) }, "c".repeat(64));
+  const research = compileResearch(input, evidence, { ...raw, facts: raw.facts.map(f => f.evidenceId === "fact-2" ? { ...f, kinds: ["benefit", "pricing"] } : f) }, "c".repeat(64), {legacy:true});
   const script = { ...scriptDraft(), version: 1, jobId: input.jobId, researchSha256: stageDigest(research), evidenceSha256: research.evidenceSha256 } as Script;
   script.scenes[1].presentation = { template: "offer", theme: "light", transition: "cut" };
   assert.throws(() => validateScript(script, input, evidence, research), /actual source pricing/);
@@ -93,8 +103,8 @@ test("a supplied pricing category never turns a non-price source quote into an o
 
 test("research rejects an unknown quote or reference-only asset instead of treating it as proof", async () => {
   for (const raw of [{ ...draft(), facts: [{ evidenceId: "fact-999", kind: "feature", label: "Invented" }] }, { ...draft(), visuals: [{ ...draft().visuals[0], assetId: "reference" }] }]) {
-    const root = await workspace(), provider = { claude: async () => raw } as unknown as Providers;
-    await assert.rejects(researchProduct(input, evidence, provider, hooks, root));
+    const root = await workspace(), provider = invalidResearchProvider(raw);
+    await assert.rejects(researchProduct(input, evidence, provider, hooks, root), isStageFailure);
     await assert.rejects(readFile(join(root, "analysis/research.json")));
   }
 });
@@ -246,9 +256,10 @@ test("typography based on a spoken recording uses its real preview without dupli
 });
 
 test("offer cards each require classified real pricing and compile with exact quotes and reading time", async () => {
-  const root = await workspace(), provider = { claude: async () => draft() } as unknown as Providers;
-  const research = await researchProduct(input, evidence, provider, hooks, root);
+  const root = await workspace();
+  const research = compileResearch(input,evidence,draft(),"f".repeat(64),{legacy:true});
   const script = { ...scriptDraft(), version: 1, jobId: input.jobId, evidenceSha256: research.evidenceSha256, researchSha256: stageDigest(research) } as Script;
+  script.scenes=script.scenes.slice(0,2);
   script.scenes[1] = { ...script.scenes[1], headline: "Free plan", detail: "Available today", evidenceId: "fact-3", durationSeconds: 2, presentation: { template: "offer", theme: "light", transition: "expand", cards: [{ title: "Free plan", body: "Available today", evidenceId: "fact-3" }] } };
   validateScript(script, input, evidence, research);
   const plan = await compilePlan(input, evidence, script, hooks, root);
