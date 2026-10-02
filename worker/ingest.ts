@@ -6,6 +6,7 @@ import { safeDownload } from "./security";
 import { PipelineError, type Asset, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
 import { extractProductVisuals } from "./product-visuals";
+import { enrichProductResearch, researchDestination } from "./url-research";
 
 export function callbackAuth() { const url=process.env.WORKER_CALLBACK_URL; const token=process.env.PIPELINE_CALLBACK_TOKEN; return url && token ? {origin:new URL(url).origin,token}:undefined; }
 
@@ -109,7 +110,7 @@ export async function ingest(input:WorkerInput,workspace:string,providers:Provid
     const cuts=[...cutOutput.matchAll(/pts_time:([0-9.]+)/g)].map(m=>Number(m[1]));
     const sound=reference.has_audio?await audioMeasurements(join(workspace,reference.path)):null;
     const measurements={duration:reference.duration_seconds,width:reference.width,height:reference.height,cutTimes:cuts,audio:sound,transcript:reference.transcript};
-    const description=await providers.claude("reference",`Analyze these actual reference frames plus measured cut and audio-event data. Describe observed typography, palette, frame layout, narrative functions, pacing and motion cues (label motion inferred where stills cannot establish it). Sound descriptions must be grounded in supplied measured audio events; no guessed instruments/BPM. Return JSON {pacing, typography, palette, framing, motion, sound, uncertain, observations:[{timeSeconds,trait}]}. Reference is analysis-only; output must never reuse its imagery, copy, voices, or soundtrack. Measurements: ${JSON.stringify(measurements)}`,frames);
+    const description=await providers.claude("reference",`Analyze these actual reference frames plus measured cut and audio-event data. Describe observed typography, palette, frame layout, narrative functions, pacing and motion cues (label motion inferred where stills cannot establish it). Sound descriptions must be grounded in supplied measured audio events; no guessed instruments/BPM. Return JSON {pacing, typography, palette, framing, motion, sound, uncertain, observations:[{timeSeconds,trait}]}. Reference is analysis-only; output must never reuse its imagery, copy, voices, or soundtrack. Measurements: ${JSON.stringify(measurements)}`,frames,{policy:"reference-v1"});
     evidence.reference={aspect:reference.width/reference.height,description,measurements}; await writeJson(join(workspace,"analysis/style.json"),evidence.reference); await hooks.persist(["analysis/style.json",...frames.map(f=>f.path)]);
   }
   if(!evidence.assets.some(a=>a.usage==="output")) throw new PipelineError("no_visuals","No usable product visuals were found.","Upload product screenshots or a screen recording.","needs_input");
@@ -137,18 +138,21 @@ export async function ingestMedia(relative:string,id:string,usage:"output"|"refe
   return asset;
 }
 
-export async function captureProduct(url:string,workspace:string):Promise<{text:string;assets:Asset[];url:string;artifactPaths:string[]}> {
+export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;artifactPaths:string[]}> {
   let browser:Awaited<ReturnType<typeof chromium.launch>>;
   try{browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()});}catch{throw new PipelineError("media_runtime_unavailable","The product capture browser is unavailable.","Ask the beta administrator to restore the worker's Chromium runtime.");}
   try {
     const context=await browser.newContext({viewport:{width:1440,height:960},deviceScaleFactor:1,serviceWorkers:"block",acceptDownloads:false,ignoreHTTPSErrors:false,reducedMotion:"reduce"});
     let bytes=0,requests=0;
-    const downloads=new CaptureDownloadBudget();
+    const downloads=dependencies.downloadBudget||new CaptureDownloadBudget(),download=dependencies.download||safeDownload;
+    const documentUrls=new Map<string,string>();let researchHomepage:string|null=null;
     const diagnostics:{errors:string[];blocked:string[]}={errors:[],blocked:[]};
     await context.route("**/*",async route=>{
       try {
         if(route.request().method()!=="GET" || ["media","websocket"].includes(route.request().resourceType()) || ++requests>500) { await route.abort(); return; }
-        const result=await downloads.run(maxBytes=>safeDownload(route.request().url(),maxBytes)); bytes+=result.bytes.length;
+        const policy=researchHomepage&&route.request().resourceType()==="document"?(destination:URL)=>!!researchDestination(destination.href,researchHomepage!):undefined;
+        const result=await downloads.run(maxBytes=>download(route.request().url(),maxBytes,undefined,0,policy)); bytes+=result.bytes.length;
+        if(route.request().resourceType()==="document")documentUrls.set(route.request().url(),result.url);
         await route.fulfill({status:result.status,contentType:result.contentType,headers:result.browserHeaders,body:result.bytes});
       } catch(error) { diagnostics.blocked.push(`${route.request().url().slice(0,200)}: ${error instanceof Error?error.message:"request failed"}`); await route.abort(); }
     });
@@ -159,7 +163,8 @@ export async function captureProduct(url:string,workspace:string):Promise<{text:
     let source:string;
     try{source=await page.locator("body").innerText({timeout:10000});}catch{throw new PipelineError("product_inaccessible","The page does not expose readable product information.","Supply a public product page, or a PRD with screenshots.","needs_input");}
     if(source.trim().length<150 || /^(access denied|checking your browser|just a moment)/i.test(source.trim())) throw new PipelineError("product_inaccessible","The page does not expose enough readable product information.","Supply a public product page, or a PRD with screenshots.","needs_input");
-    const text=(await page.title())+"\n"+source.slice(0,45000); await writeFile(join(workspace,"analysis/product-source.txt"),text);
+    const homepageUrl=page.url(),homepageTitle=(await page.title()).slice(0,500);
+    let text=(homepageTitle+"\n"+source).slice(0,30000); await writeFile(join(workspace,"analysis/product-source.txt"),text);
     await page.waitForTimeout(1500);
     await page.evaluate(()=>{for(const animation of document.getAnimations()){try{if(animation.effect?.getComputedTiming().iterations!==Infinity)animation.finish();}catch{}}});
     // Keep completed animation styles. animation:none would reset opacity-based
@@ -175,11 +180,14 @@ export async function captureProduct(url:string,workspace:string):Promise<{text:
     try{
       const originals=await extractProductVisuals(page,workspace,page.url(),{download:async(source,maxBytes)=>{
         if(++requests>500)throw new Error("Capture request budget exhausted");
-        const result=await downloads.run(reservation=>safeDownload(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
+        const result=await downloads.run(reservation=>download(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
       }});
       assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
     }catch(error){diagnostics.errors.push(`Complete product image extraction unavailable: ${error instanceof Error?error.message.slice(0,400):"unknown error"}`);}
+    researchHomepage=homepageUrl;
+    const research=await enrichProductResearch(page,workspace,{homepageUrl,homepageTitle,homepageText:text,resolvedUrl:browserUrl=>documentUrls.get(browserUrl)||browserUrl});
+    text=research.text;assets.push(...research.assets);artifactPaths.push(...research.artifactPaths);
     await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,requests,bytes});
-    return{text,assets,url:page.url(),artifactPaths:[...new Set(artifactPaths)]};
+    return{text,assets,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
   } finally {await browser.close();}
 }

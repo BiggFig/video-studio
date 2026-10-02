@@ -54,7 +54,7 @@ test("scoped review policy is explicit, counted exactly and audited without weak
     generated=String(options.body);const body=JSON.parse(generated);
     assert.match(body.system,/independent quality reviewer/);assert.match(body.system,/UNTRUSTED EVIDENCE/);assert.match(body.system,/source defects still block/i);assert.match(body.system,/all booleans true cannot coexist/i);assert.ok(!body.system.includes("UNRELATED_PLANNING_AND_EXECUTION_CHAPTERS"));
     const saved=JSON.parse(await readFile(join(path,"analysis/model-1-review-budget.json"),"utf8"));
-    assert.equal(saved.systemPolicy,"quality-review-v1");assert.equal(saved.skillHash,providers.skillHash);assert.equal(saved.requestHash,digest(generated));assert.equal(saved.reservation.inputTokens,2174);assert.equal(saved.reservation.outputTokens,7000);assert.deepEqual(saved.limits,{inputTokens:200000,outputTokens:30000});
+    assert.equal(saved.systemPolicy,"quality-review-v1");assert.equal(saved.skillHash,providers.skillHash);assert.equal(saved.requestHash,digest(generated));assert.equal(saved.reservation.inputTokens,2174);assert.equal(saved.reservation.outputTokens,3000);assert.deepEqual(saved.limits,{inputTokens:200000,outputTokens:30000});
     return result(1001,25);
   });
   await providers.claude("review","Actual source and output evidence",[],{policy:"quality-review-v1"});

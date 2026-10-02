@@ -76,7 +76,7 @@ These are recommended defaults for the first build, not previously confirmed pro
 - Auto without a reference: 16:9 landscape.
 - Format options: Auto, 16:9 landscape, 9:16 vertical, and 1:1 square.
 - Optional references improve style direction; they never become a required step.
-- Use branding and content to choose a consistent style when no reference is supplied.
+- Without a supplied reference, use the minimal product-film direction derived from the owner's 22-second reference: hook, brand, real product proof, features, a supported offer or further proof, then action. Adapt facts, copy and assets to each product. See [the complete reference breakdown](docs/reference-motion-breakdown.md).
 
 ## 5. Output
 
@@ -85,7 +85,7 @@ Each successful job produces one downloadable MP4 and a poster image for the pre
 - Full HD in the selected ratio: 1920×1080, 1080×1920, or 1080×1080.
 - H.264 video, AAC audio, and a consistent frame rate. Initial implementation default: 30 fps.
 - Automatically chosen duration, with a hard maximum of five minutes.
-- Initial creative targets: approximately 30–75 seconds for a launch and 15–45 seconds for a feature demo. These are guidance, not guaranteed durations or new form fields.
+- The default reference direction targets approximately 20–28 seconds with concise on-screen copy. Reading holds and complete meaningful source speech may extend that duration. This is guidance, not a guaranteed duration or a new form field.
 - Correct aspect ratio, readable text, clear product proof, and no cut-off UI or essential copy.
 - Suitable instrumental music and selective SFX through ElevenLabs.
 - On-screen copy supported by the supplied information.
@@ -137,9 +137,9 @@ A failed or unchecked render must not appear as a finished video.
 | Stage | Required result |
 |---|---|
 | Validate and ingest | Validate input types and limits; retrieve allowed public content; place usable assets in an isolated job workspace |
-| Analyze | Extract product facts, branding, usable visuals, reference traits, and any needed timing information |
-| Plan | Select launch/demo structure, write on-screen copy, assign real assets, and produce one authoritative timeline |
-| Compose | Build scenes, product treatments, motion, typography, transitions, music, and SFX in one renderer project |
+| Research | Extract product facts, branding, usable visuals and reference traits; retain exact source quotes and provenance in a durable research artifact |
+| Script | Select launch/demo structure, write source-grounded on-screen copy, bind each claim and product visual to research, and save the script before composition |
+| Compose | Compile trusted HTML/CSS scenes and a deterministic GSAP timeline with typography, contained real media, transitions, music and SFX; retain the editable composition |
 | Render | Produce a draft in the requested format |
 | Review and repair | Check technical output, readability, product accuracy, asset use, motion, and audio; repair within configured limits |
 | Deliver | Publish the final private output only after required checks pass |

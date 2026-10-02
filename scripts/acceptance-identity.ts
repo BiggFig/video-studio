@@ -89,7 +89,7 @@ export async function validateAcceptanceResume(workspace: string, input: WorkerI
     if (bytes.length !== expected.size || digest(bytes) !== expected.sha256) throw new Error(`Saved acceptance artifact changed after persistence: ${path}`);
   }
   // These are read directly as caches by the pipeline, even without a manifest entry.
-  for (const path of ["analysis/evidence.json", "analysis/repair-ledger.json", "plan.json"]) if (await stat(join(root, path)).catch(() => null)) {
+  for (const path of ["analysis/evidence.json", "analysis/research.json", "analysis/research-state.json", "analysis/script.json", "analysis/script-state.json", "analysis/repair-ledger.json", "plan.json"]) if (await stat(join(root, path)).catch(() => null)) {
     if (!manifest[path]) throw new Error(`Unverified reusable acceptance artifact: ${path}`);
   }
   for (const name of await readdir(join(root, "analysis")).catch(() => [] as string[])) {

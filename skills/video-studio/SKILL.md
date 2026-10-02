@@ -40,6 +40,8 @@ Describe cut rhythm, framing, typography, colors, motion, sound, and narrative f
 
 ### 3. Write one executable plan
 
+For this application's URL/PRD software-video pipeline, read `references/url-research-script-motion.md`: persist source-grounded research, then an on-screen script, before compiling the authoritative plan and trusted HTML motion composition.
+
 Write `plan.json` and `STORYBOARD.md` using the contract. Every scene has an exact asset or concrete graphic construction, timeline placement, purpose, and source range where applicable. Bind text, effects, audio, and reference techniques to it.
 
 Select one primary renderer. Prefer Hyperframes for mixed footage, motion, demos, and captions. Use FFmpeg for straightforward cuts/normalization or preprocessing. Preserve an existing Remotion project when supplied. Specialized renderers produce intermediate clips for this same timeline; they do not start independent workflows.

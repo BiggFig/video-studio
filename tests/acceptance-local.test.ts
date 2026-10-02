@@ -1,7 +1,7 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
 import { acceptanceInputIdentity, validateAcceptanceResume } from "../scripts/acceptance-identity";
@@ -45,9 +45,12 @@ test("resume fails closed for tampered, truncated and missing provider accountin
 
 test("resume preserves completed evidence and rejects untracked plan caches", async t => {
   const { root } = await savedRun(t);
-  await writeFile(join(root, "plan.json"), "{}");
-  await assert.rejects(validateAcceptanceResume(root, input, null), /Unverified reusable/);
-  await rm(join(root, "plan.json"));
+  await mkdir(join(root, "analysis"));
+  for (const path of ["plan.json", "analysis/research.json", "analysis/research-state.json", "analysis/script.json", "analysis/script-state.json"]) {
+    await writeFile(join(root, path), "{}");
+    await assert.rejects(validateAcceptanceResume(root, input, null), /Unverified reusable/);
+    await rm(join(root, path));
+  }
   const final = JSON.stringify({ status: "local_quality_passed", result: { videoPath: "renders/final.mp4" } });
   await writeFile(join(root, "acceptance-result.json"), final);
   await assert.rejects(validateAcceptanceResume(root, input, null), /Completed acceptance evidence is immutable/);
