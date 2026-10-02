@@ -1,0 +1,39 @@
+.page { max-width: 1280px; margin: 0 auto; padding: 48px 40px 52px; }
+.header { margin-bottom: 64px; }
+.brand { display: inline-flex; font-size: 18px; font-weight: 650; letter-spacing: -.045em; margin-bottom: 72px; }
+.eyebrow { font-size: 12px; color: var(--text-secondary); letter-spacing: .04em; margin-bottom: 18px; }
+.header h1 { font-size: clamp(40px, 6vw, 72px); line-height: 1.06; letter-spacing: -.065em; font-weight: 550; }
+.intro { max-width: 620px; margin-top: 24px; color: var(--text-secondary); font-size: 18px; line-height: 1.6; }
+.navigation { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.navigation a { display: inline-flex; gap: 22px; align-items: center; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 99px; padding: 10px 18px; font-size: 13px; background: var(--surface); }
+.navigation a:hover { background: var(--surface-hover); }
+.navigation span { color: var(--text-secondary); }
+.studies { display: grid; gap: 42px; }
+.study { overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); scroll-margin-top: 24px; box-shadow: 0 8px 32px #00000003; }
+.caption { display: flex; justify-content: space-between; align-items: center; padding: 24px 28px; gap: 16px; }
+.caption > div { display: flex; align-items: center; gap: 15px; }
+.number { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.caption h2 { font-size: 25px; line-height: 1.2; font-weight: 550; }
+.duration { font-size: 12px; white-space: nowrap; color: var(--text-secondary); }
+.study video { display: block; width: 100%; height: auto; aspect-ratio: 1920 / 590; background: #111113; }
+.details { padding: 22px 28px 26px; display: flex; gap: 28px; justify-content: space-between; align-items: center; }
+.details p { max-width: 680px; color: var(--text-secondary); font-size: 14px; line-height: 1.65; }
+.details a { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; min-height: 44px; font-size: 13px; font-weight: 550; }
+.details a:hover, .footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.footer { display: flex; justify-content: space-between; gap: 40px; padding-top: 36px; font-size: 12px; line-height: 1.75; color: var(--text-secondary); }
+.footer p { max-width: 740px; }
+.footer a { white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+@media (max-width: 640px) {
+  .page { padding: 24px 16px 32px; }
+  .brand { margin-bottom: 46px; }
+  .header { margin-bottom: 34px; }
+  .intro { font-size: 16px; }
+  .navigation { gap: 8px; }
+  .navigation a { padding: 10px 15px; gap: 16px; }
+  .studies { gap: 24px; }
+  .study { border-radius: 16px; }
+  .caption { padding: 20px 18px; }
+  .caption h2 { font-size: 22px; }
+  .details { flex-direction: column; gap: 8px; align-items: flex-start; padding: 18px; }
+  .footer { flex-direction: column; gap: 12px; }
+}
