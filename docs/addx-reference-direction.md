@@ -2,6 +2,8 @@
 
 The user's latest visual benchmark is the [Addx launch portfolio](https://addxstudio.com/launch). This direction supersedes the earlier fixed six-beat reference as the creative benchmark. It does not change source-grounding, paid-work limits, original-speech rules, or delivery QC.
 
+**2026-10-02 update:** The sampled inspection below has been superseded by [complete native-frame audits and actual HTML reconstruction exports](reference-replication-results.md). That work also recovered six directly embedded MP4s omitted from the initial inspection. Four films now have complete frame coverage; four authored comparison exports test the design and animation directly. The earlier observations remain here as historical context, not as the current extent of verification.
+
 ## What was actually inspected
 
 Two complete public films were downloaded for local analysis from the exact links embedded in the portfolio, rather than inferred from their thumbnails. ElevenLabs was inspected at 1 fps across the whole film and at 4 fps in sequential contact sheets; ClickUp at 1 fps and 2 fps. The time ranges below are approximate, with 0.25–0.5 second sampling resolution. Selected shots were also examined at larger size. This is sampled visual inspection, not a claim to have watched every original frame continuously.
