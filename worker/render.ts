@@ -1,9 +1,8 @@
-import { chromium } from "playwright";
 import { join } from "node:path";
-import { writeFile, mkdir } from "node:fs/promises";
-import { audioMeasurements, command, ffmpeg, mediaEnvironment, probe, writeJson } from "./media";
+import { audioMeasurements, command, ffmpeg, probe, writeJson } from "./media";
 import { PipelineError, type Hooks, type Plan, type Scene } from "./types";
 import { validateTimeline } from "./planning";
+import { renderMotionPicture } from "./motion-render";
 
 const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
 export function layout(plan:Plan) {
@@ -18,38 +17,7 @@ export function sceneHtml(plan:Plan,scene:Scene,index:number):string {
 }
 export async function render(plan:Plan,workspace:string,hooks:Hooks,pass:number):Promise<string> {
   const timelineErrors=validateTimeline(plan);if(timelineErrors.length)throw new PipelineError("invalid_render_timeline",timelineErrors.join("; "),"The retained plan requires an internal timeline repair.","needs_review");
-  const browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()}),l=layout(plan),layoutFindings:unknown[]=[];
-  const clips:string[]=[];
-  try {
-    const page=await browser.newPage({viewport:{width:plan.output.width,height:plan.output.height},deviceScaleFactor:1});
-    await page.route("**/*",r=>r.abort());
-    for(const [index,scene] of plan.scenes.entries()) {
-      const html=sceneHtml(plan,scene,index),path=`project/${scene.id}.html`,background=`project/${scene.id}.png`;
-      await writeFile(join(workspace,path),html); await page.setContent(html); await page.evaluate(()=>document.fonts.ready);
-      const inspection=await page.locator("[data-essential]").evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return{text:e.textContent,x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right,font:getComputedStyle(e).fontSize}}));
-      const copyBottom=Math.max(...inspection.map(x=>x.bottom));
-      if(inspection.some(x=>x.x<40||x.y<40||x.right>plan.output.width-40||x.bottom>plan.output.height-80) || (plan.output.width<=plan.output.height && copyBottom>l.y-45)) throw new PipelineError("copy_overflow","Essential copy does not fit the rendered scene.","The draft needs an internal layout repair.","needs_review");
-      layoutFindings.push({scene:scene.id,inspection,passed:true});
-      await page.screenshot({path:join(workspace,background),type:"png"});
-      const asset=plan.assets.find(a=>a.id===scene.asset_id)!; const duration=scene.duration_frames/30;
-      const args=["-hide_banner","-loglevel","error","-y","-loop","1","-framerate","30","-i",join(workspace,background)];
-      if(asset.kind==="image") args.push("-loop","1","-framerate","30"); else args.push("-ss",String(scene.source_in_seconds));
-      args.push("-i",join(workspace,asset.path));
-      // All actual product pixels are contained. Only the card's placement/opacity
-      // is animated; there are no invented controls or synthetic product screens.
-      const backgroundColor=plan.background==="dark"?"0x202229":"white";
-      const filter=`[0:v]fps=30,setsar=1[bg];[1:v]fps=30,scale=${l.width}:${l.height}:force_original_aspect_ratio=decrease,pad=${l.width}:${l.height}:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor},setsar=1,format=rgba,fade=t=in:st=0:d=0.35:alpha=1[media];[bg][media]overlay=x=${l.x}:y='${l.y}+32*pow(1-min(t/0.6,1),3)':eval=frame:shortest=1,format=yuv420p[out]`;
-      args.push("-filter_complex",filter,"-map","[out]");
-      if(scene.preserve_audio) args.push("-map","1:a:0","-af","apad","-c:a","aac","-b:a","192k","-ar","48000");
-      else args.push("-an");
-      const clip=`project/${scene.id}.mp4`; args.push("-t",String(duration),"-frames:v",String(scene.duration_frames),"-c:v","libx264","-preset","veryfast","-crf","19","-pix_fmt","yuv420p","-r","30","-threads","2","-movflags","+faststart",join(workspace,clip));
-      await command(ffmpeg,args,240_000);clips.push(clip);
-    }
-  } finally {await browser.close();}
-  await writeJson(join(workspace,"analysis/layout.json"),layoutFindings);
-  // Concat video separately; the exact source speech ranges are mixed once below.
-  await writeFile(join(workspace,"project/clips.txt"),clips.map(p=>`file '${p.replace("project/","")}'`).join("\n"));
-  const silent="project/picture.mp4"; await command(ffmpeg,["-v","error","-y","-f","concat","-safe","1","-i",join(workspace,"project/clips.txt"),"-map","0:v:0","-c:v","copy","-an",join(workspace,silent)]);
+  const picture=await renderMotionPicture(plan,workspace,pass,hooks),silent=picture.path;
   const audioInputs:{path:string;start:number;duration:number;source:number;gain:number;role:string}[]=plan.audio.map(a=>({path:plan.assets.find(x=>x.id===a.asset_id)!.path,start:a.start_frame/30,duration:a.duration_frames/30,source:a.source_in_seconds,gain:a.gain_db,role:a.role}));
   for(const scene of plan.scenes.filter(s=>s.preserve_audio)) audioInputs.push({path:plan.assets.find(a=>a.id===scene.asset_id)!.path,start:scene.start_frame/30,duration:scene.duration_frames/30,source:scene.source_in_seconds,gain:0,role:"speech"});
   const mixArgs=["-v","error","-y"],filters:string[]=[];
@@ -89,7 +57,7 @@ export async function render(plan:Plan,workspace:string,hooks:Hooks,pass:number)
   const normalize=`loudnorm=I=-14:TP=-1:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
   const out=`renders/draft-${pass}.mp4`;await command(ffmpeg,["-v","error","-y","-i",join(workspace,silent),"-i",join(workspace,premix),"-map","0:v:0","-map","1:a:0","-c:v","copy","-af",normalize,"-c:a","aac","-b:a","192k","-ar","48000","-t",String(plan.output.duration_frames/30),"-movflags","+faststart",join(workspace,out)]);
   const result=await probe(join(workspace,out));if(!result.audio||!result.video)throw new Error("Renderer did not produce audio and video streams");
-  await writeJson(join(workspace,"project/composition.json"),{version:1,renderer:"video-studio-html-ffmpeg",plan:"../plan.json",clips,layout:l,audioInputs,filters,output:out});
-  await hooks.persist([out,"analysis/layout.json","analysis/premix-audio.json","analysis/audio-stems.json","project/composition.json",...clips,...audioInputs.filter(a=>a.path.startsWith("project/")).map(a=>a.path),...plan.scenes.flatMap(s=>[`project/${s.id}.html`,`project/${s.id}.png`])]);
+  await writeJson(join(workspace,"project/composition.json"),{version:2,renderer:"video-studio-html-motion",plan:"../plan.json",motionProject:picture.directory,audioInputs,filters,output:out});
+  await hooks.persist([out,"analysis/layout.json","analysis/premix-audio.json","analysis/audio-stems.json","project/composition.json",...picture.artifacts,...audioInputs.filter(a=>a.path.startsWith("project/")).map(a=>a.path)]);
   return out;
 }

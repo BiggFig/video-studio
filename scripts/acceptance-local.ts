@@ -5,7 +5,8 @@ import { isAbsolute,relative,resolve,join } from "node:path";
 import { runPipeline } from "../worker/index";
 import { cancelCommands,hash,json,writeJson } from "../worker/media";
 import { Providers } from "../worker/providers";
-import { compilePlan,makePlan } from "../worker/planning";
+import { compilePlan,makePlan,preparePlanRepair,prepareRetainedPlanRepair } from "../worker/planning";
+import { loadCompletedProductionStages } from "../worker/scripting";
 import { parseReview } from "../worker/quality";
 import { RepairBudget } from "../worker/repairs";
 import { safePath } from "../worker/security";
@@ -61,15 +62,24 @@ async function main(){
       const findings=review.findings.filter(f=>f.repair);if(!findings.some(f=>f.severity!=="minor"))throw new Error("The retained review does not contain an actionable major finding.");
       const plan=await json<Plan>(join(workspace,"plan.json"));
       const evidence=await json<Evidence>(join(workspace,"analysis/evidence.json")),retainedPlan=flag("--repair-plan-response");
+      const repair={plan,findings};
+      let performRepair:()=>Promise<Plan>,retainedPlanResponse:{path:string;sha256:string}|undefined;
+      if(retainedPlan){
+        const saved=await readFile(safePath(workspace,retainedPlan),"utf8"),response=JSON.parse(saved.replace(/^```(?:json)?\s*|\s*```$/g,""));
+        retainedPlanResponse={path:retainedPlan,sha256:createHash("sha256").update(saved).digest("hex")};
+        performRepair=plan.production?await prepareRetainedPlanRepair(input,evidence,response,hooks,workspace,repair):()=>compilePlan(input,evidence,response,hooks,workspace,repair);
+      }else{
+        // Read completed stages before initializing a provider, and preflight the
+        // complete paid repair/QC cycle before consuming its durable repair slot.
+        const completed=plan.production?await loadCompletedProductionStages(input,evidence,workspace,plan):undefined;
+        const providers=new Providers(workspace,input,hooks);await providers.init(resolve("skills/video-studio"));
+        performRepair=completed?await preparePlanRepair(input,evidence,completed.research,providers,hooks,workspace,repair):()=>makePlan(input,evidence,providers,hooks,workspace,repair);
+      }
       await repairBudget.execute(`Retained review: ${findings.map(f=>f.message).join("; ")}`,async()=>{
-        provenance.retainedReviewRepair={reviewPath:repairReview,reviewSha256:await hash(reviewPath),repairPassesConsumed:1,reusedAsPassedCheck:false};await writeJson(join(workspace,"acceptance-provenance.json"),provenance);
+        provenance.retainedReviewRepair={reviewPath:repairReview,reviewSha256:await hash(reviewPath),repairPassesConsumed:1,reusedAsPassedCheck:false,...(retainedPlanResponse?{retainedPlanResponse}:{})};await writeJson(join(workspace,"acceptance-provenance.json"),provenance);
         await writeJson(repairPath,{status:"reserved",reviewPath:repairReview,reviewSha256:await hash(reviewPath),findings,reusedAsPassedCheck:false,repairPassesConsumed:1});
         await writeJson(join(workspace,"acceptance-before-repair-plan.json"),plan);
-        if(retainedPlan){
-          const saved=safePath(workspace,retainedPlan);provenance.retainedReviewRepair.retainedPlanResponse={path:retainedPlan,sha256:await hash(saved)};await writeJson(join(workspace,"acceptance-provenance.json"),provenance);
-          return compilePlan(input,evidence,JSON.parse((await readFile(saved,"utf8")).replace(/^```(?:json)?\s*|\s*```$/g,"")),hooks,workspace,{plan,findings});
-        }
-        const providers=new Providers(workspace,input,hooks);await providers.init(resolve("skills/video-studio"));return makePlan(input,evidence,providers,hooks,workspace,{plan,findings});
+        return performRepair();
       });
       await writeJson(repairPath,{status:"applied",reviewPath:repairReview,reviewSha256:await hash(reviewPath),findings,reusedAsPassedCheck:false,repairPassesConsumed:1,remainingRepairPasses:Math.max(0,(input.budgets!.maxRepairPasses??2)-repairBudget.consumed)});
     }

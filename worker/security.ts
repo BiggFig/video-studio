@@ -31,8 +31,9 @@ export async function safeDestination(raw: string): Promise<{ url: URL; address:
   if (!addresses.length || addresses.some(a => !publicAddress(a.address))) throw new PipelineError("unsafe_url", "The URL resolves to a restricted network.", "Use a public product URL or upload assets.", "needs_input");
   return { url, ...addresses[0] };
 }
-export async function safeDownload(raw: string, maxBytes: number, auth?: { origin: string; token: string }, redirect = 0): Promise<{ bytes: Buffer; contentType: string; url: string; status: number; browserHeaders:Record<string,string> }> {
+export async function safeDownload(raw: string, maxBytes: number, auth?: { origin: string; token: string }, redirect = 0, allowDestination?: (url: URL) => boolean): Promise<{ bytes: Buffer; contentType: string; url: string; status: number; browserHeaders:Record<string,string> }> {
   if (redirect > 5) throw new PipelineError("redirect_limit", "The source redirects too many times.", "Use its final public URL.", "needs_input");
+  if (allowDestination && !allowDestination(new URL(raw))) throw new PipelineError("unsafe_url", "The research destination is outside the permitted public origin or paths.", "Use the accessible public product source.", "needs_input");
   const {url,address,family} = await safeDestination(raw);
   const response = await new Promise<{ status: number; location?: string; contentType: string; bytes: Buffer;browserHeaders:Record<string,string> }>((done, reject) => {
     // Pin the validated address to the connection, closing the DNS-rebinding gap.
@@ -46,7 +47,7 @@ export async function safeDownload(raw: string, maxBytes: number, auth?: { origi
     });
     request.on("timeout", () => request.destroy(new Error("Source request timed out"))); request.on("error", reject); request.end();
   });
-  if (response.location) return safeDownload(new URL(response.location,url).href,maxBytes,auth,redirect+1);
+  if (response.location) return safeDownload(new URL(response.location,url).href,maxBytes,auth,redirect+1,allowDestination);
   if (response.status < 200 || response.status >= 300) throw new PipelineError("source_unreachable", "The source could not be retrieved.", "Check that the URL is public, or upload the file directly.", "needs_input");
   return {...response,url:url.href};
 }

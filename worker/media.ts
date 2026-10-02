@@ -51,7 +51,8 @@ export async function audioMeasurements(path: string) {
   return { loudness:match ? JSON.parse(match[0]) : null, silence:raw.split(/\r?\n/).filter(x => x.includes("silence_start") || x.includes("silence_end")) };
 }
 export async function doctor(workspace: string, skillRoot: string) {
-  const versions: Record<string,string> = {node:process.version,renderer:"video-studio-html-ffmpeg/1.0.0"};
+  const versions: Record<string,string> = {node:process.version,renderer:"video-studio-html-motion/2.0.0"};
+  for(const name of ["hyperframes","gsap"]) versions[name]=JSON.parse(await readFile(join(process.cwd(),"node_modules",name,"package.json"),"utf8")).version;
   versions.ffmpeg=(await command(ffmpeg,["-version"])).split(/\r?\n/)[0];
   versions.ffprobe=(await command(ffprobe,["-version"])).split(/\r?\n/)[0];
   const output = await command(process.env.PYTHON_PATH || "python3",["-X","utf8",join(skillRoot,"scripts","video_tool.py"),"doctor"]);

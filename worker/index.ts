@@ -8,7 +8,9 @@ import { safeDownload, safePath } from "./security";
 import { cancelCommands, command, doctor, frame, hash, json, probe, writeJson } from "./media";
 import { Providers } from "./providers";
 import { callbackAuth, ingest,type IngestDependencies } from "./ingest";
-import { makePlan, savePlan, validateTimeline } from "./planning";
+import { compilePlan, preparePlanRepair, savePlan, validateTimeline } from "./planning";
+import { researchProduct, stageDigest, stageFailure } from "./research";
+import { writeScript } from "./scripting";
 import { render } from "./render";
 import { quality, repairableFindings } from "./quality";
 import { assertCompatibleRuntime } from "./runtime";
@@ -71,10 +73,17 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   deadline();
   await hooks.state("reading",{stage:"ingest"});
   let evidence:Evidence;
-  try {evidence=await json<Evidence>(join(workspace,"analysis/evidence.json"));}catch{evidence=await ingest(input,workspace,providers,hooks,dependencies);}
-  deadline();await hooks.state("planning",{stage:"plan"});
+  try {evidence=await json<Evidence>(join(workspace,"analysis/evidence.json"));if(!evidence||typeof evidence.text!=="string"||!Array.isArray(evidence.assets))throw stageFailure("The retained source evidence is invalid.");}
+  catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(providers.ledger.modelCalls)throw stageFailure("The source evidence for previous paid work is missing.");evidence=await ingest(input,workspace,providers,hooks,dependencies);}
+  deadline();await hooks.state("reading",{stage:"research"});
+  const research=await researchProduct(input,evidence,providers,hooks,workspace);
+  deadline();await hooks.state("planning",{stage:"script",researchSha256:stageDigest(research)});
+  const script=await writeScript(input,evidence,research,providers,hooks,workspace);
+  deadline();
   let plan:Plan;
-  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length)throw new Error("Stored plan failed validation");}catch{if(repairBudget.consumed)throw new PipelineError("repair_plan_changed","The retained repaired plan failed timeline validation.","Ask the administrator to restore the last confirmed repaired plan; no new planning call was made.","needs_review");plan=await makePlan(input,evidence,providers,hooks,workspace);}
+  try{plan=await json<Plan>(join(workspace,"plan.json"));if(validateTimeline(plan).length||plan.production?.researchSha256!==stageDigest(research)||plan.production?.evidenceSha256!==research.evidenceSha256||(!repairBudget.consumed&&plan.production?.scriptSha256!==stageDigest(script)))throw stageFailure("The retained plan does not match its completed research and script.");}
+  catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(repairBudget.consumed)throw stageFailure("The repaired plan is missing.");plan=await compilePlan(input,evidence,script,hooks,workspace);}
+  await hooks.state("planning",{stage:"composition",scriptSha256:plan.production?.scriptSha256});
   if(!plan.audio.length) {
     const music=await providers.audio("music",plan.music_prompt,plan.output.duration_frames/30),sfx=await providers.audio("sfx",plan.sfx_prompt,1.2);
     const musicProbe=await probe(join(workspace,music)),sfxProbe=await probe(join(workspace,sfx));
@@ -90,14 +99,15 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
     const pass=repairBudget.consumed;
     deadline();await hooks.state("rendering",{stage:"render",repairPass:pass});
     try {draft=await render(plan,workspace,hooks,pass);}catch(error){
-      if(error instanceof PipelineError&&error.code==="copy_overflow"&&pass<repairMax) {const findings=[{severity:"major" as const,message:error.message,repair:"shorten_copy" as const}];plan=await repairBudget.execute("Shorten overflowing copy before rendering",()=>makePlan(input,evidence,providers,hooks,workspace,{plan,findings}));continue;}throw error;
+      if(error instanceof PipelineError&&error.code==="copy_overflow"&&pass<repairMax) {const findings=[{severity:"major" as const,message:error.message,repair:"shorten_copy" as const}];const repair=await preparePlanRepair(input,evidence,research,providers,hooks,workspace,{plan,findings});plan=await repairBudget.execute("Shorten overflowing copy before rendering",repair);continue;}throw error;
     }
     deadline();await hooks.state("checking",{stage:"quality",repairPass:pass,draft});
     qc=await quality(plan,evidence,draft,workspace,providers,hooks,repairBudget.descriptions);
     if(qc.passed)break;
     const repairable=repairableFindings(qc.findings);
     if(pass===repairMax||!repairable.length)throw new PipelineError("quality_failed","The video did not pass every required quality check.","The draft and specific quality findings were retained for the beta administrator.","needs_review");
-    plan=await repairBudget.execute(repairable.map(f=>f.message).join("; "),()=>makePlan(input,evidence,providers,hooks,workspace,{plan,findings:repairable}));
+    const repair=await preparePlanRepair(input,evidence,research,providers,hooks,workspace,{plan,findings:repairable});
+    plan=await repairBudget.execute(repairable.map(f=>f.message).join("; "),repair);
   }
   if(!qc?.passed)throw new PipelineError("quality_incomplete","The required checks could not complete.","The retained draft needs internal review.","needs_review");
   const videoPath="renders/final.mp4",posterPath="renders/poster.jpg";await copyFile(join(workspace,draft),join(workspace,videoPath));await frame(join(workspace,videoPath),join(workspace,posterPath),Math.min(2,plan.scenes[0].duration_frames/60),plan.output.width);
