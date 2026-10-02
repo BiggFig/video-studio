@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/pr
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { compileResearch, researchProduct, sourceFacts, stageDigest, validateResearch, type Research } from "./research";
-import { loadCompletedProductionStages, validateScript, writeScript, type Script } from "./scripting";
+import { compileScript, loadCompletedProductionStages, validateScript, writeScript, type Script } from "./scripting";
 import { compilePlan, prepareRetainedPlanRepair } from "./planning";
 import { Providers } from "./providers";
 import { RepairBudget } from "./repairs";
@@ -131,6 +131,42 @@ test("an insufficient-evidence script returns actionable needs_input before requ
   const research = await researchProduct(input, evidence, provider, hooks, root);
   await assert.rejects(writeScript(input, evidence, research, provider, hooks, root), error => error instanceof PipelineError && error.code === "insufficient_product_evidence" && error.status === "needs_input" && error.message.includes("no visible product workflow"));
   await assert.rejects(readFile(join(root, "analysis/script.json")));
+});
+
+test("pure script compilation bounds descriptive notes while preserving every visible, timing, source and audio field", () => {
+  const research = compileResearch(input, evidence, draft(), "d".repeat(64)), raw = { ...scriptDraft(), assumptions: ["Uncertainty and production notes. ".repeat(40)] };
+  raw.summary = "Non-rendered script explanation. ".repeat(30);
+  for (const scene of raw.scenes) { scene.purpose = "Narrative purpose. ".repeat(60); scene.referenceTechnique = "Supported motion description. ".repeat(40); }
+  const original = JSON.stringify(raw), compiled = compileScript(raw, input, evidence, research);
+  assert.equal(compiled.summary, raw.summary.slice(0, 500)); assert.deepEqual(compiled.assumptions, raw.assumptions.map(note => note.slice(0, 1000)));
+  assert.deepEqual(compiled.scenes, raw.scenes.map(scene => ({ ...scene, purpose: scene.purpose.slice(0, 800), referenceTechnique: scene.referenceTechnique.slice(0, 800) })));
+  assert.equal(compiled.product, raw.product); assert.equal(compiled.musicPrompt, raw.musicPrompt); assert.equal(compiled.sfxPrompt, raw.sfxPrompt);
+  assert.equal(compiled.accent, raw.accent); assert.equal(compiled.background, raw.background);
+  assert.equal(compiled.researchSha256, stageDigest(research)); assert.equal(compiled.evidenceSha256, research.evidenceSha256);
+  assert.equal(JSON.stringify(raw), original); validateScript(compiled, input, evidence, research);
+});
+
+test("generated script contract violations stay strict and actionable after metadata normalization", () => {
+  const research = compileResearch(input, evidence, draft(), "e".repeat(64));
+  const invalid = [
+    (raw: ReturnType<typeof scriptDraft>) => { raw.scenes[0].headline = "x".repeat(77); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.scenes[0].detail = "x".repeat(151); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.scenes[1].presentation.cards![0].title = "x".repeat(45); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.scenes[1].presentation.cards![0].body = "x".repeat(101); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.product = "x".repeat(49); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.scenes[0].durationSeconds = 301; },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.musicPrompt = "x".repeat(1001); },
+    (raw: ReturnType<typeof scriptDraft>) => { raw.sfxPrompt = "x".repeat(401); },
+  ];
+  for (const change of invalid) {
+    const raw = scriptDraft(); raw.summary = "Long harmless note. ".repeat(40); change(raw); const original = JSON.stringify(raw);
+    assert.throws(() => compileScript(raw, input, evidence, research), error => error instanceof PipelineError && error.code === "invalid_generated_script" && error.status === "needs_review" && error.action.includes("retained script response"));
+    assert.equal(JSON.stringify(raw), original);
+  }
+  const unknown = scriptDraft(); unknown.scenes[0].evidenceId = "fact-999";
+  assert.throws(() => compileScript(unknown, input, evidence, research), isStageFailure);
+  const altered = structuredClone(research); altered.facts[0].quote = "A rewritten claim";
+  assert.throws(() => compileScript(scriptDraft(), input, evidence, altered), /canonical source passage/);
 });
 
 test("retained raw repair is rebound to completed stages and persisted before its repaired plan is confirmed", async () => {
