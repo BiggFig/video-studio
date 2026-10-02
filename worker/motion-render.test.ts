@@ -28,6 +28,15 @@ test("brand removes only the repeated product line and cardless offers use the c
  // The layout transform belongs to the heading wrapper; GSAP animates its children.
  assert.match(html,/\.hook \.heading,\.offer-solo \.heading\{top:50%;transform:translateY\(-50%\)\}/);
 });
+test("compact feature cards require every body empty and never alter offers or mixed cards",()=>{
+ const plan=fixture();plan.scenes[3].presentation!.cards=[{title:"Links",body:"",evidenceId:"fact-1"},{title:"Graph",body:" \n ",evidenceId:"fact-2"},{title:"Plugins",body:"",evidenceId:"fact-3"}];
+ plan.scenes[4].presentation!.cards=[{title:"Verified free offer",body:"",evidenceId:"fact-4"}];
+ const sections=motionHtml(plan,{real:"assets/media-0.png"}).match(/<section\b[\s\S]*?<\/section>/g)!;
+ assert.match(sections[3],/class="cards  titles-only"/);assert.equal((sections[3].match(/<h2 data-essential>/g)||[]).length,3);assert.doesNotMatch(sections[3],/<p data-essential>/);assert.doesNotMatch(sections[4],/titles-only/);
+ plan.scenes[3].presentation!.cards![1].body="An actual supported detail.";
+ const mixed=motionHtml(plan,{real:"assets/media-0.png"}).match(/<section\b[\s\S]*?<\/section>/g)!;
+ assert.doesNotMatch(mixed[3],/titles-only/);assert.match(mixed[3],/<p data-essential>An actual supported detail\.<\/p>/);
+});
 test("generated seek API stays in the intended source frame after browser microsecond quantization",async()=>{
  const plan=fixture();plan.assets[0].kind="video";plan.scenes[2].source_in_seconds=1;
  const html=motionHtml(plan,{real:"assets/video.mp4"}),script=html.slice(html.lastIndexOf("<script>")+8,html.lastIndexOf("</script>"));
