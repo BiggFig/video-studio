@@ -13,14 +13,17 @@ import { geistFontBase64 } from '../worker/assets/geist-font';
 import { serveMotionProject } from '../worker/motion-render';
 import { motionBrowserArgs, motionBrowserPath } from '../worker/motion-browser';
 import { audioMeasurements, command, ffmpeg, frameIndex, hash, mediaEnvironment, probe, writeJson } from '../worker/media';
+import { writeExtremePercussion } from './launch-percussion';
 
 async function main() {
   const id = process.argv[2];
   if (!['linear', 'tally', 'todoist'].includes(id)) throw new Error('Choose linear, tally or todoist');
-  const mod = await import(pathToFileURL(resolve('studies', `launch-${id}.ts`)).href);
+  const extreme = process.argv.includes('--extreme');
+  const sourceName = `launch-${id}${extreme ? '-extreme' : ''}.ts`;
+  const mod = await import(pathToFileURL(resolve('studies', sourceName)).href);
   const study = mod[`${id}Study`] as MotionStudy;
   validateStudy(study); new Script(study.script);
-  const workspace = resolve('.local/launch-films-20261003', id), root = join(workspace, 'project');
+  const workspace = resolve(extreme ? '.local/launch-extreme-20261003' : '.local/launch-films-20261003', id), root = join(workspace, 'project');
   const html = studyHtml(study), finish = process.argv.includes('--finish');
   if (finish && await readFile(join(root, 'index.html'), 'utf8') !== html) throw new Error('Source changed; rerender before finishing');
   await mkdir(join(root, 'assets'), { recursive: true });
@@ -29,8 +32,8 @@ async function main() {
   await copyFile(createRequire(import.meta.url).resolve('gsap/dist/gsap.min.js'), join(root, 'assets/gsap.min.js'));
   await copyFile(resolve('worker/assets/Geist-LICENSE.txt'), join(root, 'assets/Geist-LICENSE.txt'));
   await writeFile(join(root, 'index.html'), html);
-  await copyFile(resolve('studies', `launch-${id}.ts`), join(workspace, 'authored-study.ts'));
-  const metadata = { id, title: study.title, width: study.width, height: study.height, fps: 30,
+  await copyFile(resolve('studies', sourceName), join(workspace, 'authored-study.ts'));
+  const metadata = { id, variant: extreme ? 'extreme' : 'original', title: study.title, width: study.width, height: study.height, fps: 30,
     durationFrames: study.durationFrames, durationSeconds: study.durationFrames / 30,
     renderer: 'Hyperframes 0.8.97 / GSAP 3.14.2 / trusted HTML', manuallyAuthored: true,
     automaticUrlGenerationVerified: false, sourcePixelsInGeneratedPicture: false,
@@ -76,6 +79,7 @@ async function main() {
       const log=await command(ffmpeg,['-hide_banner','-i',decoded,'-i',join(workspace,'frames',`html-${String(frame).padStart(4,'0')}.png`),'-filter_complex','[0:v]format=yuv420p[a];[1:v]format=yuv420p[b];[a][b]ssim','-frames:v','1','-f','null','-']);
       const ssim=Number(/All:([0-9.]+)/.exec(log)?.[1]); comparisons.push({frame,ssim,passed:Number.isFinite(ssim)&&ssim>=.97});
     }
+    await writeJson(join(workspace,'export-comparisons.json'),comparisons);
     if(comparisons.some(c=>!c.passed))throw new Error('Export differs from authored HTML');
     const musicManifest=JSON.parse(await readFile(join(workspace,'music.json'),'utf8'));
     const music=join(workspace,musicManifest.path);
@@ -91,18 +95,27 @@ async function main() {
     const lastStart=starts.at(-1), lastEnd=ends.at(-1);
     const trailing=lastStart!==undefined&&lastEnd!==undefined&&Math.abs(lastEnd-sourceProbe.duration)<.2&&duration-lastStart>1;
     const sourceEnd=trailing?Math.min(duration,lastStart+.12):duration;
-    const tempo=trailing?sourceEnd/(duration-.15):1;
+    const tempo=trailing && !extreme?sourceEnd/(duration-.15):1;
     if(tempo<.75||tempo>1)throw new Error('Score needs an authored audio repair beyond the bounded tempo fit');
     const audioFit={sourceEndSeconds:sourceEnd,tempo,pitchPreserved:true,trailingSilenceFitted:trailing,sourceMeasurements:sourceLevels};
-    await command(ffmpeg,['-v','error','-y','-i',picture,'-i',music,'-map','0:v:0','-map','1:a:0','-c:v','copy','-af',`atrim=duration=${sourceEnd},asetpts=PTS-STARTPTS,atempo=${tempo},apad,atrim=duration=${duration},afade=t=in:d=0.08,afade=t=out:st=${duration-.8}:d=0.8,loudnorm=I=-17:TP=-1.5:LRA=9`,'-c:a','aac','-b:a','192k','-ar','48000','-t',String(duration),'-movflags','+faststart',output]);
+    let percussion;
+    if (extreme) {
+      percussion = await writeExtremePercussion(workspace, id, duration);
+      await command(ffmpeg,['-v','error','-y','-i',picture,'-i',music,'-i',percussion.path,
+        '-filter_complex',`[1:a]atrim=duration=${sourceEnd},asetpts=PTS-STARTPTS,apad,atrim=duration=${duration},loudnorm=I=-15:TP=-2:LRA=7[m];[2:a]volume=0.75[p];[m][p]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.9:level=false,afade=t=in:d=0.008,afade=t=out:st=${duration-.18}:d=0.18,loudnorm=I=-12:TP=-1.5:LRA=6[a]`,
+        '-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-b:a','256k','-ar','48000','-t',String(duration),'-movflags','+faststart',output]);
+    } else {
+      await command(ffmpeg,['-v','error','-y','-i',picture,'-i',music,'-map','0:v:0','-map','1:a:0','-c:v','copy','-af',`atrim=duration=${sourceEnd},asetpts=PTS-STARTPTS,atempo=${tempo},apad,atrim=duration=${duration},afade=t=in:d=0.08,afade=t=out:st=${duration-.8}:d=0.8,loudnorm=I=-17:TP=-1.5:LRA=9`,'-c:a','aac','-b:a','192k','-ar','48000','-t',String(duration),'-movflags','+faststart',output]);
+    }
     const final=await probe(output); await command(ffmpeg,['-v','error','-xerror','-i',output,'-f','null','-']);
     if(!final.audio||Number(final.video?.nb_frames)!==study.durationFrames||Math.abs(final.duration-duration)>.1)throw new Error('Final audiovisual metadata mismatch');
     const levels=await audioMeasurements(output);
     if(!levels.loudness||!Number.isFinite(Number(levels.loudness.input_i))||Number(levels.loudness.input_tp)>-.5)throw new Error('Invalid final soundtrack levels');
-    const posterFrame: Record<string,number> = {linear:395,tally:555,todoist:408};
+    if(extreme&&(Number(levels.loudness.input_i)<-14||Number(levels.loudness.input_i)>-10||levels.silence.length||Number(final.audio.channels)!==2))throw new Error('Extreme mix failed loudness, continuity or stereo check');
+    const posterFrame: Record<string,number> = extreme ? {linear:30,tally:30,todoist:30} : {linear:395,tally:555,todoist:408};
     await frameIndex(output,join(workspace,'poster.jpg'),posterFrame[id],1920);
-    await writeJson(join(workspace,'qc.json'),{technicalPassed:true,decoded:true,comparisons,levels,audioFit,deterministicChecks:checks,auditoryReviewPerformed:false,semanticVisualReview:'Separate human/agent review required; export SSIM compares HTML with encoded pixels only.'});
-    await writeJson(join(workspace,'result.json'),{...metadata,status:'authored_launch_film',technicalPassed:true,videoPath:output,sha256:await hash(output),audioSource:musicManifest,audioFit,automaticAcceptancePassed:false});
+    await writeJson(join(workspace,'qc.json'),{technicalPassed:true,decoded:true,comparisons,levels,audioFit,percussion,deterministicChecks:checks,auditoryReviewPerformed:false,semanticVisualReview:'Separate human/agent review required; export SSIM compares HTML with encoded pixels only.'});
+    await writeJson(join(workspace,'result.json'),{...metadata,status:'authored_launch_film',technicalPassed:true,videoPath:output,sha256:await hash(output),audioSource:musicManifest,audioFit,percussion,automaticAcceptancePassed:false});
   }
   console.log(JSON.stringify({id,workspace,frames:study.durationFrames,rendered:process.argv.includes('--render')||finish}));
 }
