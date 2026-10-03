@@ -19,11 +19,13 @@ async function main() {
   const id = process.argv[2];
   if (!['linear', 'tally', 'todoist'].includes(id)) throw new Error('Choose linear, tally or todoist');
   const extreme = process.argv.includes('--extreme');
-  const sourceName = `launch-${id}${extreme ? '-extreme' : ''}.ts`;
+  const motion = process.argv.includes('--motion');
+  if (extreme && motion) throw new Error('Choose one film variant');
+  const sourceName = `launch-${id}${motion ? '-motion' : extreme ? '-extreme' : ''}.ts`;
   const mod = await import(pathToFileURL(resolve('studies', sourceName)).href);
   const study = mod[`${id}Study`] as MotionStudy;
   validateStudy(study); new Script(study.script);
-  const workspace = resolve(extreme ? '.local/launch-extreme-20261003' : '.local/launch-films-20261003', id), root = join(workspace, 'project');
+  const workspace = resolve(motion ? '.local/launch-motion-20261003' : extreme ? '.local/launch-extreme-20261003' : '.local/launch-films-20261003', id), root = join(workspace, 'project');
   const html = studyHtml(study), finish = process.argv.includes('--finish');
   if (finish && await readFile(join(root, 'index.html'), 'utf8') !== html) throw new Error('Source changed; rerender before finishing');
   await mkdir(join(root, 'assets'), { recursive: true });
@@ -33,7 +35,7 @@ async function main() {
   await copyFile(resolve('worker/assets/Geist-LICENSE.txt'), join(root, 'assets/Geist-LICENSE.txt'));
   await writeFile(join(root, 'index.html'), html);
   await copyFile(resolve('studies', sourceName), join(workspace, 'authored-study.ts'));
-  const metadata = { id, variant: extreme ? 'extreme' : 'original', title: study.title, width: study.width, height: study.height, fps: 30,
+  const metadata = { id, variant: motion ? 'motion' : extreme ? 'extreme' : 'original', title: study.title, width: study.width, height: study.height, fps: 30,
     durationFrames: study.durationFrames, durationSeconds: study.durationFrames / 30,
     renderer: 'Hyperframes 0.8.97 / GSAP 3.14.2 / trusted HTML', manuallyAuthored: true,
     automaticUrlGenerationVerified: false, sourcePixelsInGeneratedPicture: false,
@@ -54,12 +56,19 @@ async function main() {
     const seek = (frame:number) => page.evaluate(n => (window as unknown as {__studio:{seekFrame(n:number):Promise<void>}}).__studio.seekFrame(n), frame);
     for (const frame of samples) { await seek(frame); await page.screenshot({path:join(workspace,'frames',`html-${String(frame).padStart(4,'0')}.png`)}); }
     for (const frame of [0, samples[Math.floor(samples.length / 2)], study.durationFrames - 1]) {
-      await seek(frame); const before = createHash('sha256').update(await page.screenshot()).digest('hex');
+      await seek(frame); const beforeImage = await page.screenshot();
       await seek(frame === 0 ? study.durationFrames - 1 : 0); await seek(frame);
-      checks.push({frame, deterministic: before === createHash('sha256').update(await page.screenshot()).digest('hex')});
+      const afterImage = await page.screenshot();
+      const deterministic = createHash('sha256').update(beforeImage).digest('hex') === createHash('sha256').update(afterImage).digest('hex');
+      checks.push({frame, deterministic});
+      if (!deterministic) {
+        await writeFile(join(workspace,'frames',`rewind-${frame}-before.png`),beforeImage);
+        await writeFile(join(workspace,'frames',`rewind-${frame}-after.png`),afterImage);
+      }
     }
-    if (errors.length || checks.some(c => !c.deterministic)) throw new Error(JSON.stringify({errors,checks}));
-    await writeJson(join(workspace,'preflight.json'),{passed:true,errors,checks,samples});
+    const passed = !errors.length && checks.every(c => c.deterministic);
+    await writeJson(join(workspace,'preflight.json'),{passed,errors,checks,samples});
+    if (!passed) throw new Error(JSON.stringify({errors,checks}));
   } finally { await browser?.close(); await server.close(); }
   if (process.argv.includes('--render') || finish) {
     const picture = join(workspace, 'picture.mp4');
@@ -81,6 +90,31 @@ async function main() {
     }
     await writeJson(join(workspace,'export-comparisons.json'),comparisons);
     if(comparisons.some(c=>!c.passed))throw new Error('Export differs from authored HTML');
+    if (motion) {
+      // Hold the soundtrack constant so this comparison isolates visual direction.
+      // Reuse the shipped AAC stream without new provider calls or re-encoding.
+      const audioSource = resolve('public/launch-tests/media', `${id}-extreme.mp4`);
+      const audioSourceSha256 = await hash(audioSource);
+      const source = await probe(audioSource), duration = study.durationFrames / 30;
+      if (!source.audio || Math.abs(source.duration - duration) > .1) throw new Error('Motion comparison requires matching source audio duration');
+      const output = join(workspace, 'final.mp4');
+      await command(ffmpeg, ['-v','error','-y','-i',picture,'-i',audioSource,'-map','0:v:0','-map','1:a:0','-c','copy','-t',String(duration),'-movflags','+faststart',output]);
+      const final = await probe(output);
+      await command(ffmpeg, ['-v','error','-xerror','-i',output,'-f','null','-']);
+      if (!final.audio || Number(final.video?.nb_frames) !== study.durationFrames || Math.abs(final.duration-duration) > .1) throw new Error('Motion export metadata mismatch');
+      const audioHash = async (path: string) => (await command(ffmpeg,['-v','error','-i',path,'-map','0:a:0','-c','copy','-f','hash','-hash','SHA256','-'])).trim();
+      const sourceAudioHash = await audioHash(audioSource), finalAudioHash = await audioHash(output);
+      if (sourceAudioHash !== finalAudioHash || !/^SHA256=[a-f0-9]{64}$/.test(finalAudioHash)) throw new Error('Retained soundtrack bytes changed');
+      const levels = await audioMeasurements(output);
+      if (!levels.loudness || !Number.isFinite(Number(levels.loudness.input_i)) || Number(levels.loudness.input_tp) > -.5) throw new Error('Invalid retained soundtrack levels');
+      const posterFrame: Record<string,number> = {linear:22,tally:55,todoist:30};
+      await frameIndex(output, join(workspace,'poster.jpg'),posterFrame[id],1920);
+      const reusedAudio = {path:audioSource,sha256:audioSourceSha256,aacSha256:finalAudioHash.slice(7),byteIdentical:true,mode:'AAC stream copy from previous extreme cut',newProviderCalls:0};
+      await writeJson(join(workspace,'qc.json'),{technicalPassed:true,decoded:true,comparisons,levels,reusedAudio,deterministicChecks:checks,auditoryReviewPerformed:false,semanticVisualReview:'Separate muted sequence review required; export SSIM measures renderer fidelity only.'});
+      await writeJson(join(workspace,'result.json'),{...metadata,status:'authored_launch_film',technicalPassed:true,videoPath:output,sha256:await hash(output),reusedAudio,automaticAcceptancePassed:false});
+      console.log(JSON.stringify({id,workspace,frames:study.durationFrames,rendered:true}));
+      return;
+    }
     const musicManifest=JSON.parse(await readFile(join(workspace,'music.json'),'utf8'));
     const music=join(workspace,musicManifest.path);
     if(await hash(music)!==musicManifest.sha256)throw new Error('Music source hash changed');
