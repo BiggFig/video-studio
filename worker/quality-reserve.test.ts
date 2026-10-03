@@ -288,6 +288,32 @@ test("multi-source proof, real logo and connection copy reach their actual QC ba
   assert.throws(()=>qualitySceneVisibility(request.plan,request.motion),/contradicts/);
 });
 
+test("QC batches retain omitted wide-logo metadata without adding a source image or requiring visible pixels", () => {
+  const value=fixture(1),scene=value.plan.scenes[0],logo=asset("logo",630,110);
+  value.plan.assets.push(logo);
+  value.plan.brand={logoAssetId:logo.id,background:"#111111",foreground:"#ffffff",accent:"#8855cc",sourceUrl:"https://example.com"};
+  scene.presentation={template:"cta",theme:"dark",transition:"cut"};
+  scene.direction={version:2,job:"cta",motion:"hold"};
+  const samples=[{sceneId:scene.id,path:"actual-hold.jpg",label:"ACTUAL RENDER reading hold"}];
+  const batch=reviewBatch(value.plan,samples),visibility=qualitySceneVisibility(batch.plan,batch.motion)[0];
+  assert.deepEqual(batch.plan.assets.find(a=>a.id===logo.id),logo);
+  assert.equal(visibility.requiredLogoAssetId,null);
+  assert.deepEqual(visibility.requiredProofAssetIds,[]);
+  assert.equal(visibility.expectedVisibleCopy.product,value.plan.product);
+  assert.equal(batch.images.length,2); // One rendered sample and the scene's grounding source.
+  assert.ok(!batch.images.some(image=>image.path===logo.path));
+  // Losing the metadata would reproduce the original false visible-logo demand.
+  assert.equal(qualitySceneVisibility({...batch.plan,assets:batch.plan.assets.filter(a=>a.id!==logo.id)},batch.motion)[0].requiredLogoAssetId,logo.id);
+  scene.direction.version=1;
+  const legacy=reviewBatch(value.plan,samples);
+  assert.equal(qualitySceneVisibility(legacy.plan,legacy.motion)[0].requiredLogoAssetId,logo.id);
+  assert.ok(legacy.images.some(image=>image.path===logo.path));
+  scene.direction.version=2;logo.width=110;
+  const icon=reviewBatch(value.plan,samples);
+  assert.equal(qualitySceneVisibility(icon.plan,icon.motion)[0].requiredLogoAssetId,logo.id);
+  assert.ok(icon.images.some(image=>image.path===logo.path));
+});
+
 test("new story repair reserve includes two originals per scene and an observed logo outside research visuals", async t => {
   environment(t);const value=fixture(2),claim={text:"Use the product",basis:"explicit" as const,evidenceIds:["fact-1"]};
   value.plan.story={primaryAudience:claim,problem:claim,mechanism:{...claim,steps:[{action:"Use it",assetId:"old-small",evidenceId:"fact-1"}]},outcome:claim,differentiator:claim,cta:claim};

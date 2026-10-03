@@ -21,6 +21,7 @@ export default function ComparisonsPage() {
       <p className={styles.eyebrow}>Reference studies · October 2026</p>
       <h1>See the motion.<br />Compare the details.</h1>
       <p className={styles.intro}>Four references alongside our reconstructions. The original is on the left; our HTML engine is on the right.</p>
+      <p className={styles.intro}><a href="/launch-tests">Watch the three new launch films →</a></p>
       <nav aria-label="Choose a comparison" className={styles.navigation}>{studies.map(study => <a key={study.id} href={`#${study.id}`}>{study.name}<span aria-hidden="true">↘</span></a>)}</nav>
     </header>
     <div className={styles.studies}>{studies.map((study, index) => <section key={study.id} id={study.id} className={styles.study} aria-labelledby={`${study.id}-title`}>
