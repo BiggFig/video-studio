@@ -1,0 +1,636 @@
+[
+  {
+    "id": "interface-slack-direct",
+    "advertiser": "Slack",
+    "title": "Slackbot: icon to weekly recap",
+    "sourceType": "direct-meta",
+    "sourceUrl": "https://www.facebook.com/ads/library/?id=1787295452461737",
+    "durationSeconds": 15.017,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Meta card displayed Active; Library ID 1787295452461737; started Sep 1, 2026. This is an observation, not a performance claim.",
+    "hook": {
+      "type": "demonstration",
+      "description": "A cursor approaches the Slack icon; colored logo pieces lift and a real purple app window rises into the same focal area before one second.",
+      "startSeconds": 0,
+      "endSeconds": 1.75
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 0.75,
+        "title": "Open the product",
+        "visual": "Slack app icon on pale lilac, followed by the purple desktop window.",
+        "motion": "Cursor approach, logo breakup and upward window reveal.",
+        "purpose": "Recognizable brand action replaces a static logo slate."
+      },
+      {
+        "id": "s0-75",
+        "startSeconds": 0.75,
+        "endSeconds": 4.75,
+        "title": "Enter a personal workspace",
+        "visual": "App shell fills with Slackbot greeting and a small existing-context card.",
+        "motion": "Window settles, content resolves, then a rapid push-in.",
+        "purpose": "Connect the opening icon to the working product."
+      },
+      {
+        "id": "s4-75",
+        "startSeconds": 4.75,
+        "endSeconds": 6.5,
+        "title": "Put the request above its user",
+        "visual": "Split composition: executive interview below, a card carrying her weekly-recap request above.",
+        "motion": "Hard cut into split layout; text appears inside a persistent request card.",
+        "purpose": "Attach a concrete task to a visible practitioner."
+      },
+      {
+        "id": "s6-5",
+        "startSeconds": 6.5,
+        "endSeconds": 8.25,
+        "title": "Show the process",
+        "visual": "Request remains while a channel-scanning indicator and Slackbot motif appear.",
+        "motion": "Small progress-state animation above the interview; no full-screen wipe.",
+        "purpose": "Bridge request to result without implying the result appeared before the request."
+      },
+      {
+        "id": "s8-25",
+        "startSeconds": 8.25,
+        "endSeconds": 10.5,
+        "title": "Deliver the same request",
+        "visual": "A weekly team recap skill card replaces the process, followed by a cursor using it and a phone view below.",
+        "motion": "Card replacement, cursor interaction, lower-panel cut to mobile.",
+        "purpose": "Make the output object the focal point and show its use."
+      },
+      {
+        "id": "s10-5",
+        "startSeconds": 10.5,
+        "endSeconds": 12.25,
+        "title": "Human montage to brand",
+        "visual": "Brief cuts through other people working, then the Salesforce mark.",
+        "motion": "Fast live-action cuts and logo transition.",
+        "purpose": "Broaden the situation after proof."
+      },
+      {
+        "id": "s12-25",
+        "startSeconds": 12.25,
+        "endSeconds": 15.017,
+        "title": "Destination",
+        "visual": "Slack lockup, product URL and a purple get-started control.",
+        "motion": "Text and CTA resolve, then hold.",
+        "purpose": "Give one clear next step."
+      }
+    ],
+    "mechanism": "The opening object becomes the app; the central request card then becomes the output card. Motion preserves a chain of meaning while the surrounding composition changes.",
+    "howWeApply": [
+      "Todoist: keep the same sentence/task visible through recognition, click and Inbox result.",
+      "Tally: transform one meaningful form field into its saved response object.",
+      "Do not copy the testimonial, claimed ROI or branded logo animation."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-slack-direct.jpg",
+      "alt": "Slack ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; Meta Ad Library 1787295452461737. Full clip remains private research material."
+    },
+    "metaLibraryUrl": "https://www.facebook.com/ads/library/?id=1787295452461737"
+  },
+  {
+    "id": "interface-figma-options",
+    "advertiser": "Figma",
+    "title": "One app, collaborative edits, chosen result",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/figma",
+    "durationSeconds": 30.101,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Motion archive labels this creative Active. Current Meta delivery and performance were not independently verified.",
+    "hook": {
+      "type": "demonstration",
+      "description": "A finished recipe app is already visible. Short action verbs accumulate above it while the app moves toward the camera; the opening is proof plus editing momentum.",
+      "startSeconds": 0,
+      "endSeconds": 2.75
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 2.5,
+        "title": "Result first",
+        "visual": "Recipe app preview floats over code panels on a dark ground; action-word heading accumulates.",
+        "motion": "Sequential word highlighting, scrolling preview and an enlarging cursor.",
+        "purpose": "Show what can be made before explaining tools.",
+        "copy": "Prompt, riff, align, and ship."
+      },
+      {
+        "id": "s2-5",
+        "startSeconds": 2.5,
+        "endSeconds": 4.5,
+        "title": "Enter the working file",
+        "visual": "Camera closes on the app toolbar and an open-file control.",
+        "motion": "Strong push-in follows the cursor; browser chrome drops away.",
+        "purpose": "Turn the advertised result into a working design object."
+      },
+      {
+        "id": "s4-5",
+        "startSeconds": 4.5,
+        "endSeconds": 8.5,
+        "title": "Explore together",
+        "visual": "The same phone design expands into three alternatives, with named collaborator cursors.",
+        "motion": "Pull back, duplicate and fan designs; cursors travel to different variants.",
+        "purpose": "Visualize collaboration and variation without changing the core product object."
+      },
+      {
+        "id": "s8-5",
+        "startSeconds": 8.5,
+        "endSeconds": 12.5,
+        "title": "A visible local edit",
+        "visual": "Macro crop of a cake illustration and edit controls.",
+        "motion": "Cursor removes its background, then selects vectorization; the illustration changes.",
+        "purpose": "Keep cause and changed pixels adjacent."
+      },
+      {
+        "id": "s12-5",
+        "startSeconds": 12.5,
+        "endSeconds": 16.5,
+        "title": "Second edit and screen",
+        "visual": "A food image expands; camera moves across to a share-dialog design.",
+        "motion": "Vertical image expansion followed by a lateral camera traverse.",
+        "purpose": "Vary the camera because the task focus changes."
+      },
+      {
+        "id": "s16-5",
+        "startSeconds": 16.5,
+        "endSeconds": 23,
+        "title": "Return edited designs to the workflow",
+        "visual": "Three app screens gather and an explicit send-to-Make action appears; the app views reconfigure.",
+        "motion": "Pull-back, click emphasis, overlapping slides and reorder.",
+        "purpose": "Close the loop from editing to an implemented preview."
+      },
+      {
+        "id": "s23",
+        "startSeconds": 23,
+        "endSeconds": 26.5,
+        "title": "Make a choice",
+        "visual": "A board contains three alternatives; one is selected with a note.",
+        "motion": "Camera zooms into the chosen option; a note lands on that design.",
+        "purpose": "Show convergence after divergence."
+      },
+      {
+        "id": "s26-5",
+        "startSeconds": 26.5,
+        "endSeconds": 30.101,
+        "title": "Close with the product",
+        "visual": "Return to dark app-and-code composition, then Figma mark.",
+        "motion": "Match return to opening arrangement; short logo end card.",
+        "purpose": "Reinforce the journey and identity."
+      }
+    ],
+    "mechanism": "Object continuity supplies orientation across unusually large camera changes: result → editable asset → variations → edit → selected result.",
+    "howWeApply": [
+      "Todoist: hook on a meaningful task object, then camera follows its date, time and priority rather than decorative orbiting.",
+      "Tally: use a changed field/response as the transition anchor.",
+      "Reserve wide views for orientation and macro views for real actions."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement.",
+        "A second downloaded Figma file is an aspect-ratio variant of this same creative and was excluded from the six-reference count."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-figma-options.jpg",
+      "alt": "Figma ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; source: Motion public Figma ad archive. Full clip remains private research material."
+    }
+  },
+  {
+    "id": "interface-figma-team-skit",
+    "advertiser": "Figma",
+    "title": "Conversation to a working site",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/figma",
+    "durationSeconds": 15.039,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Motion archive labels this creative Active. Current Meta delivery and performance were not independently verified.",
+    "hook": {
+      "type": "curiosity",
+      "description": "A living-room conversation is interrupted by a decisive move to the laptop around two seconds; the unknown idea becomes visible design work immediately afterward.",
+      "startSeconds": 0,
+      "endSeconds": 2.5
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 2,
+        "title": "An idea in the room",
+        "visual": "Two people sit talking in a living room.",
+        "motion": "Subtle handheld framing and human gesture.",
+        "purpose": "Set up an everyday collaboration situation; spoken premise was not audited."
+      },
+      {
+        "id": "s2",
+        "startSeconds": 2,
+        "endSeconds": 3.5,
+        "title": "Act on the idea",
+        "visual": "A person pulls the laptop forward; the next shot shows two animal-logo sketches in Figma.",
+        "motion": "Action cut from person to screen.",
+        "purpose": "Convert conversation into tangible design evidence."
+      },
+      {
+        "id": "s3-5",
+        "startSeconds": 3.5,
+        "endSeconds": 5.75,
+        "title": "Build in quick details",
+        "visual": "Close shots alternate between hands, a collaborator face, and a poster layout.",
+        "motion": "Short hard cuts with tight crops.",
+        "purpose": "Show effort and progress through distinct useful details."
+      },
+      {
+        "id": "s5-75",
+        "startSeconds": 5.75,
+        "endSeconds": 7.5,
+        "title": "Prompt and reaction",
+        "visual": "Figma prompt interface appears, followed by a person reacting.",
+        "motion": "Cut to readable prompt area, then close-up reaction.",
+        "purpose": "Bridge an idea to a generated artifact without requiring long explanatory text."
+      },
+      {
+        "id": "s7-5",
+        "startSeconds": 7.5,
+        "endSeconds": 9.75,
+        "title": "Working destination",
+        "visual": "Laptop shows a complete nickname-themed site with heading and input.",
+        "motion": "Cut to site, small camera motion and a brief readable hold.",
+        "purpose": "Reveal the actual output as payoff."
+      },
+      {
+        "id": "s9-75",
+        "startSeconds": 9.75,
+        "endSeconds": 11.75,
+        "title": "Finished gesture",
+        "visual": "Laptop closes; its sticker stays in view.",
+        "motion": "Physical closure matches narrative closure.",
+        "purpose": "Signal completion with a real object action."
+      },
+      {
+        "id": "s11-75",
+        "startSeconds": 11.75,
+        "endSeconds": 15.039,
+        "title": "Identity",
+        "visual": "Figma mark on black.",
+        "motion": "Hard cut, static hold.",
+        "purpose": "Brand close."
+      }
+    ],
+    "mechanism": "Physical action motivates every cut: idea spoken, laptop pulled in, work performed, site revealed, laptop shut. The hook does not need unrelated animation.",
+    "howWeApply": [
+      "Todoist: make the opening obstruction clear because the task enters the product, not as decorative footage.",
+      "Linear: a real issue-state change can motivate a camera cut as decisively as the laptop movement."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement.",
+        "The opening depends on unaudited dialogue; no claim is made about its effectiveness when muted."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-figma-team-skit.jpg",
+      "alt": "Figma ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; source: Motion public Figma ad archive. Full clip remains private research material."
+    }
+  },
+  {
+    "id": "interface-grammarly-paper",
+    "advertiser": "Grammarly",
+    "title": "Paper obstruction to applied rewrite",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/grammarly",
+    "durationSeconds": 17.045,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Motion archive labels this creative Active. Current Meta delivery and performance were not independently verified.",
+    "hook": {
+      "type": "problem",
+      "description": "A sheet held across the lens tears away during the first half second, revealing the speaker while a concise writing-friction subtitle remains visible.",
+      "startSeconds": 0,
+      "endSeconds": 0.75
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 0.5,
+        "title": "Tear away the obstruction",
+        "visual": "Notebook paper blocks most of a speaker; it is pulled/torn away.",
+        "motion": "Fast physical foreground wipe.",
+        "purpose": "Create immediate visible change related to writing."
+      },
+      {
+        "id": "s0-5",
+        "startSeconds": 0.5,
+        "endSeconds": 3,
+        "title": "Name the friction",
+        "visual": "Speaker talks directly to camera with one problem subtitle.",
+        "motion": "Tight handheld portrait and small gestures.",
+        "purpose": "Give the attention-grab a relevant problem."
+      },
+      {
+        "id": "s3",
+        "startSeconds": 3,
+        "endSeconds": 5.75,
+        "title": "Identify the tool",
+        "visual": "Laptop views show Grammarly and writing-assistance feature cards.",
+        "motion": "Hard cuts, physical push-in and small camera sway.",
+        "purpose": "Move from problem to actual software rather than a long slogan."
+      },
+      {
+        "id": "s5-75",
+        "startSeconds": 5.75,
+        "endSeconds": 8.5,
+        "title": "Enter the writing",
+        "visual": "Email composition is selected and a writing-assistant panel opens.",
+        "motion": "Cut to the message, cursor selection, tool panel appears.",
+        "purpose": "Locate the precise text being improved."
+      },
+      {
+        "id": "s8-5",
+        "startSeconds": 8.5,
+        "endSeconds": 11.75,
+        "title": "Apply the result",
+        "visual": "A rewrite suggestion is shown and accepted; changed email text remains visible.",
+        "motion": "Panel-to-text change inside the same email crop.",
+        "purpose": "Demonstrate completion instead of stopping at a suggestion."
+      },
+      {
+        "id": "s11-75",
+        "startSeconds": 11.75,
+        "endSeconds": 17.045,
+        "title": "Single CTA",
+        "visual": "Grammarly logo and a green download control on black.",
+        "motion": "Simple entrance and a long end hold.",
+        "purpose": "Clear action, though the hold is longer than our short-film target.",
+        "copy": "Download for Free"
+      }
+    ],
+    "mechanism": "The hook is a content-relevant obstruction/removal, followed quickly by a small but complete before/action/after proof.",
+    "howWeApply": [
+      "Todoist: use a legible thought block that clears into the same task sentence.",
+      "Keep our authentic recognition and saved Inbox row; do not replace proof with a reveal alone.",
+      "Borrow the interruption and semantic handoff, not the speaker, paper footage or claims."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-grammarly-paper.jpg",
+      "alt": "Grammarly ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; source: Motion public Grammarly ad archive. Full clip remains private research material."
+    }
+  },
+  {
+    "id": "interface-canva-workshop",
+    "advertiser": "Canva",
+    "title": "A spoon workshop becomes a poster",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/canva",
+    "durationSeconds": 35.27,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Motion archive labels this creative Active. Current Meta delivery and performance were not independently verified.",
+    "hook": {
+      "type": "outcome",
+      "description": "Hands carve a spoon, then the finished spoon is held toward the lens; the creator pivots to making the workshop poster. The viewer sees the purpose before software.",
+      "startSeconds": 0,
+      "endSeconds": 3
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 1.25,
+        "title": "Show the real work",
+        "visual": "Close view of a woodcarving tool and spoon on a workbench.",
+        "motion": "Hand action and tight crop.",
+        "purpose": "Start with the audience’s activity, not a software logo."
+      },
+      {
+        "id": "s1-25",
+        "startSeconds": 1.25,
+        "endSeconds": 4,
+        "title": "Connect object to need",
+        "visual": "Finished spoon is presented; creator turns toward laptop and poster-making heading appears.",
+        "motion": "Object approaches lens, then gesture-led turn.",
+        "purpose": "Tie the design task to a concrete event."
+      },
+      {
+        "id": "s4",
+        "startSeconds": 4,
+        "endSeconds": 9.5,
+        "title": "Gather visual direction",
+        "visual": "Creator at a table; several inspiration posters overlay the shot.",
+        "motion": "Hard cut; reference images appear sequentially then clear.",
+        "purpose": "Explain what the following design is based on."
+      },
+      {
+        "id": "s9-5",
+        "startSeconds": 9.5,
+        "endSeconds": 17.5,
+        "title": "Bring an image into the editor",
+        "visual": "Laptop shows Canva, an inspiration poster and separate selected components.",
+        "motion": "Push from wide laptop view to screen; selection outlines reveal parts.",
+        "purpose": "Demonstrate the relevant editing mechanism."
+      },
+      {
+        "id": "s17-5",
+        "startSeconds": 17.5,
+        "endSeconds": 23.5,
+        "title": "Make it the creator’s own",
+        "visual": "Poster typography and color change; a spoon graphic replaces the central illustration.",
+        "motion": "Edits remain on one persistent canvas; camera cuts closer.",
+        "purpose": "Keep the visual identity of the work while showing meaningful customization."
+      },
+      {
+        "id": "s23-5",
+        "startSeconds": 23.5,
+        "endSeconds": 29,
+        "title": "Finish and animate",
+        "visual": "The blue spoon-workshop poster is adjusted and animated in the editor.",
+        "motion": "Small changes followed by a larger final poster view.",
+        "purpose": "Show a completed artifact after the edit sequence."
+      },
+      {
+        "id": "s29",
+        "startSeconds": 29,
+        "endSeconds": 32.75,
+        "title": "Show the output at useful scale",
+        "visual": "Final poster overlays the returning creator.",
+        "motion": "Large centered artifact replaces tiny editor view.",
+        "purpose": "Let the viewer read the result."
+      },
+      {
+        "id": "s32-75",
+        "startSeconds": 32.75,
+        "endSeconds": 35.27,
+        "title": "Invitation and tool CTA",
+        "visual": "Creator gestures with a try-the-feature prompt and event invitation.",
+        "motion": "Overlay clears to the person; short end gesture.",
+        "purpose": "Close on the original real-world purpose."
+      }
+    ],
+    "mechanism": "Purpose → original material → working canvas → customized deliverable. The object introduced in the hook returns inside the final output.",
+    "howWeApply": [
+      "Tally: begin with a concrete event/signup need, then let the same details become the form and response.",
+      "Todoist: preserve one thought all the way to the scheduled task; do not rotate through unrelated sample tasks."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement.",
+        "Fine editor text is too small to transcribe reliably; observed changes are described at the visible-object level."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-canva-workshop.jpg",
+      "alt": "Canva ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; source: Motion public Canva ad archive. Full clip remains private research material."
+    }
+  },
+  {
+    "id": "interface-canva-prompt-design",
+    "advertiser": "Canva",
+    "title": "Finished poster first, editable proof second",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/canva",
+    "durationSeconds": 44.277611,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Motion archive labels this creative Active. Current Meta delivery and performance were not independently verified.",
+    "hook": {
+      "type": "outcome",
+      "description": "A dramatic finished poster occupies the frame immediately. Its planes separate, then editor selection bounds appear and the headline becomes editable within the first three seconds.",
+      "startSeconds": 0,
+      "endSeconds": 3.25
+    },
+    "scenes": [
+      {
+        "id": "s0",
+        "startSeconds": 0,
+        "endSeconds": 1,
+        "title": "Reveal the finished artifact",
+        "visual": "A cinematic portrait poster with bold red type fills the view; foreground planes separate slightly.",
+        "motion": "Short depth/fan reveal then flattening.",
+        "purpose": "Present a desirable output before the process."
+      },
+      {
+        "id": "s1",
+        "startSeconds": 1,
+        "endSeconds": 3.5,
+        "title": "Prove editability",
+        "visual": "Same poster in Canva; text and image are selected and the headline changes.",
+        "motion": "Selection rectangles and direct text edit.",
+        "purpose": "Make the output feel controllable, not merely generated."
+      },
+      {
+        "id": "s3-5",
+        "startSeconds": 3.5,
+        "endSeconds": 6.5,
+        "title": "Second artifact, same affordance",
+        "visual": "Another cinematic poster appears with selected portrait elements and type controls.",
+        "motion": "Match cut to a second design; zoom out to app window.",
+        "purpose": "Show the same editing mechanism on a different artifact."
+      },
+      {
+        "id": "s6-5",
+        "startSeconds": 6.5,
+        "endSeconds": 9.5,
+        "title": "Return to the beginning",
+        "visual": "Browser URL and Canva home interface are shown.",
+        "motion": "Quick application-window replacement and push-in.",
+        "purpose": "Rewind from result to a reproducible starting point."
+      },
+      {
+        "id": "s9-5",
+        "startSeconds": 9.5,
+        "endSeconds": 15,
+        "title": "Prompt to options",
+        "visual": "Prompt is entered; response with several poster options appears; camera picks one.",
+        "motion": "Text entry, generated-results reveal and a quick push into an option.",
+        "purpose": "Connect the initial output to a request."
+      },
+      {
+        "id": "s15",
+        "startSeconds": 15,
+        "endSeconds": 24.5,
+        "title": "Edit the chosen poster",
+        "visual": "Persistent poster canvas; image elements and type are selected and several typefaces tested.",
+        "motion": "Local edits with small camera drift.",
+        "purpose": "Demonstrate control, but this long middle is an editorial pacing limitation."
+      },
+      {
+        "id": "s24-5",
+        "startSeconds": 24.5,
+        "endSeconds": 41.5,
+        "title": "Another controlled variation",
+        "visual": "Return to the first poster; headline, text color and layout adjustments are visible.",
+        "motion": "Match cut back; incremental edits in the same editor view.",
+        "purpose": "Reinforce editable components rather than a one-shot result."
+      },
+      {
+        "id": "s41-5",
+        "startSeconds": 41.5,
+        "endSeconds": 44.277611,
+        "title": "Finished-output montage",
+        "visual": "Three full-screen posters appear with a short tool CTA.",
+        "motion": "Fast outcome cuts and final hold.",
+        "purpose": "Close on output quality."
+      }
+    ],
+    "mechanism": "Outcome-first sequencing is paired with immediate editable bounds, then a process rewind. The first three seconds supply both ambition and proof.",
+    "howWeApply": [
+      "Tally: show a filled, useful response object first, then pull back to the field that creates it.",
+      "Todoist: allow the thought typography to become a real input rather than keeping it as an unrelated headline.",
+      "Avoid importing the lengthy font-menu exploration into an 18-second film."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Entire decoded file inspected at 0.5-second intervals; opening 0–3 seconds additionally inspected at 0.25-second intervals. Scene boundaries are approximate, usually within 0.5 seconds. No continuous playback or listening assessment.",
+      "audioReviewed": false,
+      "limitations": [
+        "No spend, conversion, CTR or effectiveness evidence.",
+        "The downloaded rendition is low resolution; small UI text is not fully readable.",
+        "Interpretation of hook/purpose is analysis, not an advertiser statement."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/interface-canva-prompt-design.jpg",
+      "alt": "Canva ad: six timestamped frame excerpts",
+      "caption": "Six low-resolution frame excerpts for criticism; source: Motion public Canva ad archive. Full clip remains private research material."
+    }
+  }
+]

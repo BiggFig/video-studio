@@ -1,0 +1,677 @@
+[
+  {
+    "id": "backend-clickup-tool-cost",
+    "advertiser": "ClickUp",
+    "title": "The cost of a fragmented tool stack",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/clickup",
+    "durationSeconds": 67.072,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "problem",
+      "description": "A rapidly increasing cost figure above a presenter turns a familiar software-stack problem into a concrete consequence.",
+      "startSeconds": 0,
+      "endSeconds": 5.5
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 5.5,
+        "title": "Count the consequence",
+        "visual": "Presenter at a desk under a large recurring-cost counter; short supporting captions.",
+        "motion": "Number increments and caption replacements; presenter framing remains a stable anchor.",
+        "purpose": "Establish an economic pain before naming the alternative."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 5.5,
+        "endSeconds": 13,
+        "title": "Make fragmentation countable",
+        "visual": "Tool names stack above the presenter, followed by login and invoice counts.",
+        "motion": "Quick punch-ins, stacked typography and brief paper-like fragments.",
+        "purpose": "Translate an abstract fragmented stack into tangible administrative friction."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 13,
+        "endSeconds": 22.5,
+        "title": "Escalate, then introduce the brand",
+        "visual": "Annual-cost framing gives way to the ClickUp mark and an integration claim.",
+        "motion": "Counter changes, presenter cuts and a large brand reveal.",
+        "purpose": "Create the before/after turn."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 22.5,
+        "endSeconds": 31.5,
+        "title": "Replace claims with interface cards",
+        "visual": "Task status, document table, whiteboard, chat and clip-menu views appear over the host.",
+        "motion": "Individual proof cards slide and replace one another in a consistent screen region.",
+        "purpose": "Show recognizable evidence for a broad feature proposition."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 31.5,
+        "endSeconds": 42.5,
+        "title": "Continue the product inventory",
+        "visual": "Notetaker/transcript, task creation, scheduling grid and AI-answer card.",
+        "motion": "Successive UI replacements with tight framing on each example.",
+        "purpose": "Sustain proof cadence without relocating the presenter anchor."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 42.5,
+        "endSeconds": 50,
+        "title": "Compress the proposition",
+        "visual": "Forms and time tracking conclude the UI sequence; short consolidation statements return.",
+        "motion": "Brief color wash, hard type substitutions and a closer presenter shot.",
+        "purpose": "Reassemble the many examples into a single proposition."
+      },
+      {
+        "id": "scene-7",
+        "startSeconds": 50,
+        "endSeconds": 61.5,
+        "title": "Price comparison",
+        "visual": "A paid-plan card and cost comparison occupy the upper composition.",
+        "motion": "Large numbers, plan-card entrance and counter changes.",
+        "purpose": "Supply the ad's financial rationale; these figures are not independently verified."
+      },
+      {
+        "id": "scene-8",
+        "startSeconds": 61.5,
+        "endSeconds": 67.072,
+        "title": "Direct call to action",
+        "visual": "Presenter, large start-oriented type and website ending.",
+        "motion": "Stable closing composition after the rapid proof sequence.",
+        "purpose": "Make the next action easy to identify."
+      }
+    ],
+    "mechanism": "Quantify one problem, then answer it through a regular sequence of small interface proofs. The method is useful; the advertised savings are not transferable evidence.",
+    "howWeApply": [
+      "Open Linear with one recognizable work blockage rather than a generic product introduction.",
+      "Keep the issue/composer/PR as recurring physical objects instead of borrowing the presenter, colors or financial claims."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 67.072-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-clickup-tool-cost.jpg",
+      "alt": "Six timestamped excerpts from ClickUp: The cost of a fragmented tool stack",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  },
+  {
+    "id": "backend-clickup-link-hunt",
+    "advertiser": "ClickUp",
+    "title": "A missing-link workplace exchange",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/clickup",
+    "durationSeconds": 40.309002,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "question",
+      "description": "A colleague asks for a link; alternating reactions turn a small familiar request into a coordination problem.",
+      "startSeconds": 0,
+      "endSeconds": 3
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 3,
+        "title": "A recognizable question",
+        "visual": "Office performer asks another colleague for a link; the reverse view is behind a large monitor.",
+        "motion": "Immediate angle reversal with simple captions.",
+        "purpose": "Invite recognition before explaining the product."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 3,
+        "endSeconds": 9.5,
+        "title": "Which link?",
+        "visual": "The same performer plays both sides of a confused exchange about the item and its location.",
+        "motion": "Back-and-forth cuts between front and reverse angles.",
+        "purpose": "Escalate ordinary friction through cause and reaction."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 9.5,
+        "endSeconds": 14.5,
+        "title": "Reaction payoff",
+        "visual": "The clarification culminates in a close reaction and facepalm.",
+        "motion": "Tighter framing and a pause on the reaction.",
+        "purpose": "Pay off the setup before moving into explanation."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 14.5,
+        "endSeconds": 21,
+        "title": "Name the fragmented problem",
+        "visual": "Presenter gestures through several places where work can be scattered.",
+        "motion": "Caption replacement follows the gestural enumeration.",
+        "purpose": "Connect the sketch to an understandable software need."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 21,
+        "endSeconds": 25,
+        "title": "Show the workspace",
+        "visual": "Phone-camera view of a ClickUp task table on a monitor.",
+        "motion": "Short pan across the actual workspace.",
+        "purpose": "Provide concrete product context after the sketch."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 25,
+        "endSeconds": 30.5,
+        "title": "Resolve the exchange",
+        "visual": "Presenter returns to explain the unified-workspace idea.",
+        "motion": "Moderate punch-ins and hand gestures, without decorative graphics.",
+        "purpose": "Tie the demonstrated workspace back to the original question."
+      },
+      {
+        "id": "scene-7",
+        "startSeconds": 30.5,
+        "endSeconds": 36.5,
+        "title": "Ask for the next step",
+        "visual": "Direct-to-camera closing appeal.",
+        "motion": "Relatively stable framing and successive captions.",
+        "purpose": "Close the conversational argument."
+      },
+      {
+        "id": "scene-8",
+        "startSeconds": 36.5,
+        "endSeconds": 40.309002,
+        "title": "Brand end card",
+        "visual": "White background, ClickUp logo and workspace-start call to action.",
+        "motion": "Logo entrance followed by a readable end hold.",
+        "purpose": "Separate the brand action from the comic setup."
+      }
+    ],
+    "mechanism": "A tiny recognizable question creates tension before any product explanation. Alternating cause/reaction shots make a simple premise move.",
+    "howWeApply": [
+      "Use an original developer question on the actual issue object: Bug reported. Now what?",
+      "Answer through the documented delegation and draft PR, rather than adding unrelated jokes or unverified speed claims."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 40.309-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-clickup-link-hunt.jpg",
+      "alt": "Six timestamped excerpts from ClickUp: A missing-link workplace exchange",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  },
+  {
+    "id": "backend-notion-calculator",
+    "advertiser": "Notion",
+    "title": "Short contrast, changing calculator",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/notion",
+    "durationSeconds": 19.2,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "contrast",
+      "description": "Three compact typography statements contrast productive work, fewer tools and lower cost before any long explanation.",
+      "startSeconds": 0,
+      "endSeconds": 4
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 4,
+        "title": "Three compact promises",
+        "visual": "Small centered black type on an off-white field changes through a productivity/tool-count/cost contrast.",
+        "motion": "Words build and replace; horizontal blur punctuates the substitutions.",
+        "purpose": "Deliver a legible proposition quickly."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 4,
+        "endSeconds": 7.5,
+        "title": "Interactive cost proof",
+        "visual": "A white calculator card shows checked AI-tool categories, a team size and financial totals.",
+        "motion": "Cursor toggles rows and the totals update in the same card.",
+        "purpose": "Turn the opening abstraction into a changing visual demonstration."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 7.5,
+        "endSeconds": 10.5,
+        "title": "Raise the scale",
+        "visual": "Team size increases while a red hand-drawn ellipse calls out an annual figure.",
+        "motion": "Number progression and a drawn annotation focus attention.",
+        "purpose": "Show the ad's proposed consequence of scale; not a verified economic comparison."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 10.5,
+        "endSeconds": 13.5,
+        "title": "Assignment metaphor",
+        "visual": "Small illustrated person becomes an arrangement of agents with a short delegation statement.",
+        "motion": "Illustrated characters multiply and regroup.",
+        "purpose": "Reduce the workflow relationship to a simple human-to-agent metaphor."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 13.5,
+        "endSeconds": 15.5,
+        "title": "Brand reveal",
+        "visual": "Notion cube becomes the wordmark.",
+        "motion": "Compact mark-to-wordmark transformation.",
+        "purpose": "Name the product after the value argument."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 15.5,
+        "endSeconds": 19.2,
+        "title": "Offer close",
+        "visual": "Product positioning and a blue trial-offer button on the same quiet field.",
+        "motion": "Minimal change and a readable final hold.",
+        "purpose": "Make the advertised next action conspicuous."
+      }
+    ],
+    "mechanism": "Sparse typography can feel quick when each replacement advances the argument; one changing proof object then carries the middle of the ad.",
+    "howWeApply": [
+      "Change the meaning of the opening issue card, not merely its color.",
+      "Make the same object contract into the actual composer; preserve a clear draft result and brand-faithful palette."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 19.200-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-notion-calculator.jpg",
+      "alt": "Six timestamped excerpts from Notion: Short contrast, changing calculator",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  },
+  {
+    "id": "backend-notion-bug-agent",
+    "advertiser": "Notion",
+    "title": "An agent builds a bug dashboard",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/notion",
+    "durationSeconds": 52.267,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "outcome",
+      "description": "A creator introduces converting scattered input into organized work, then demonstrates a specific bug-dashboard request.",
+      "startSeconds": 0,
+      "endSeconds": 7
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 7,
+        "title": "Input inventory",
+        "visual": "Creator in front-facing footage with a Notion mark and caption emphasis lists several kinds of source material.",
+        "motion": "Small framing changes and highlighted words.",
+        "purpose": "Establish the breadth of the advertised input problem."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 7,
+        "endSeconds": 15,
+        "title": "Output promise",
+        "visual": "Creator continues with examples of organized outputs before product footage appears.",
+        "motion": "Caption replacements dominate a mostly fixed composition.",
+        "purpose": "Explain the transformation, at the cost of a long preamble."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 15,
+        "endSeconds": 19.5,
+        "title": "Concrete request",
+        "visual": "Split-screen product view above the creator; a bug-dashboard request is entered with workspace connectors.",
+        "motion": "Typing and a tighter product crop.",
+        "purpose": "Convert the general promise into a specific task."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 19.5,
+        "endSeconds": 24.5,
+        "title": "Work begins",
+        "visual": "An illustrated agent processing state changes into a dashboard title/table and report-compilation views.",
+        "motion": "Processing-state replacement and interface cuts.",
+        "purpose": "Make the intermediate work visible."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 24.5,
+        "endSeconds": 29.5,
+        "title": "Material result accumulates",
+        "visual": "Source/result rows appear and the bug dashboard fills.",
+        "motion": "Rows arrive in a previously sparse table.",
+        "purpose": "Show a persistent organized result rather than only a confirmation message."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 29.5,
+        "endSeconds": 35,
+        "title": "Inspect the result",
+        "visual": "Camera closes in on the table; a row is selected and its detail panel opens beside it.",
+        "motion": "Zoom, selection and side-panel reveal preserve the same item.",
+        "purpose": "Demonstrate that the generated output can be examined."
+      },
+      {
+        "id": "scene-7",
+        "startSeconds": 35,
+        "endSeconds": 46.5,
+        "title": "Broaden the use cases",
+        "visual": "Agent-type grid and a gallery of further examples.",
+        "motion": "Pullback into the grid, followed by gallery scrolling.",
+        "purpose": "Expand the proposition beyond the initial task."
+      },
+      {
+        "id": "scene-8",
+        "startSeconds": 46.5,
+        "endSeconds": 52.267,
+        "title": "Creator and brand close",
+        "visual": "Brief presenter call to action followed by Notion branding.",
+        "motion": "Hard cut from presenter to a clean end card.",
+        "purpose": "End on product identity."
+      }
+    ],
+    "mechanism": "Request → populated table → opened detail is a useful causal proof chain. The long spoken-looking preamble would be a poor fit for an 18-second film.",
+    "howWeApply": [
+      "Get into the request early, then let the persistent draft PR carry the outcome.",
+      "Use a meaningful camera move to inspect the result; do not substitute a feature gallery for a completed workflow."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 52.267-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-notion-bug-agent.jpg",
+      "alt": "Six timestamped excerpts from Notion: An agent builds a bug dashboard",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  },
+  {
+    "id": "backend-monday-localization",
+    "advertiser": "monday.com",
+    "title": "A localization request becomes deliverables",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/monday-com",
+    "durationSeconds": 38.443,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "demonstration",
+      "description": "A quick human shot leads directly into a selected agent and an urgent, concrete localization request.",
+      "startSeconds": 0,
+      "endSeconds": 5.5
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 2.5,
+        "title": "Enter the task",
+        "visual": "Close human face gives way to a laptop agent catalog and the regional-marketing agent.",
+        "motion": "Fast push into the chosen agent card.",
+        "purpose": "Move from person to product with almost no preamble."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 2.5,
+        "endSeconds": 5.5,
+        "title": "Type and send",
+        "visual": "Tight composer view shows a localization request and deadline, followed by send.",
+        "motion": "Camera stays near the typed request and send control.",
+        "purpose": "Make the initiating cause readable."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 5.5,
+        "endSeconds": 8.8,
+        "title": "Files arrive",
+        "visual": "Progress pill becomes file tiles and an attachments-column view.",
+        "motion": "Orange tiles gather, then hard cut/zoom into their destination.",
+        "purpose": "Show work materializing as identifiable objects."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 8.8,
+        "endSeconds": 14,
+        "title": "Choose a creative",
+        "visual": "A medal insert punctuates selection; agent activity resolves into three creative options, followed by a typed choice.",
+        "motion": "Metaphor cut, card fan and camera return to the input.",
+        "purpose": "Make the human decision alter the next step."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 14,
+        "endSeconds": 18,
+        "title": "Localize and approve",
+        "visual": "One umbrella creative expands into multiple language versions, then an approval prompt receives a thumbs-up.",
+        "motion": "Repeated asset identity across transformed cards.",
+        "purpose": "Demonstrate a specific transformation and review point."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 18,
+        "endSeconds": 22.8,
+        "title": "Refine the formats",
+        "visual": "Several size/layout versions appear; a request removes an unwanted carousel.",
+        "motion": "Format-card arrangement and return to the agent exchange.",
+        "purpose": "Show iterative control rather than one opaque generation."
+      },
+      {
+        "id": "scene-7",
+        "startSeconds": 22.8,
+        "endSeconds": 27.5,
+        "title": "Handoff for approval",
+        "visual": "Attachments and a message go to a reviewer; race-start lights punctuate the waiting stage.",
+        "motion": "Send action, metaphor insert and transition to status.",
+        "purpose": "Separate preparing deliverables from approval."
+      },
+      {
+        "id": "scene-8",
+        "startSeconds": 27.5,
+        "endSeconds": 33,
+        "title": "Approval changes the outcome",
+        "visual": "Waiting status becomes a green check; a coordination agent and ready message appear.",
+        "motion": "Status replacement, message reveal and brief celebratory particles.",
+        "purpose": "Make the approval state change visible."
+      },
+      {
+        "id": "scene-9",
+        "startSeconds": 33,
+        "endSeconds": 38.443,
+        "title": "Brand close",
+        "visual": "Dark monday.com composition with typed agent positioning and logo.",
+        "motion": "Typed statement settles into the brand end card.",
+        "purpose": "Name the system behind the workflow."
+      }
+    ],
+    "mechanism": "The moving objects are the work: one request yields assets, a choice changes them, and approval changes their status. Camera moves follow that causal chain.",
+    "howWeApply": [
+      "Make Linear's send control the origin of the reveal into the actual draft PR.",
+      "Carry the same PR card through separation and reassembly; do not add decorative swarms or claim instantaneous completion."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 38.443-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-monday-localization.jpg",
+      "alt": "Six timestamped excerpts from monday.com: A localization request becomes deliverables",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  },
+  {
+    "id": "backend-monday-sheet-import",
+    "advertiser": "monday.com",
+    "title": "A spreadsheet becomes an organized board",
+    "sourceType": "archive",
+    "sourceUrl": "https://motionapp.com/library/monday-com",
+    "durationSeconds": 52.373,
+    "observedAt": "2026-10-03",
+    "statusObserved": "Public Motion archive available on 2026-10-03. Exact creative current delivery, start date and Meta Library ID were not independently verified.",
+    "hook": {
+      "type": "contrast",
+      "description": "A deliberately affectionate spreadsheet setup reverses through a broken-heart symbol and a product reveal.",
+      "startSeconds": 0,
+      "endSeconds": 3.5
+    },
+    "scenes": [
+      {
+        "id": "scene-1",
+        "startSeconds": 0,
+        "endSeconds": 3.5,
+        "title": "Reverse an expectation",
+        "visual": "Spreadsheet field with large type and a heart that becomes broken.",
+        "motion": "Kinetic type and symbolic reversal over recognizable work data.",
+        "purpose": "Create contrast before the product explanation."
+      },
+      {
+        "id": "scene-2",
+        "startSeconds": 3.5,
+        "endSeconds": 7,
+        "title": "Name the alternative",
+        "visual": "Brand letters resolve, then the product homepage start control is clicked.",
+        "motion": "Logo assembly and a quick interface cut.",
+        "purpose": "Move from argument into a usable product."
+      },
+      {
+        "id": "scene-3",
+        "startSeconds": 7,
+        "endSeconds": 10.5,
+        "title": "Import the existing work",
+        "visual": "Import menu, spreadsheet-file selection and a dropzone completion check.",
+        "motion": "Macro menu crop, file travel and success-state replacement.",
+        "purpose": "Show the migration action instead of only asserting ease."
+      },
+      {
+        "id": "scene-4",
+        "startSeconds": 10.5,
+        "endSeconds": 13.5,
+        "title": "Continuous before/after",
+        "visual": "A sheet is replaced by a populated work board with statuses, people and progress.",
+        "motion": "Left-to-right wipe preserves the overall data-table footprint.",
+        "purpose": "Make organization visibly change while the subject remains continuous."
+      },
+      {
+        "id": "scene-5",
+        "startSeconds": 13.5,
+        "endSeconds": 21.5,
+        "title": "Build the planning view",
+        "visual": "Large wordplay type punctuates the cut; a planning board gains rows, assignments, statuses and charts.",
+        "motion": "Type flies past camera, then structured objects accumulate.",
+        "purpose": "Expand the demonstrated transformation."
+      },
+      {
+        "id": "scene-6",
+        "startSeconds": 21.5,
+        "endSeconds": 29,
+        "title": "Comic comparison",
+        "visual": "Spreadsheet aside, pixelated face and split comparison columns.",
+        "motion": "Rapid cuts and labels falling into two areas.",
+        "purpose": "Restate the ad's competitive argument through visual contrast."
+      },
+      {
+        "id": "scene-7",
+        "startSeconds": 29,
+        "endSeconds": 35.5,
+        "title": "Show practical working views",
+        "visual": "Dashboard, timeline and workload examples lead to a project comment thread.",
+        "motion": "Fast view replacements, then a closer post/reply panel.",
+        "purpose": "Tie the broad argument back to concrete work."
+      },
+      {
+        "id": "scene-8",
+        "startSeconds": 35.5,
+        "endSeconds": 41,
+        "title": "Connect and automate",
+        "visual": "Condition fields populate and integration icons gather around the board.",
+        "motion": "Field filling and icon entrances.",
+        "purpose": "Add examples of the advertised system around the same core workspace."
+      },
+      {
+        "id": "scene-9",
+        "startSeconds": 41,
+        "endSeconds": 47,
+        "title": "Return to people and schedule",
+        "visual": "Live-action workers with UI overlays, then a timeline close-up.",
+        "motion": "Human/product cuts and a final interface crop.",
+        "purpose": "Humanize the demonstrated workflow."
+      },
+      {
+        "id": "scene-10",
+        "startSeconds": 47,
+        "endSeconds": 52.373,
+        "title": "Trial end card",
+        "visual": "Brand and trial-oriented call to action.",
+        "motion": "Clear final plate after the dense montage.",
+        "purpose": "Conclude with an identifiable next action."
+      }
+    ],
+    "mechanism": "A continuous data-object wipe can make a before/after transformation immediately legible. The surrounding jokes and comparison claims are optional, not the mechanism itself.",
+    "howWeApply": [
+      "Transform the issue surface into the agent composer rather than fading between unrelated screens.",
+      "Keep the same draft card visible through the review transformation; avoid copying competitive or migration claims."
+    ],
+    "observation": {
+      "method": "sampled-frames",
+      "coverage": "Inspected every 0.5-second decoded sample across this 52.373-second clip, including all contact sheets. Scene boundaries are approximate within 0.5 seconds; no continuous playback or listening claim.",
+      "audioReviewed": false,
+      "limitations": [
+        "Third-party archive evidence, not a verified current Meta delivery record.",
+        "No impression, spend, conversion, retention or performance evidence was available.",
+        "Motion direction is inferred from adjacent decoded frames; sub-0.5-second events and exact easing can be missed.",
+        "Visible pricing, savings, offers and product claims are observations of advertising, not independently verified current facts."
+      ]
+    },
+    "poster": {
+      "src": "/ad-references/backend-monday-sheet-import.jpg",
+      "alt": "Six timestamped excerpts from monday.com: A spreadsheet becomes an organized board",
+      "caption": "Low-resolution excerpts for scene criticism. Source: Motion public ad archive; exact current Meta status unverified."
+    }
+  }
+]

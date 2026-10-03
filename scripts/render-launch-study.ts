@@ -20,12 +20,14 @@ async function main() {
   if (!['linear', 'tally', 'todoist'].includes(id)) throw new Error('Choose linear, tally or todoist');
   const extreme = process.argv.includes('--extreme');
   const motion = process.argv.includes('--motion');
-  if (extreme && motion) throw new Error('Choose one film variant');
-  const sourceName = `launch-${id}${motion ? '-motion' : extreme ? '-extreme' : ''}.ts`;
+  const hook = process.argv.includes('--hook');
+  if ([extreme, motion, hook].filter(Boolean).length > 1) throw new Error('Choose one film variant');
+  const variant = hook ? 'hook' : motion ? 'motion' : extreme ? 'extreme' : 'original';
+  const sourceName = `launch-${id}${variant === 'original' ? '' : `-${variant}`}.ts`;
   const mod = await import(pathToFileURL(resolve('studies', sourceName)).href);
   const study = mod[`${id}Study`] as MotionStudy;
   validateStudy(study); new Script(study.script);
-  const workspace = resolve(motion ? '.local/launch-motion-20261003' : extreme ? '.local/launch-extreme-20261003' : '.local/launch-films-20261003', id), root = join(workspace, 'project');
+  const workspace = resolve(variant === 'original' ? '.local/launch-films-20261003' : `.local/launch-${variant}-20261003`, id), root = join(workspace, 'project');
   const html = studyHtml(study), finish = process.argv.includes('--finish');
   if (finish && await readFile(join(root, 'index.html'), 'utf8') !== html) throw new Error('Source changed; rerender before finishing');
   await mkdir(join(root, 'assets'), { recursive: true });
@@ -35,7 +37,7 @@ async function main() {
   await copyFile(resolve('worker/assets/Geist-LICENSE.txt'), join(root, 'assets/Geist-LICENSE.txt'));
   await writeFile(join(root, 'index.html'), html);
   await copyFile(resolve('studies', sourceName), join(workspace, 'authored-study.ts'));
-  const metadata = { id, variant: motion ? 'motion' : extreme ? 'extreme' : 'original', title: study.title, width: study.width, height: study.height, fps: 30,
+  const metadata = { id, variant, title: study.title, width: study.width, height: study.height, fps: 30,
     durationFrames: study.durationFrames, durationSeconds: study.durationFrames / 30,
     renderer: 'Hyperframes 0.8.97 / GSAP 3.14.2 / trusted HTML', manuallyAuthored: true,
     automaticUrlGenerationVerified: false, sourcePixelsInGeneratedPicture: false,
@@ -90,10 +92,11 @@ async function main() {
     }
     await writeJson(join(workspace,'export-comparisons.json'),comparisons);
     if(comparisons.some(c=>!c.passed))throw new Error('Export differs from authored HTML');
-    if (motion) {
+    if (motion || hook) {
       // Hold the soundtrack constant so this comparison isolates visual direction.
       // Reuse the shipped AAC stream without new provider calls or re-encoding.
-      const audioSource = resolve('public/launch-tests/media', `${id}-extreme.mp4`);
+      const audioSourceVariant = hook ? 'motion' : 'extreme';
+      const audioSource = resolve('public/launch-tests/media', `${id}-${audioSourceVariant}.mp4`);
       const audioSourceSha256 = await hash(audioSource);
       const source = await probe(audioSource), duration = study.durationFrames / 30;
       if (!source.audio || Math.abs(source.duration - duration) > .1) throw new Error('Motion comparison requires matching source audio duration');
@@ -107,9 +110,9 @@ async function main() {
       if (sourceAudioHash !== finalAudioHash || !/^SHA256=[a-f0-9]{64}$/.test(finalAudioHash)) throw new Error('Retained soundtrack bytes changed');
       const levels = await audioMeasurements(output);
       if (!levels.loudness || !Number.isFinite(Number(levels.loudness.input_i)) || Number(levels.loudness.input_tp) > -.5) throw new Error('Invalid retained soundtrack levels');
-      const posterFrame: Record<string,number> = {linear:22,tally:55,todoist:30};
+      const posterFrame: Record<string,number> = hook ? {linear:24,tally:24,todoist:24} : {linear:22,tally:55,todoist:30};
       await frameIndex(output, join(workspace,'poster.jpg'),posterFrame[id],1920);
-      const reusedAudio = {path:audioSource,sha256:audioSourceSha256,aacSha256:finalAudioHash.slice(7),byteIdentical:true,mode:'AAC stream copy from previous extreme cut',newProviderCalls:0};
+      const reusedAudio = {path:audioSource,sha256:audioSourceSha256,aacSha256:finalAudioHash.slice(7),byteIdentical:true,mode:`AAC stream copy from previous ${audioSourceVariant} cut`,newProviderCalls:0};
       await writeJson(join(workspace,'qc.json'),{technicalPassed:true,decoded:true,comparisons,levels,reusedAudio,deterministicChecks:checks,auditoryReviewPerformed:false,semanticVisualReview:'Separate muted sequence review required; export SSIM measures renderer fidelity only.'});
       await writeJson(join(workspace,'result.json'),{...metadata,status:'authored_launch_film',technicalPassed:true,videoPath:output,sha256:await hash(output),reusedAudio,automaticAcceptancePassed:false});
       console.log(JSON.stringify({id,workspace,frames:study.durationFrames,rendered:true}));
