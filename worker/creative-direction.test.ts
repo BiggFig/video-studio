@@ -251,3 +251,23 @@ test("new direction changes its durable policy binding while retained v3 request
   assert.match(scriptRequest(input, f.evidence, f.research, undefined, f.ui, true), /flat-script-v2/);
   assert.match(scriptRequest(input, f.evidence, f.research, undefined, f.ui), /flat-script-v1/);
 });
+
+test("new films select visual v2 while retained v1 plans and repairs preserve their renderer contract", async t => {
+  const f = fixture(), raw = flat(f.raw);
+  const script = compileScript(raw, input, f.evidence, f.research, undefined, f.ui, { requireDirection: true });
+  assert.ok(script.scenes.every(scene => scene.direction?.version === 2));
+  const plan = await compilePlan(input, f.evidence, script, hooks, await workspace(t));
+  validatePlanCreativeDirection(plan, f.research, f.evidence);
+  const retained = structuredClone(plan);
+  for (const scene of retained.scenes) scene.direction!.version = 1;
+  const retainedBefore = JSON.stringify(retained);
+  validatePlanCreativeDirection(retained, f.research, f.evidence);
+  const repaired = compileScript(raw, input, f.evidence, f.research, { plan: retained, findings: [] }, f.ui);
+  assert.ok(repaired.scenes.every(scene => scene.direction?.version === 1));
+  assert.equal(JSON.stringify(retained), retainedBefore);
+  assert.throws(() => validateScript(script, input, f.evidence, f.research, { plan: retained, findings: [] }, f.ui), /retained visual renderer contract/);
+  const mixed = structuredClone(plan);
+  mixed.scenes[0].direction!.version = 1;
+  assert.throws(() => validatePlanCreativeDirection(mixed, f.research, f.evidence), /cannot mix/);
+  assert.throws(() => compileShotDirection(script.scenes[0], 3 as never));
+});

@@ -19,15 +19,19 @@ export function resolvePresentation(scene:Scene,plan:Pick<Plan,"background">):Pr
  return value;
 }
 
-export function motionUsage(scene:Scene,plan:Pick<Plan,"background"|"brand"|"uiDocuments">){
+export function motionUsage(scene:Scene,plan:Pick<Plan,"background"|"brand"|"uiDocuments"> & {assets?:Plan["assets"]}){
  const presentation=resolvePresentation(scene,plan),visual=presentation.visual;
  const uiDocumentId=visual?.kind==="ui-demo"?visual.documentId:null,document=uiDocumentId?plan.uiDocuments?.find(document=>document.id===uiDocumentId):undefined;
  if(uiDocumentId&&!document)throw new Error("A UI demonstration needs a compiled source-bound document");
  const reconstructionSourceAssetIds=document?.sourceAssetIds||[];
  const proofAssetIds=presentation.template==="proof"&&!uiDocumentId?[scene.asset_id,...(visual?.kind==="panels"?[visual.secondaryAssetId]:[])]:[];
- const logoAssetId=["brand","cta"].includes(presentation.template)?plan.brand?.logoAssetId||null:null;
+ let logoAssetId=["brand","cta"].includes(presentation.template)?plan.brand?.logoAssetId||null:null;
+ // A wide raster companion competes with the explicit product-text lockup.
+ // This is composition, not an inference that the image contains a wordmark.
+ const logo=logoAssetId?plan.assets?.find(asset=>asset.id===logoAssetId):undefined;
+ if(scene.direction?.version===2&&logo?.kind==="image"&&logo.width>0&&logo.height>0&&logo.width/logo.height>=2.4)logoAssetId=null;
  const visibleAssetIds=[...new Set([...proofAssetIds,...(logoAssetId?[logoAssetId]:[])])];
  return {presentation,proofAssetIds,logoAssetId,visibleAssetIds,reconstructionSourceAssetIds,uiDocumentId,copiedAssetIds:[...new Set([scene.asset_id,...visibleAssetIds,...reconstructionSourceAssetIds])],extraCopy:visual?.kind==="connections"?visual.nodes.map(node=>node.label):[]};
 }
 
-export const motionAssetIds=(plan:Pick<Plan,"scenes"|"background"|"brand"|"uiDocuments">)=>[...new Set(plan.scenes.flatMap(scene=>motionUsage(scene,plan).copiedAssetIds))];
+export const motionAssetIds=(plan:Pick<Plan,"scenes"|"background"|"brand"|"uiDocuments"> & {assets?:Plan["assets"]})=>[...new Set(plan.scenes.flatMap(scene=>motionUsage(scene,plan).copiedAssetIds))];

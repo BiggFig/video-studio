@@ -15,7 +15,7 @@ export const shotJobSchema = z.enum(["hook", "context", "action", "result", "pay
 export const shotMotionSchema = z.enum(["reveal", "focus", "connect", "consolidate", "hold"]);
 export const directionSelectionSchema = z.object({ concept: creativeConceptSchema, evidenceId: factId }).strict();
 export const shotSelectionSchema = z.object({ job: shotJobSchema, motion: shotMotionSchema }).strict();
-export const shotDirectionSchema = shotSelectionSchema.extend({ version: z.literal(1), continuityKey: z.string().min(1).max(300).optional() }).strict();
+export const shotDirectionSchema = shotSelectionSchema.extend({ version: z.union([z.literal(1), z.literal(2)]), continuityKey: z.string().min(1).max(300).optional() }).strict();
 const brandSchema = z.object({ sourceUrl: z.string(), colors: z.array(z.object({ value: z.string(), role: z.enum(["accent", "background", "text"]) }).strict()), logoAssetIds: z.array(z.string()) }).strict();
 const workflowSchema = z.array(z.object({ action: z.string().min(1).max(80), evidenceId: factId, assetId: z.string().min(1) }).strict()).min(1).max(3);
 const conceptOptionSchema = z.object({ concept: creativeConceptSchema, evidenceIds: z.array(factId).min(1).max(24), meaning: z.string().max(350) }).strict();
@@ -76,7 +76,7 @@ export function compileCreativeDirection(selection: unknown, research: Research,
 interface DirectedScene { storyRole?: string; assetId: string; evidenceId: string; preserveAudio: boolean; presentation?: Presentation; direction?: ShotSelection | ShotDirection }
 const roleJobs: Record<string, ShotDirection["job"][]> = { problem: ["hook"], product: ["context"], mechanism: ["action", "result"], outcome: ["result", "payoff"], differentiator: ["payoff"], cta: ["cta"] };
 /** Derived identity is a visual motif only. It never carries or fabricates product UI state. */
-export function compileShotDirection(scene: DirectedScene): ShotDirection {
+export function compileShotDirection(scene: DirectedScene, rendererVersion?: 1 | 2): ShotDirection {
   const raw = shotSelectionSchema.safeParse(scene.direction && { job: scene.direction.job, motion: scene.direction.motion });
   if (!raw.success || !roleJobs[scene.storyRole || ""]?.includes(raw.data.job)) throw invalid("Every directed shot needs a job matching its grounded narrative role.");
   const { job, motion } = raw.data, visual = scene.presentation?.visual;
@@ -86,7 +86,8 @@ export function compileShotDirection(scene: DirectedScene): ShotDirection {
   if (motion === "connect" && visual?.kind !== "connections") throw invalid("Connect motion requires source-bound informational connection nodes.");
   if (motion === "consolidate" && visual?.kind !== "panels") throw invalid("Consolidate motion requires two intact verified product panels.");
   const continuityKey = visual?.kind === "ui-demo" ? `ui:${visual.documentId}` : visual?.kind === "panels" ? `panels:${scene.assetId}:${visual.secondaryAssetId}` : scene.presentation?.template === "proof" && visual?.kind !== "connections" ? `asset:${scene.assetId}` : undefined;
-  return shotDirectionSchema.parse({ version: 1, job, motion, ...(continuityKey ? { continuityKey } : {}) });
+  const version = rendererVersion ?? (scene.direction && "version" in scene.direction ? scene.direction.version : 1);
+  return shotDirectionSchema.parse({ version, job, motion, ...(continuityKey ? { continuityKey } : {}) });
 }
 
 /** Only an actual supported action can contribute a second fact to UI execution. */
@@ -117,7 +118,7 @@ export function creativeExecutionIssues(direction: Pick<CreativeDirection, "conc
   return scenes.some(scene => scene.direction?.motion === direction.concept && executedFacts(scene, research, evidence, documents).includes(direction.evidenceId)) ? [] : [{ code: "creative_concept_requires_executed_fact", path: ["creativeDirection", "evidenceId"] }];
 }
 
-export function validateDirectedStory(direction: CreativeDirection | undefined, scenes: DirectedScene[], research: Research, evidence: Evidence, previous?: { creativeDirection?: CreativeDirection }, documents: UiDocument[] = []) {
+export function validateDirectedStory(direction: CreativeDirection | undefined, scenes: DirectedScene[], research: Research, evidence: Evidence, previous?: { creativeDirection?: CreativeDirection; scenes?: { direction?: ShotDirection }[] }, documents: UiDocument[] = []) {
   if (!direction) {
     if (scenes.some(scene => scene.direction) || previous?.creativeDirection) throw stageFailure("A script cannot drop its immutable creative direction or add unbound shot motion.");
     return;
@@ -126,6 +127,12 @@ export function validateDirectedStory(direction: CreativeDirection | undefined, 
   const expected = compileCreativeDirection({ concept: direction.concept, evidenceId: direction.evidenceId }, research, evidence);
   if (stageDigest(direction) !== stageDigest(expected) || (previous?.creativeDirection && stageDigest(previous.creativeDirection) !== stageDigest(direction))) throw stageFailure("The script changed its source-bound creative direction.");
   for (const scene of scenes) if (stageDigest(scene.direction) !== stageDigest(compileShotDirection(scene))) throw stageFailure("A shot changed its compiled motion or source continuity identity.");
+  const rendererVersions = new Set(scenes.map(scene => (scene.direction as ShotDirection).version));
+  if (rendererVersions.size !== 1) throw stageFailure("A directed film cannot mix retained and current visual renderer contracts.");
+  if (previous?.scenes) {
+    const priorVersion = previous.scenes.find(scene => scene.direction)?.direction?.version;
+    if (priorVersion !== undefined && !rendererVersions.has(priorVersion)) throw stageFailure("A repair cannot change its retained visual renderer contract.");
+  }
   if (creativeExecutionIssues(direction, scenes, research, evidence, documents).length) throw invalid("At least one shot must execute the selected creative concept with its cited product fact and supported visual primitive.");
   if (!scenes.some(scene => scene.direction?.job === "action") || !scenes.some(scene => ["result", "payoff"].includes(scene.direction?.job || ""))) throw invalid("Directed films require a concrete action and a distinct result or payoff job.");
   if (!["hook", "context"].includes(scenes[0]?.direction?.job || "")) throw invalid("A directed film must open with its audience problem or actual product context.");

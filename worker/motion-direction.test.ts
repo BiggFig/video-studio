@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
-import { directedShot,expectedDirectionFrame,directionEvaluatorSource,directedTimeline } from "./motion-direction";
+import { directedShot,expectedDirectionFrame,directionEvaluatorSource,directedTimeline,directedTimelineSource } from "./motion-direction";
 import { motionHtml } from "./motion-composition";
+import { motionUsage,motionAssetIds } from "./motion-assets";
 import { motionTimingForPresentation } from "./motion-timing";
 import type { Plan,Scene } from "./types";
 
@@ -45,4 +46,39 @@ test("separate designed entrances do not consume the existing essential-reading 
   const entry=motionTimingForPresentation({template,transition:"cut",cards:template==="features"?[1,2,3]:undefined,visual:template==="proof"?{kind:"showcase"}:undefined},true).entryFrames;
   assert.ok(relevant.every(track=>Math.ceil((track.at+track.duration+track.stagger)*30-.00001)<=entry),`${template} entry ${entry}`);
  }
+});
+
+test("v2 staging is opt-in and wide raster omission agrees with actual source inventory",()=>{
+ const plan=fixture();plan.product="Source Product";plan.brand={sourceUrl:"https://example.com",background:"#101010",foreground:"#eeeeee",accent:"#7452cc",logoAssetId:"logo"};
+ plan.assets.push({id:"logo",path:"assets/logo.png",kind:"image",usage:"output",rights:"Observed fixture logo",width:300,height:60});
+ for(const scene of plan.scenes){scene.presentation={template:"brand",theme:"dark",transition:"cut"};scene.headline="A useful proposition";}
+ const media={real:"assets/real.png",logo:"assets/logo.png"},legacy=motionHtml(plan,media).match(/<section\b[\s\S]*?<\/section>/g)!;
+ assert.ok(legacy.every(section=>section.includes('direction-volume')&&!section.includes('editorial-atmosphere')));assert.equal(motionUsage(plan.scenes[0],plan).logoAssetId,"logo");
+ plan.scenes[0].direction!.version=2;
+ const fresh=motionHtml(plan,media).match(/<section\b[\s\S]*?<\/section>/g)!;
+ assert.match(fresh[0],/editorial-atmosphere/);assert.doesNotMatch(fresh[0],/direction-volume|direction-rim|direction-orbit|data-brand-mark/);assert.match(fresh[0],/class="brand-name" data-essential/);
+ assert.equal(fresh[1],legacy[1],"Retained v1 scene markup is unchanged even beside v2");
+ assert.equal(motionUsage(plan.scenes[0],plan).logoAssetId,null);assert.deepEqual(motionUsage(plan.scenes[0],plan).visibleAssetIds,[]);
+ plan.scenes[1].direction!.version=2;assert.deepEqual(motionAssetIds(plan),["real"]);
+ plan.assets[1].width=60;assert.equal(motionUsage(plan.scenes[0],plan).logoAssetId,"logo");assert.match(motionHtml(plan,media).match(/<section\b[\s\S]*?<\/section>/g)![0],/data-brand-mark/);
+});
+
+test("v2 serialized timeline executes value callbacks and respects original essential-entry budgets",()=>{
+ const embedded=runInNewContext(`(${directedTimelineSource()})`);
+ for(const visual of [undefined,"showcase","focus","panels","connections","ui-demo"]){
+  const template=visual==="connections"?"features":"proof",tracks:{selector:string;end:number}[]=[];
+  const tl={set(){},fromTo(selector:string,from:any,to:any,at:number){for(const value of Object.values(from))if(typeof value==="function")for(const i of [0,1,2])assert.equal(typeof value(i),"number");const stagger=typeof to.stagger==="number"?to.stagger*(visual==="panels"?1:2):to.stagger?.amount||0;tracks.push({selector,end:at+to.duration+stagger});}};
+  embedded(tl,"#scene",{directed:{version:2,job:"action",motion:"reveal"},visual,focus:{from:{left:0},to:{left:10}}},0);
+  const entry=motionTimingForPresentation({template,transition:"cut",visual:visual?{kind:visual,actions:visual==="ui-demo"?[{kind:"click",atFrame:30,durationFrames:6}]:undefined}:undefined},false).entryFrames;
+  const relevant=tracks.filter(track=>track.selector.endsWith(' .word')||track.selector.endsWith(' .detail')||track.selector.endsWith(visual==="connections"?' .connection-edge':visual==="ui-demo"?' .ui-demo-stage':visual==="panels"?' .source-panel':visual==="focus"?' .focus-image':' .proof-media'));
+  assert.ok(relevant.every(track=>Math.ceil(track.end*30-.00001)<=entry),`${visual||"basic proof"} exceeds original ${entry}-frame entry`);
+ }
+});
+
+test("v2 material clock remains seekable and stable while scene-specific staging preserves complete proof",()=>{
+ const plan=fixture();for(const scene of plan.scenes)scene.direction!.version=2;
+ const shot=directedShot(plan,plan.scenes[0],0)!,embedded=runInNewContext(`(${directionEvaluatorSource()})`);
+ for(const frame of [0,30,149,12,0])assert.equal(JSON.stringify(embedded(shot,frame)),JSON.stringify(expectedDirectionFrame(shot,frame)));
+ assert.deepEqual(expectedDirectionFrame(shot,shot.travelFrames),expectedDirectionFrame(shot,149));
+ const html=motionHtml(plan,{real:"assets/real.png"});assert.equal((html.match(/data-proof data-asset-id="real"/g)||[]).length,2);assert.equal((html.match(/data-stage-version="2"/g)||[]).length,2);
 });

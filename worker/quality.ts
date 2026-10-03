@@ -56,12 +56,17 @@ export function realVisualsPassed(reviews:{realVisualsPassed:boolean}[],inventor
   return inventory.plannedProofScenes.length>0&&reviews.length>0&&reviews.every(review=>review.realVisualsPassed);
 }
 export function reviewBatch(plan:Plan,samples:Sample[]){
-  const ids=new Set(samples.map(s=>s.sceneId)),scenes=plan.scenes.filter(s=>ids.has(s.id)),assetIds=new Set(scenes.flatMap(s=>motionUsage(s,plan).copiedAssetIds)),assets=plan.assets.filter(a=>a.usage==="output"&&assetIds.has(a.id));
+  const ids=new Set(samples.map(s=>s.sceneId)),scenes=plan.scenes.filter(s=>ids.has(s.id)),assetIds=new Set(scenes.flatMap(s=>motionUsage(s,plan).copiedAssetIds));
+  // Preserve observed dimensions used by the shared visibility policy even when
+  // a wide logo is omitted. Metadata alone never schedules another review image.
+  const reviewAssetIds=new Set(assetIds);
+  if(plan.brand?.logoAssetId&&scenes.some(scene=>["brand","cta"].includes(presentation(scene,plan).template)))reviewAssetIds.add(plan.brand.logoAssetId);
+  const assets=plan.assets.filter(a=>a.usage==="output"&&reviewAssetIds.has(a.id));
   const motion=scenes.map(scene=>{
     const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan);
     return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo"};
   });
-  return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,creativeDirection:plan.creativeDirection,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
+  return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,creativeDirection:plan.creativeDirection,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.filter(a=>assetIds.has(a.id)).map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
 }
 export function unexpectedVoice(plan:Plan,heard:Transcript) {
   const windows=plan.scenes.filter(s=>s.preserve_audio).map(s=>({start:s.start_frame/30,end:(s.start_frame+s.duration_frames)/30}));
