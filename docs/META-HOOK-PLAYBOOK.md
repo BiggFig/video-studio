@@ -51,3 +51,29 @@ or conversion, rather than rewarding attention without comprehension.
 The current execution is manually art-directed through the existing HTML/SVG
 engine. The portfolio and this procedure are reusable creative inputs; this
 batch alone does not prove that automatic URL generation has learned them.
+
+## Mobile story revision: 5 October
+
+The social studies add a stricter brief before composition:
+
+- Specify the audience's concrete moment, the friction in that moment, one
+  documented product action, its observable result, and the consequence in
+  ordinary language. The example data must persist through each stage.
+- Make the opening identify the problem or desired outcome on the first frame.
+  Avoid a generic category statement that could advertise any competing product.
+- Put the key outcome early enough to earn the remaining watch time. Linear's
+  draft reveal was advanced during review instead of preserving a slow build.
+- Choreograph interruption, intentional action, reveal and stable proof as
+  different visual beats. More movement is useful only if it directs attention
+  to the next piece of information. Leave complete action/result states readable.
+- Write the CTA to follow the demonstrated task, with source-supported offer
+  wording. Do not invent a quantitative speedup, customer result or entitlement.
+- Author 9:16 and 4:5 positions before export. Use phone-readable typography and
+  placement-safe essential content, not a scaled desktop frame or center crop.
+- Verify the saved outcome follows the visible action; a draft stays a draft,
+  a pending task stays pending, and an editorial recap is labeled as such.
+
+The renderer now supports 1920×1080, 1080×1920 and 1080×1350 authored studies and
+checks encoded dimensions against the declared canvas. The public social test
+brief separates visual QA from external comprehension and acquisition evidence.
+The production URL-generation worker has not been changed by these studies.

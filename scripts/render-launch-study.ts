@@ -21,13 +21,17 @@ async function main() {
   const extreme = process.argv.includes('--extreme');
   const motion = process.argv.includes('--motion');
   const hook = process.argv.includes('--hook');
-  if ([extreme, motion, hook].filter(Boolean).length > 1) throw new Error('Choose one film variant');
-  const variant = hook ? 'hook' : motion ? 'motion' : extreme ? 'extreme' : 'original';
+  const social = process.argv.includes('--social');
+  const feed = process.argv.includes('--feed');
+  if (feed && !social) throw new Error('--feed requires --social');
+  if ([extreme, motion, hook, social].filter(Boolean).length > 1) throw new Error('Choose one film variant');
+  const variant = social ? 'social' : hook ? 'hook' : motion ? 'motion' : extreme ? 'extreme' : 'original';
   const sourceName = `launch-${id}${variant === 'original' ? '' : `-${variant}`}.ts`;
   const mod = await import(pathToFileURL(resolve('studies', sourceName)).href);
-  const study = mod[`${id}Study`] as MotionStudy;
+  const study = mod[`${id}${feed ? 'Feed' : ''}Study`] as MotionStudy;
   validateStudy(study); new Script(study.script);
-  const workspace = resolve(variant === 'original' ? '.local/launch-films-20261003' : `.local/launch-${variant}-20261003`, id), root = join(workspace, 'project');
+  const workspace = social ? resolve('.local/launch-social-20261005', `${id}-${feed ? 'feed' : 'reels'}`) : resolve(variant === 'original' ? '.local/launch-films-20261003' : `.local/launch-${variant}-20261003`, id);
+  const root = join(workspace, 'project');
   const html = studyHtml(study), finish = process.argv.includes('--finish');
   if (finish && await readFile(join(root, 'index.html'), 'utf8') !== html) throw new Error('Source changed; rerender before finishing');
   await mkdir(join(root, 'assets'), { recursive: true });
@@ -37,19 +41,22 @@ async function main() {
   await copyFile(resolve('worker/assets/Geist-LICENSE.txt'), join(root, 'assets/Geist-LICENSE.txt'));
   await writeFile(join(root, 'index.html'), html);
   await copyFile(resolve('studies', sourceName), join(workspace, 'authored-study.ts'));
-  const metadata = { id, variant, title: study.title, width: study.width, height: study.height, fps: 30,
+  const metadata = { id, variant, placement: social ? (feed ? 'feed-4x5' : 'reels-9x16') : 'landscape', title: study.title, width: study.width, height: study.height, fps: 30,
     durationFrames: study.durationFrames, durationSeconds: study.durationFrames / 30,
     renderer: 'Hyperframes 0.8.97 / GSAP 3.14.2 / trusted HTML', manuallyAuthored: true,
     automaticUrlGenerationVerified: false, sourcePixelsInGeneratedPicture: false,
     htmlSha256: createHash('sha256').update(html).digest('hex'), notes: study.notes };
   await writeJson(join(workspace, 'study.json'), metadata);
-  const samples = [...new Set([0, ...study.reviewFrames, study.durationFrames - 1])].sort((a,b) => a-b);
+  const densePreview = process.argv.includes('--dense-preview');
+  if (densePreview && (process.argv.includes('--render') || finish)) throw new Error('--dense-preview is a preview-only pass; run the checked export separately');
+  const denseFrames = densePreview ? Array.from({ length: Math.ceil(study.durationFrames / 6) }, (_, index) => index * 6) : [];
+  const samples = [...new Set([0, ...study.reviewFrames, ...denseFrames, study.durationFrames - 1])].sort((a,b) => a-b);
   const server = await serveMotionProject(root, ['index.html', 'assets/gsap.min.js', 'assets/Geist.woff2']);
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   const errors: string[] = [], checks: {frame:number;deterministic:boolean}[] = [];
   try {
     browser = await chromium.launch({ headless: true, executablePath: motionBrowserPath(), args: motionBrowserArgs, env: mediaEnvironment() });
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: study.width, height: study.height }, deviceScaleFactor: 1 });
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => new URL(route.request().url()).origin === server.origin ? route.continue() : route.abort());
     await page.goto(server.origin);
@@ -81,21 +88,21 @@ async function main() {
     const retainedLog=await readFile(join(workspace,'render.log'),'utf8');
     if (/sub_timeline_readiness_timeout|\[Browser:ERROR\]|correctness warnings/i.test(retainedLog)) throw new Error('Render correctness warning; inspect log');
     const measured=await probe(picture);
-    if(measured.width!==1920||measured.height!==1080||Number(measured.video?.nb_frames)!==study.durationFrames||measured.video?.codec_name!=='h264'||measured.video?.pix_fmt!=='yuv420p')throw new Error('Rendered picture metadata mismatch');
+    if(measured.width!==study.width||measured.height!==study.height||Number(measured.video?.nb_frames)!==study.durationFrames||measured.video?.codec_name!=='h264'||measured.video?.pix_fmt!=='yuv420p')throw new Error('Rendered picture metadata mismatch');
     await command(ffmpeg,['-v','error','-xerror','-i',picture,'-f','null','-']);
     const comparisons=[];
     for(const frame of samples){
       const decoded=join(workspace,'frames',`decoded-${String(frame).padStart(4,'0')}.png`);
-      await frameIndex(picture,decoded,frame,1920);
+      await frameIndex(picture,decoded,frame,study.width);
       const log=await command(ffmpeg,['-hide_banner','-i',decoded,'-i',join(workspace,'frames',`html-${String(frame).padStart(4,'0')}.png`),'-filter_complex','[0:v]format=yuv420p[a];[1:v]format=yuv420p[b];[a][b]ssim','-frames:v','1','-f','null','-']);
       const ssim=Number(/All:([0-9.]+)/.exec(log)?.[1]); comparisons.push({frame,ssim,passed:Number.isFinite(ssim)&&ssim>=.97});
     }
     await writeJson(join(workspace,'export-comparisons.json'),comparisons);
     if(comparisons.some(c=>!c.passed))throw new Error('Export differs from authored HTML');
-    if (motion || hook) {
+    if (motion || hook || social) {
       // Hold the soundtrack constant so this comparison isolates visual direction.
       // Reuse the shipped AAC stream without new provider calls or re-encoding.
-      const audioSourceVariant = hook ? 'motion' : 'extreme';
+      const audioSourceVariant = social ? 'hook' : hook ? 'motion' : 'extreme';
       const audioSource = resolve('public/launch-tests/media', `${id}-${audioSourceVariant}.mp4`);
       const audioSourceSha256 = await hash(audioSource);
       const source = await probe(audioSource), duration = study.durationFrames / 30;
@@ -110,8 +117,8 @@ async function main() {
       if (sourceAudioHash !== finalAudioHash || !/^SHA256=[a-f0-9]{64}$/.test(finalAudioHash)) throw new Error('Retained soundtrack bytes changed');
       const levels = await audioMeasurements(output);
       if (!levels.loudness || !Number.isFinite(Number(levels.loudness.input_i)) || Number(levels.loudness.input_tp) > -.5) throw new Error('Invalid retained soundtrack levels');
-      const posterFrame: Record<string,number> = hook ? {linear:24,tally:24,todoist:24} : {linear:22,tally:55,todoist:30};
-      await frameIndex(output, join(workspace,'poster.jpg'),posterFrame[id],1920);
+      const posterFrame: Record<string,number> = hook || social ? {linear:24,tally:24,todoist:24} : {linear:22,tally:55,todoist:30};
+      await frameIndex(output, join(workspace,'poster.jpg'),posterFrame[id],study.width);
       const reusedAudio = {path:audioSource,sha256:audioSourceSha256,aacSha256:finalAudioHash.slice(7),byteIdentical:true,mode:`AAC stream copy from previous ${audioSourceVariant} cut`,newProviderCalls:0};
       await writeJson(join(workspace,'qc.json'),{technicalPassed:true,decoded:true,comparisons,levels,reusedAudio,deterministicChecks:checks,auditoryReviewPerformed:false,semanticVisualReview:'Separate muted sequence review required; export SSIM measures renderer fidelity only.'});
       await writeJson(join(workspace,'result.json'),{...metadata,status:'authored_launch_film',technicalPassed:true,videoPath:output,sha256:await hash(output),reusedAudio,automaticAcceptancePassed:false});
