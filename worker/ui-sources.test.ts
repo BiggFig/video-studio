@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { chromium } from "playwright";
-import { captureUiSource, selectUiSourceElements, UiSourceBudget, uiHexColor, uiSourceFromObservation, type UiSource } from "./ui-sources";
+import { captureUiSource, selectUiSourceElements, UiSourceBudget, uiHexColor, uiPaintBounds, uiSourceFromObservation, type UiSource } from "./ui-sources";
 import { motionBrowserPath } from "./motion-browser";
 import { captureProduct } from "./ingest";
 import { rankProductPanelCandidates } from "./product-visuals";
@@ -42,6 +42,63 @@ test("effective opaque background is a separately bounded source field, never a 
   assert.equal(first.style!.backgroundColor, "transparent"); assert.equal(first.style!.effectiveBackgroundColor, "#101010");
   raw.elements[0].style = { ...raw.elements[0].style, effectiveBackgroundColor: "linear-gradient(white, black)" } as typeof raw.elements[0]["style"];
   assert.equal(uiSourceFromObservation(asset, "#editor", raw).elements[0].style!.effectiveBackgroundColor, undefined);
+});
+
+const paintLayer = (backgroundColor = "rgb(0, 0, 0)", backgroundImage = "none") => ({ backgroundColor, backgroundImage, opacity: "1", filter: "none", backdropFilter: "none", mixBlendMode: "normal" });
+const faintGradient = "radial-gradient(100% 50% at 50% 0%, rgba(0, 163, 255, 0.13) 0%, rgba(0, 163, 255, 0) 50%, rgba(0, 163, 255, 0) 100%)";
+test("observed alpha and gradient envelopes exclude inverted colors without certifying an exact gradient", () => {
+  const constraints = uiPaintBounds("rgba(252, 253, 255, 0.937)", [paintLayer("rgb(0, 0, 0)", faintGradient)]);
+  assert.deepEqual(constraints.colorBounds, { min: [235, 236, 237], max: [254, 255, 255] });
+  assert.deepEqual(constraints.effectiveBackgroundColorBounds, { min: [0, 0, 0], max: [36, 36, 36] });
+  const observationWithBounds = observation();
+  Object.assign(observationWithBounds.elements[0], { paintBounds: constraints });
+  Object.assign(observationWithBounds.elements[0].style, { color: "", effectiveBackgroundColor: "", backgroundColor: "transparent" });
+  const style = uiSourceFromObservation(asset, "#editor", observationWithBounds).elements[0].style!;
+  assert.equal(style.color, undefined); assert.equal(style.effectiveBackgroundColor, undefined);
+  assert.deepEqual(style.colorBounds, constraints.colorBounds); assert.deepEqual(style.effectiveBackgroundColorBounds, constraints.effectiveBackgroundColorBounds);
+  // An exact source color has precedence, even when extra metadata is present.
+  observationWithBounds.elements[0].style.color = "rgb(1, 2, 3)";
+  assert.equal(uiSourceFromObservation(asset, "#editor", observationWithBounds).elements[0].style!.colorBounds, undefined);
+});
+
+test("paint envelopes reject unsupported layers, stops, effects and unresolved backgrounds", () => {
+  for (const image of ["linear-gradient(red, rgba(0, 0, 0, .1))", "linear-gradient(color(srgb 1 0 0 / .1), rgba(0, 0, 0, .1))", "url(https://example.com/image.png)", `${faintGradient}, ${faintGradient}`, "linear-gradient(rgba(0,0,0,9), rgba(0,0,0,0))"]) {
+    assert.equal(uiPaintBounds("rgba(250,250,250,.9)", [paintLayer("rgb(0,0,0)", image)]).effectiveBackgroundColorBounds, undefined, image);
+  }
+  assert.equal(uiPaintBounds("rgb(255,255,255)", [paintLayer("rgba(0,0,0,0)", faintGradient)]).effectiveBackgroundColorBounds, undefined);
+  for (const effect of [{ opacity: ".9" }, { filter: "invert(1)" }, { backdropFilter: "blur(1px)" }, { mixBlendMode: "screen" }, { maskImage: "linear-gradient(black,transparent)" }, { maskBorderSource: "url(mask.png)" }, { clipPath: "circle(10px)" }, { pseudoPaint: true }]) assert.deepEqual(uiPaintBounds("rgba(250,250,250,.9)", [{ ...paintLayer(), ...effect }]), {});
+  for (const effect of [{ backgroundClip: "text" }, { backgroundClip: "content-box" }, { coversRegion: false }, { boxShadow: "white 0 0 100px inset" }]) assert.equal(uiPaintBounds("rgba(250,250,250,.9)", [{ ...paintLayer(), ...effect }]).effectiveBackgroundColorBounds, undefined);
+  assert.equal(uiPaintBounds("rgba(250,250,250,.9)", [{ ...paintLayer(), textFillColor: "rgb(0,0,0)" }]).colorBounds, undefined);
+  assert.equal(uiPaintBounds("rgba(250,250,250,.9)", [paintLayer("rgb(0,0,0)", `linear-gradient(${"rgba(0,0,0,.1),".repeat(1000)}rgba(0,0,0,0))`)]).effectiveBackgroundColorBounds, undefined);
+  assert.deepEqual(uiPaintBounds("rgba(250,250,250,.9)", [paintLayer()], false), {});
+  assert.deepEqual(uiPaintBounds("rgba(250,250,250,.9)", Array(16).fill(paintLayer())), {});
+});
+
+test("layer envelopes contain composited RGB at all alpha and backdrop extremes", () => {
+  const partial = paintLayer("rgba(120,80,200,.25)", "linear-gradient(rgba(0,0,0,.2), rgba(255,255,255,0))");
+  const constraints = uiPaintBounds("rgba(12,34,56,.7)", [partial, paintLayer("rgb(220,230,240)", faintGradient)]);
+  const bg = constraints.effectiveBackgroundColorBounds!, fg = constraints.colorBounds!;
+  for (const alpha1 of [0, .13]) for (const alpha2 of [0, .2]) for (const hue1 of [0, 255]) for (const hue2 of [0, 255]) {
+    const final = [220, 230, 240].map((base, i) => ((base * (1 - alpha1) + hue1 * alpha1) * .75 + [120, 80, 200][i] * .25) * (1 - alpha2) + hue2 * alpha2);
+    assert.ok(final.every((value, i) => Math.round(value) >= bg.min[i] && Math.round(value) <= bg.max[i]));
+    assert.ok(final.every((value, i) => { const composite = Math.round([12, 34, 56][i] * .7 + value * .3); return composite >= fg.min[i] && composite <= fg.max[i]; }));
+  }
+});
+
+test("browser captures alpha-gradient constraints while exact paint stays unknown", { skip: process.env.STUDIO_UI_SOURCE_INTEGRATION !== "1", timeout: 45000 }, async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: motionBrowserPath() }); t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } }); await page.route("**/*", route => route.abort());
+  await page.setContent(`<style>body{margin:0}#editor{width:1000px;height:650px;background:#000;color:#eee;padding:20px;box-sizing:border-box}.preview{width:500px;height:550px;background:#000;background-image:${faintGradient};color:rgba(252,253,255,.937)}h2{font:24px Arial}p{font:14px Arial}</style><section id="editor"><div class="preview"><h2>Observed heading</h2><p>Observed greeting</p></div></section>`);
+  const source = await captureUiSource(page, { ...asset, width: 1000, height: 650 }, "#editor");
+  for (const text of ["Observed heading", "Observed greeting"]) {
+    const style = source.elements.find(element => element.text === text)!.style!;
+    assert.equal(style.color, undefined); assert.equal(style.effectiveBackgroundColor, undefined); assert.equal(style.backgroundColor, "transparent");
+    assert.ok(style.colorBounds!.min.every(value => value >= 230)); assert.ok(style.effectiveBackgroundColorBounds!.max.every(value => value < 50));
+  }
+  await page.addStyleTag({ content: '.preview{position:relative}.preview::before{content:"";position:absolute;inset:0;background:white}' });
+  const overpainted = await captureUiSource(page, { ...asset, width: 1000, height: 650 }, "#editor");
+  const overpaintedStyle = overpainted.elements.find(element => element.text === "Observed greeting")!.style!;
+  assert.equal(overpaintedStyle.colorBounds, undefined); assert.equal(overpaintedStyle.effectiveBackgroundColorBounds, undefined);
 });
 
 test("browser color capture resolves supported modern colors and opaque ancestors without flattening alpha or gradients", { skip: process.env.STUDIO_UI_SOURCE_INTEGRATION !== "1", timeout: 45000 }, async t => {

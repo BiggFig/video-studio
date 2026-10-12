@@ -1,6 +1,8 @@
 import type { Page } from "playwright";
 import type { Asset } from "./types";
 
+export interface UiColorBounds { min: [number, number, number]; max: [number, number, number] }
+
 export interface UiSource {
   id: string; assetId: string; basis: "dom" | "pixels";
   context: "marketing-example" | "public-demo" | "user-supplied";
@@ -9,7 +11,7 @@ export interface UiSource {
     id: string; role: "panel" | "text" | "button" | "input" | "tab" | "list-item" | "link" | "icon" | "node";
     rect: { x: number; y: number; width: number; height: number };
     text?: string; selector?: string; codeContainer?: string; state?: { selected?: boolean; expanded?: boolean; disabled?: boolean };
-    style?: { color?: string; backgroundColor?: string; effectiveBackgroundColor?: string; borderColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number; fontWeight?: string; lineHeight?: number };
+    style?: { color?: string; backgroundColor?: string; effectiveBackgroundColor?: string; colorBounds?: UiColorBounds; effectiveBackgroundColorBounds?: UiColorBounds; borderColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number; fontWeight?: string; lineHeight?: number };
   }[];
   limitations: string[];
 }
@@ -50,6 +52,62 @@ export function uiHexColor(value: unknown): string | undefined {
   if (channels.some(n => !Number.isFinite(n) || n < 0 || n > 255)) return;
   return "#" + channels.map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
 }
+/** Conservative displayed-channel constraints, NOT an exact paint/color result.
+ * Partial foreground alpha may be bounded over any backdrop. Gradient bounds
+ * require a known opaque base; only one standard RGB linear/radial layer is
+ * supported at each ancestor. Unsupported paint/effects never acquire bounds.
+ * Kept self-contained because the same pure function runs in the guarded page. */
+export function uiPaintBounds(foreground: string, layers: { backgroundColor: string; backgroundImage: string; opacity: string; filter: string; backdropFilter: string; mixBlendMode: string; maskImage?: string; maskBorderSource?: string; clipPath?: string; backgroundClip?: string; coversRegion?: boolean; textFillColor?: string; boxShadow?: string; pseudoPaint?: boolean }[], complete = true): { colorBounds?: UiColorBounds; effectiveBackgroundColorBounds?: UiColorBounds } {
+  if (!complete || !layers.length || layers.length > 15 || layers.some(layer => Number(layer.opacity) !== 1 || layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal" || layer.maskImage && layer.maskImage !== "none" || layer.maskBorderSource && layer.maskBorderSource !== "none" || layer.clipPath && layer.clipPath !== "none" || layer.pseudoPaint)) return {};
+  const rgba = (value: string) => {
+    if (typeof value !== "string" || value.length > 160) return;
+    const match = /^rgba?\(\s*(\d+(?:\.\d+)?)[, ]+\s*(\d+(?:\.\d+)?)[, ]+\s*(\d+(?:\.\d+)?)(?:\s*[,/]\s*(\d+(?:\.\d+)?|\.\d+)(%)?)?\s*\)$/i.exec(value);
+    if (!match) return;
+    const channels = match.slice(1, 4).map(Number), alpha = match[4] === undefined ? 1 : Number(match[4]) / (match[5] ? 100 : 1);
+    if (channels.some(value => value < 0 || value > 255) || alpha < 0 || alpha > 1) return;
+    return { channels, alpha };
+  };
+  const gradientAlpha = (value: string) => {
+    if (typeof value !== "string" || value.length > 1600) return;
+    if (!/^(?:repeating-)?(?:linear|radial)-gradient\(/.test(value) || !value.endsWith(")")) return;
+    const body = value.slice(value.indexOf("(") + 1, -1), stops: number[] = [];
+    const rest = body.replace(/rgba?\([^()]*\)/g, color => { const parsed = rgba(color); stops.push(parsed ? parsed.alpha : NaN); return "#"; });
+    // No named colors, images, color-space functions, nested layers or other
+    // syntax can hide an uncounted opaque stop. Direction/size tokens only.
+    const syntax = rest.replace(/(?:farthest-corner|closest-corner|farthest-side|closest-side|ellipse|circle|bottom|center|right|left|top|turn|grad|deg|rad|px|at|to)\b/g, "");
+    if (stops.length < 2 || stops.length > 16 || stops.some(value => !Number.isFinite(value)) || !/^[\d\s.,+%#-]*$/.test(syntax)) return;
+    return Math.max(...stops);
+  };
+  // One outward byte per compositing layer also covers intermediate browser
+  // channel quantization; the constraints must never be tighter than the paint.
+  const bounded = (min: number[], max: number[], padding = 1): UiColorBounds => ({ min: min.map(value => Math.max(0, Math.floor(value) - padding)) as UiColorBounds["min"], max: max.map(value => Math.min(255, Math.ceil(value) + padding)) as UiColorBounds["max"] });
+  const result: { colorBounds?: UiColorBounds; effectiveBackgroundColorBounds?: UiColorBounds } = {};
+  const text = rgba(foreground);
+  if (text && text.alpha > 0 && text.alpha < 1 && (!layers[0].textFillColor || layers[0].textFillColor === foreground)) result.colorBounds = bounded(text.channels.map(value => value * text.alpha), text.channels.map(value => value * text.alpha + 255 * (1 - text.alpha)));
+  const stack: { color: NonNullable<ReturnType<typeof rgba>>; gradient: number }[] = [];
+  for (const layer of layers) {
+    if (layer.boxShadow && layer.boxShadow !== "none") return result;
+    const color = rgba(layer.backgroundColor), gradient = layer.backgroundImage === "none" ? 0 : gradientAlpha(layer.backgroundImage);
+    if (!color || gradient === undefined) return result;
+    if ((color.alpha > 0 || layer.backgroundImage !== "none") && (layer.coversRegion === false || layer.backgroundClip && layer.backgroundClip !== "border-box")) return result;
+    stack.push({ color, gradient });
+    if (color.alpha === 1) {
+      let min = [0, 0, 0], max = [255, 255, 255];
+      for (const paint of stack.reverse()) {
+        min = min.map((value, index) => paint.color.channels[index] * paint.color.alpha + value * (1 - paint.color.alpha));
+        max = max.map((value, index) => paint.color.channels[index] * paint.color.alpha + value * (1 - paint.color.alpha));
+        // Gradient position and hue remain unknown: allow every possible RGB,
+        // with alpha between zero and the greatest explicitly parsed stop.
+        min = min.map(value => value * (1 - paint.gradient));
+        max = max.map(value => value + (255 - value) * paint.gradient);
+      }
+      const constraint = bounded(min, max, stack.length + 1);
+      if (constraint.min.some(value => value > 0) || constraint.max.some(value => value < 255)) result.effectiveBackgroundColorBounds = constraint;
+      return result;
+    }
+  }
+  return result;
+}
 /** One shared allowance across homepage and followup panels; no new capture/network budget. */
 export class UiSourceBudget {
   sources: UiSource[] = [];
@@ -68,7 +126,7 @@ export class UiSourceBudget {
 
 interface DomObservation {
   width: number; height: number;
-  elements: { role: UiSource["elements"][number]["role"]; rect: UiSource["elements"][number]["rect"]; text?: string; selector: string; codeContainer?: string; state: UiSource["elements"][number]["state"]; style: Record<string, string> }[];
+  elements: { role: UiSource["elements"][number]["role"]; rect: UiSource["elements"][number]["rect"]; text?: string; selector: string; codeContainer?: string; state: UiSource["elements"][number]["state"]; style: Record<string, string>; paintBounds?: ReturnType<typeof uiPaintBounds> }[];
 }
 /** Validate observed data again outside the browser; site text is never executable content. */
 export function uiSourceFromObservation(asset: Asset, selector: string, observed?: DomObservation): UiSource {
@@ -81,6 +139,10 @@ export function uiSourceFromObservation(asset: Asset, selector: string, observed
     const style: NonNullable<UiSource["elements"][number]["style"]> = {};
     for (const key of ["color", "backgroundColor", "effectiveBackgroundColor", "borderColor"] as const) { const color = uiHexColor(raw.style[key]); if (color && (key !== "borderColor" || parseFloat(raw.style.borderWidth) > 0)) style[key] = color; }
     if (raw.style.backgroundColor === "transparent") style.backgroundColor = "transparent";
+    for (const [key, exact] of [["colorBounds", "color"], ["effectiveBackgroundColorBounds", "effectiveBackgroundColor"]] as const) {
+      const value = raw.paintBounds?.[key];
+      if (style[exact] === undefined && value && Array.isArray(value.min) && Array.isArray(value.max) && value.min.length === 3 && value.max.length === 3 && [...value.min, ...value.max].every(channel => Number.isInteger(channel) && channel >= 0 && channel <= 255) && value.min.every((channel, index) => channel <= value.max[index])) style[key] = { min: [...value.min], max: [...value.max] };
+    }
     for (const key of ["borderRadius", "fontSize", "lineHeight"] as const) { const value = raw.style[key]; if (/^\d+(?:\.\d+)?px$/.test(value)) { const number = parseFloat(value); if (number <= 256) style[key] = round(number, 2); } }
     const families = (raw.style.fontFamily || "").split(",").slice(0, 5).map(family => clean(family, 80).replace(/["']/g, ""));
     while (families.join(", ").length > 120) families.pop();
@@ -105,7 +167,7 @@ export async function captureUiSource(page: Page, asset: Asset, selector: string
     const root=document.querySelector(${JSON.stringify(selector)});if(!root)return {width:0,height:0,elements:[]};
     const outer=root.getBoundingClientRect(),elements=[];if(!outer.width||!outer.height)return {width:0,height:0,elements};
     for(let ancestor=root;ancestor;ancestor=ancestor.parentElement){const s=getComputedStyle(ancestor);if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)===0)return {width:outer.width,height:outer.height,elements};}
-    const __name=value=>value,select=${selectUiSourceElements.toString()};
+    const __name=value=>value,select=${selectUiSourceElements.toString()},paintBounds=${uiPaintBounds.toString()};
     // Resolve browser-supported computed colors into bounded sRGB bytes. This
     // reads no image, CSS rule, form value or URL and never executes site code.
     // Alpha mixtures/gradients remain unknown instead of becoming light UI.
@@ -120,17 +182,23 @@ export async function captureUiSource(page: Page, asset: Asset, selector: string
       const rgba=paint.getImageData(0,0,1,1).data,result=rgba[3]===255?'#'+Array.from(rgba).slice(0,3).map(v=>v.toString(16).padStart(2,'0')).join(''):rgba[3]===0?'transparent':'';
       if(colors.size<1600)colors.set(value,result);return result;
     };
+    const pseudoPaint=new WeakMap();
     const background=node=>{
-      let found='',blocked=false,current=node;
+      let found='',blocked=false,current=node;const layers=[],region=node.getBoundingClientRect();
       for(let depth=0;current&&depth<15;depth++,current=current.parentElement){
         const s=getComputedStyle(current);
+        const box=current.getBoundingClientRect(),radii=[s.borderTopLeftRadius,s.borderTopRightRadius,s.borderBottomRightRadius,s.borderBottomLeftRadius];
+        if(!pseudoPaint.has(current))pseudoPaint.set(current,['::before','::after'].some(pseudo=>{const p=getComputedStyle(current,pseudo);return p.content!=='none'&&p.content!=='normal'&&p.display!=='none'&&p.visibility!=='hidden'&&Number(p.opacity)!==0;}));
+        const radius=radii.every(value=>/^\\d+(?:\\.\\d+)?px$/.test(value))?Math.max(...radii.map(parseFloat)):Infinity;
+        const coversRegion=region.left>=box.left+radius&&region.right<=box.right-radius&&region.top>=box.top+radius&&region.bottom<=box.bottom-radius;
+        layers.push({backgroundColor:s.backgroundColor,backgroundImage:s.backgroundImage,opacity:s.opacity,filter:s.filter,backdropFilter:s.backdropFilter,mixBlendMode:s.mixBlendMode,maskImage:s.maskImage,maskBorderSource:s.maskBorderSource||s.webkitMaskBoxImageSource||'none',clipPath:s.clipPath,backgroundClip:s.backgroundClip,coversRegion,textFillColor:s.webkitTextFillColor,boxShadow:s.boxShadow,pseudoPaint:pseudoPaint.get(current)});
         if(Number(s.opacity)!==1||s.filter!=='none'||s.backdropFilter!=='none'||s.mixBlendMode!=='normal')return {opaque:false,color:''};
         if(!found&&!blocked){
           if(s.backgroundImage!=='none')blocked=true;
           else {const value=color(s.backgroundColor);if(value&&value!=='transparent')found=value;else if(value!=='transparent')blocked=true;}
         }
       }
-      return current?{opaque:false,color:''}:{opaque:true,color:blocked?'':found};
+      return current?{opaque:false,color:''}:{opaque:true,color:blocked?'':found,bounds:paintBounds(getComputedStyle(node).color,layers)};
     };
     // Keep the existing 400-node geometry allowance, but spread it across the
     // subtree. Hundreds of early syntax spans cannot hide a later control.
@@ -193,7 +261,7 @@ export async function captureUiSource(page: Page, asset: Asset, selector: string
       const state={};for(const key of ['selected','expanded','disabled']){const value=node.getAttribute('aria-'+key);if(value==='true'||value==='false')state[key]=value==='true';}
       if(node.matches(':disabled'))state.disabled=true;
       const backdrop=background(node),foreground=backdrop.opaque?color(s.color):'';
-      elements.push({role,rect:{x:Math.max(0,(box.left-outer.left)/outer.width),y:Math.max(0,(box.top-outer.top)/outer.height),width:Math.min(box.width,outer.right-box.left)/outer.width,height:Math.min(box.height,outer.bottom-box.top)/outer.height},...(own&&role!=='input'?{text:own}:{}),selector:path(node),...(line?{codeContainer:path(node.closest('pre'))}:{}),state,style:{color:foreground==='transparent'?'':foreground,backgroundColor:backdrop.opaque&&s.backgroundImage==='none'?color(s.backgroundColor):'',effectiveBackgroundColor:backdrop.color,borderColor:backdrop.opaque?color(s.borderColor):'',borderWidth:s.borderWidth,borderRadius:s.borderRadius,fontFamily:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight}});
+      elements.push({role,rect:{x:Math.max(0,(box.left-outer.left)/outer.width),y:Math.max(0,(box.top-outer.top)/outer.height),width:Math.min(box.width,outer.right-box.left)/outer.width,height:Math.min(box.height,outer.bottom-box.top)/outer.height},...(own&&role!=='input'?{text:own}:{}),selector:path(node),...(line?{codeContainer:path(node.closest('pre'))}:{}),state,paintBounds:backdrop.bounds,style:{color:foreground==='transparent'?'':foreground,backgroundColor:backdrop.opaque&&s.backgroundImage==='none'?color(s.backgroundColor):'',effectiveBackgroundColor:backdrop.color,borderColor:backdrop.opaque?color(s.borderColor):'',borderWidth:s.borderWidth,borderRadius:s.borderRadius,fontFamily:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight}});
     }
     return {width:outer.width,height:outer.height,elements:select(elements,96)};
   })()`);

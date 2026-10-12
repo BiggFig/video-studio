@@ -10,7 +10,7 @@ import { buildUiDocuments, compileUiDocuments, loadUiDocuments, validateUiBundle
 import { constrainedUiSchema, UI_TRANSPORT_VERSION } from "./model-format";
 import { inspectUiDocumentLayout } from "./ui-document-layout";
 import { expectedUiState } from "./ui-state";
-import type { UiSource } from "./ui-sources";
+import { uiPaintBounds, type UiSource } from "./ui-sources";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
 import { literalPreviewCandidates } from "./literal-preview-candidates";
@@ -92,6 +92,35 @@ test("only genuinely unknown colors become independent exact review slots; confl
   for (const presentation of [review.presentation.slice(1), [...review.presentation, review.presentation[0]], review.presentation.map((value, index) => index === 0 ? { ...value, slotId: "undeclared" } : value), review.presentation.map(value => panelSlots.some(slot => slot.id === value.slotId) ? { ...value, color: "transparent" } : value)]) assert.throws(() => assembleUiLiteralReview({ ...review, presentation }, seed, f.research, f.evidence, f.target), PipelineError);
   const conflict = fixture(); conflict.evidence.uiSources![0].elements[0].style!.effectiveBackgroundColor = "#ffffff"; assert.equal(createUiLiteralSeed(conflict.research, conflict.evidence, conflict.target), undefined);
   const mixed = fixture(); delete mixed.evidence.uiSources![0].elements[0].style!.effectiveBackgroundColor; assert.equal(createUiLiteralSeed(mixed.research, mixed.evidence, mixed.target), undefined);
+});
+
+test("unknown alpha-gradient slots remain reviewed but reject a white surface and black source text", () => {
+  const f = fixture();
+  const constraints = uiPaintBounds("rgba(252,253,255,.937)", [{ backgroundColor: "rgb(0,0,0)", backgroundImage: "radial-gradient(100% 50% at 50% 0%, rgba(0,163,255,.13) 0%, rgba(0,163,255,0) 100%)", opacity: "1", filter: "none", backdropFilter: "none", mixBlendMode: "normal" }]);
+  for (const element of f.evidence.uiSources![0].elements.filter(element => !element.codeContainer)) {
+    delete element.style!.color; delete element.style!.effectiveBackgroundColor; Object.assign(element.style!, constraints);
+  }
+  const seed = createUiLiteralSeed(f.research, f.evidence, f.target)!; assert.ok(seed); assert.equal(seed.slots.length, 3);
+  assert.ok(seed.slots.every(slot => slot.bounds));
+  const review = { ...reviewFor(seed), presentation: seed.slots.map(slot => ({ slotId: slot.id, color: slot.property === "color" ? "#eeeeef" : "#030509" })) };
+  const document = assembleUiLiteralReview(review, seed, f.research, f.evidence, f.target); validateUiDocuments([document], f.research, f.evidence);
+  for (const slot of seed.slots) {
+    const wrong = structuredClone(review); wrong.presentation.find(value => value.slotId === slot.id)!.color = slot.property === "color" ? "#000000" : "#ffffff";
+    assert.throws(() => assembleUiLiteralReview(wrong, seed, f.research, f.evidence, f.target), PipelineError);
+  }
+  const tampered = structuredClone(seed); tampered.slots[0].bounds!.max[0] = 255;
+  assert.throws(() => assembleUiLiteralReview(review, tampered, f.research, f.evidence, f.target), PipelineError);
+  assert.match(uiLiteralReviewRequest(seed, f.research, f.evidence, f.target, 6000).prompt, /not exact colors/);
+  assert.match(uiLiteralReviewRequest(seed, f.research, f.evidence, f.target, 6000).prompt, /approximated by this flat-color representation/);
+});
+
+test("shared panel color must satisfy every observed constraint and incompatible bounds refuse the seed", () => {
+  const f = fixture(), preview = f.evidence.uiSources![0].elements.filter(element => !element.codeContainer);
+  for (const [i, element] of preview.entries()) { delete element.style!.effectiveBackgroundColor; element.style!.effectiveBackgroundColorBounds = i ? { min: [10, 12, 14], max: [30, 30, 30] } : { min: [0, 0, 0], max: [20, 22, 24] }; }
+  const seed = createUiLiteralSeed(f.research, f.evidence, f.target)!;
+  assert.deepEqual(seed.slots[0].bounds, { min: [10, 12, 14], max: [20, 22, 24] });
+  preview[1].style!.effectiveBackgroundColorBounds = { min: [25, 25, 25], max: [30, 30, 30] };
+  assert.equal(createUiLiteralSeed(f.research, f.evidence, f.target), undefined);
 });
 
 test("missing or ambiguous source inventory never manufactures a seed; refusal cannot carry choices", () => {

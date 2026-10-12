@@ -70,3 +70,39 @@ test("export integrity requires every UI action comparison as well as every scen
   const legacy={...report,planSha256:createHash("sha256").update(JSON.stringify(plan)).digest("hex"),comparisons:[{scene:scene.id,frame:motionSampleFrames(scene,plan,0)[2],passed:true,ssim:.99}]};
   assert.equal(motionIntegrityPassed(plan,legacy,seek),true);
 });
+
+test("directed export integrity requires the exact camera/action union and independent hold multiplicity",()=>{
+  const {plan}=fixture(),scene=plan.scenes[0];
+  scene.start_frame=120;plan.output.duration_frames=420;
+  const hold=motionSampleFrames(scene,plan,0)[2],window={startFrame:0,endFrame:300,enterFrames:0};
+  scene.shotDirection={version:1,subjectIds:["note"],copyRole:"support",camera:{shots:[
+    {atFrame:0,moveFrames:0,job:"establish",targetIds:[]},
+    {atFrame:78,moveFrames:12,job:"input",targetIds:["note"]},
+    {atFrame:hold-scene.start_frame,moveFrames:0,job:"result",targetIds:["note"]},
+  ]},actionWindow:{startFrame:30,endFrame:90},resultHold:{startFrame:90,endFrame:300},layers:{copy:{...window},cursor:{...window},product:{...window},material:{...window}},exit:{kind:"cut"}};
+  // Renderer emits one hold, then unique action/camera frames. Frame210 is both
+  // the completed type and settled camera; the independent hold appears twice.
+  const frames=[hold,120,198,204,210,hold,419];
+  const comparisons=frames.map(frame=>({scene:scene.id,frame,passed:true,ssim:.986272}));
+  const report={passed:true,localFontLoaded:true,localImagesDecoded:true,frames:plan.output.duration_frames,planSha256:createHash("sha256").update(JSON.stringify(plan)).digest("hex"),comparisons};
+  const seek={deterministic:true},before=JSON.stringify({plan,report,seek});
+  assert.equal(motionIntegrityPassed(plan,report,seek),true);
+  assert.equal(comparisons.filter(value=>value.frame===210).length,1);
+  assert.equal(comparisons.filter(value=>value.frame===hold).length,2);
+  for(const invalid of [
+    comparisons.filter(value=>value.frame!==198),
+    [...comparisons,comparisons[1]],
+    comparisons.map((value,index)=>index===2?comparisons[1]:value),
+    comparisons.map((value,index)=>index===2?{...value,frame:199}:value),
+    comparisons.map((value,index)=>index===2?{...value,ssim:.969999}:value),
+    comparisons.map((value,index)=>index===2?{...value,ssim:NaN}:value),
+    comparisons.map((value,index)=>index===2?{...value,passed:false}:value),
+    comparisons.slice(1),
+  ])assert.equal(motionIntegrityPassed(plan,{...report,comparisons:invalid},seek),false);
+  assert.equal(motionIntegrityPassed(plan,{...report,comparisons:[...comparisons].reverse()},seek),true);
+  assert.equal(motionIntegrityPassed(plan,{...report,planSha256:"0".repeat(64)},seek),false);
+  assert.equal(motionIntegrityPassed(plan,{...report,frames:419},seek),false);
+  assert.equal(motionIntegrityPassed(plan,{...report,localFontLoaded:false},seek),false);
+  assert.equal(motionIntegrityPassed(plan,{...report,localImagesDecoded:false},seek),false);
+  assert.equal(JSON.stringify({plan,report,seek}),before,"validation never rewrites the plan or retained proof");
+});

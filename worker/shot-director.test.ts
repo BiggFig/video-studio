@@ -26,6 +26,64 @@ function fixture(): Plan {
 }
 function bindUi(plan: Plan) { plan.production!.uiSha256 = stageDigest({ version: 1, jobId: plan.job_id, evidenceSha256: plan.production!.evidenceSha256, researchSha256: plan.production!.researchSha256, documents: plan.uiDocuments }); }
 
+function literalFixture(): Plan {
+  const plan = fixture(), doc = plan.uiDocuments![0], scene = plan.scenes[0];
+  doc.id = "preview"; doc.viewport = { width: 520, height: 240 }; doc.styles[0].fontSize = 12;
+  const element = (id: string, text: string, x: number, y: number, width: number, height: number, type: "text" | "panel" = "text") => ({ id, type, text, rect: { x, y, width, height }, sourceRect: { x, y, width, height }, sourceAssetId: "source", styleId: "body", textBasis: "source-ui" as const, initiallyVisible: true });
+  // Same compact two-pane geometry as the real failed shot, with generic copy.
+  doc.elements = [element("code-pane", "", .038, .083, .443, .767, "panel"), element("definition", "const Greeting = ({", .061, .15, .396, .158), element("code", "name = 'Ada',", .061, .375, .396, .092), element("template", "Hello {name},", .061, .692, .396, .092), element("preview-pane", "", .519, .083, .443, .592, "panel"), element("heading", "Welcome, user!", .542, .15, .396, .2875), element("greeting", "Hello Ada,", .542, .504, .396, .104)];
+  const visible = doc.elements.map(element => element.id);
+  doc.states = [{ id: "before", basis: "observed", sourceAssetId: "source", evidenceIds: ["fact-1"], visibleElementIds: visible, selectedElementIds: [], textValues: [] }, { id: "after", basis: "illustrative", evidenceIds: ["fact-1"], visibleElementIds: visible, selectedElementIds: [], textValues: [{ elementId: "code", text: "name = 'Mina',", textBasis: "example-content" }, { elementId: "greeting", text: "Hello Mina,", textBasis: "example-content" }] }];
+  doc.previewBinding = { kind: "literal-preview", codeElementId: "code", templateElementId: "template", resultElementId: "greeting", contextElementIds: ["definition", "heading"], evidenceIds: ["fact-1"] };
+  doc.terminalResult = { version: 2, beforeStateId: "before", afterStateId: "after", trigger: { kind: "code-edit-complete", elementId: "code", text: "name = 'Mina',", evidenceId: "fact-1" }, resultElementIds: ["greeting"], evidenceIds: ["fact-1"] };
+  scene.duration_frames = 270; plan.output.duration_frames = 270;
+  scene.presentation!.visual = { kind: "ui-demo", documentId: "preview", actions: [{ kind: "type", atFrame: 30, durationFrames: 54, targetId: "code", text: "name = 'Mina',", evidenceId: "fact-1" }, { kind: "state", atFrame: 90, durationFrames: 1, stateId: "after", evidenceId: "fact-1" }] };
+  bindUi(plan); return plan;
+}
+
+test("fresh literal camera preserves both causal panes before, throughout typing and through the result hold in every format", () => {
+  for (const [width, height] of [[1920, 1080], [1080, 1080], [1080, 1350], [1080, 1920]]) {
+    const plan = literalFixture(), original = structuredClone(plan.scenes[0].presentation); Object.assign(plan.output, { width, height });
+    applyShotDirector(plan); validatePlanShotDirector(plan);
+    assert.equal(plan.shotDirector!.literalContextVersion, 1);
+    const scene = plan.scenes[0], doc = plan.uiDocuments![0], track = scene.shotDirection!.camera;
+    assert.deepEqual(scene.presentation, original); assert.deepEqual(scene.shotDirection!.resultHold, { startFrame: 103, endFrame: 270 });
+    assert.equal(track.shots.find(shot => shot.job === "input")!.targetIds[0], "code");
+    assert.equal(track.shots.at(-1)!.targetIds[0], "greeting"); assert.equal(track.shots.at(-1)!.moveFrames, 12);
+    const view = uiStageViewport(width, height, true, true, true), fit = Math.min(view.width / doc.viewport.width, view.height / doc.viewport.height);
+    for (let frame = 24; frame < scene.duration_frames; frame++) {
+      const camera = expectedSemanticUiCamera(doc, track, frame, view);
+      for (const element of doc.elements) {
+        const r = element.rect, left = view.width / 2 + (r.x - .5) * doc.viewport.width * fit * camera.scale + camera.x, top = view.height / 2 + (r.y - .5) * doc.viewport.height * fit * camera.scale + camera.y;
+        assert.ok(left >= -.001 && top >= -.001 && left + r.width * doc.viewport.width * fit * camera.scale <= view.width + .001 && top + r.height * doc.viewport.height * fit * camera.scale <= view.height + .001, `${width}x${height} frame${frame} ${element.id}`);
+        if (element.text) assert.ok(doc.styles[0].fontSize * fit * camera.scale >= 16);
+      }
+    }
+  }
+});
+
+test("retained literal framing and repair selection retain absence, hashes and isolated poses", () => {
+  const legacy = applyShotDirector(literalFixture(), undefined, { literalContextVersion: 0 }), saved = JSON.stringify(legacy), hash = legacy.production!.shotDirectorSha256;
+  assert.equal(legacy.shotDirector!.literalContextVersion, undefined); validatePlanShotDirector(legacy); assert.equal(JSON.stringify(legacy), saved);
+  assert.deepEqual(buildDirectorPlan(legacy).scenes, legacy.scenes.map(scene => scene.shotDirection));
+  applyShotDirector(legacy); assert.equal(legacy.production!.shotDirectorSha256, hash);
+  const repaired = literalFixture(); applyShotDirector(repaired, undefined, { literalContextVersion: legacy.shotDirector!.literalContextVersion ?? 0 });
+  assert.deepEqual(repaired.scenes[0].shotDirection!.camera, legacy.scenes[0].shotDirection!.camera);
+  const oldCamera = expectedSemanticUiCamera(legacy.uiDocuments![0], legacy.scenes[0].shotDirection!.camera, 269, uiStageViewport(1920, 1080, true, true, true)); assert.equal(oldCamera.scale, 2.4);
+  const fresh = applyShotDirector(literalFixture()), changed = structuredClone(fresh); delete changed.shotDirector!.literalContextVersion;
+  assert.throws(() => validatePlanShotDirector(changed));
+});
+
+test("literal framing includes only visible bound context and containing panels", () => {
+  const plan = literalFixture(), doc = plan.uiDocuments![0];
+  doc.elements.push({ ...doc.elements[5], id: "future", initiallyVisible: false }, { ...doc.elements[5], id: "unrelated", text: "Unrelated", rect: { x: .9, y: .9, width: .05, height: .05 } });
+  doc.previewBinding!.contextElementIds.push("future"); doc.states[1].visibleElementIds = [...doc.states[1].visibleElementIds, "future"]; bindUi(plan);
+  const track = buildDirectorPlan(plan).scenes[0].camera;
+  assert.ok(!track.shots.find(shot => shot.job === "input")!.contextIds!.includes("future"));
+  assert.ok(track.shots.at(-1)!.contextIds!.includes("future"));
+  assert.ok(track.shots.every(shot => !shot.contextIds?.includes("unrelated")));
+});
+
 test("director compiles causal close-ups and quiet consequence without changing product actions", () => {
   const plan = fixture(), original = structuredClone(plan.scenes[0].presentation), directed = buildDirectorPlan(plan).scenes[0];
   assert.deepEqual(directed.camera.shots.map(shot => shot.job), ["establish", "input", "context", "commit", "result"]);

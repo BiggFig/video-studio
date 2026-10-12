@@ -319,7 +319,7 @@
       "number": 11,
       "title": "Prove it generalizes",
       "status": "in-progress",
-      "detail": "Zero automatic passes. One earlier Baserow draft rendered but failed complete acceptance. The latest completed three-product batch stopped before rendering. The six approved authored Tally exports remain available and do not count as automatic URL passes."
+      "detail": "Zero automatic passes. Baserow and Resend have produced retained drafts, but final quality checks rejected them. Camera framing and early action are being corrected. The six approved authored Tally exports remain available and do not count as automatic URL passes."
     },
     {
       "number": 12,
@@ -367,7 +367,7 @@
     {
       "title": "Resend",
       "status": "Automatic reconstruction under test",
-      "detail": "Source-seeded reconstruction and coherent capture of animated panels are implemented. Public verification recovered the actual code and matching email greeting. Fresh automatic acceptance is underway; no automatic video has passed."
+      "detail": "A fresh 24.8-second landscape draft preserved source colors and passed action/outcome review. Final quality checks rejected cropped UI context and unclear code-to-preview framing. No repair ran beyond its reserved budget; camera and pacing fixes are in progress. No automatic video has passed."
     },
     {
       "title": "Baserow",

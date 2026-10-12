@@ -6,9 +6,11 @@ import { audioMeasurements, command, ffmpeg, frameIndex, hash, probe, writeJson 
 import { validateTimeline } from "./planning";
 import { motionSampleFrames, presentation, transitionFrames } from "./motion-composition";
 import { uiActionSampleFrames } from "./ui-state";
+import { uiCameraSampleFrames } from "./ui-camera";
 import { soundCues, soundCueIssues } from "./audio-direction";
 import { motionTimingForPresentation } from "./motion-timing";
 import { motionAssetIds, motionUsage } from "./motion-assets";
+import { designedStageForScene } from "./motion-direction";
 import { buildPlanWorkflowContext, scopeWorkflowContext } from "./workflow-coherence";
 import { assertQualityRetryState, reviewWithSchemaRetry } from "./quality-review";
 import { qualityDefaultStyle, qualityOriginalSourceLabel, qualityReviewPrompt, type Providers, type QualityModelRequest, type WholeFilmProof } from "./providers";
@@ -70,8 +72,8 @@ export function reviewBatch(plan:Plan,samples:Sample[]){
   if(plan.brand?.logoAssetId&&scenes.some(scene=>["brand","cta"].includes(presentation(scene,plan).template)))reviewAssetIds.add(plan.brand.logoAssetId);
   const assets=plan.assets.filter(a=>a.usage==="output"&&reviewAssetIds.has(a.id));
   const motion=scenes.map(scene=>{
-    const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan);
-    return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo"};
+    const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan),designedStage=designedStageForScene(plan,scene,index);
+    return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo",...(designedStage?{designedStage}:{})};
   });
   return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,creativeDirection:plan.creativeDirection,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.filter(a=>assetIds.has(a.id)).map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
 }
@@ -79,9 +81,14 @@ export function unexpectedVoice(plan:Plan,heard:Transcript) {
   const windows=plan.scenes.filter(s=>s.preserve_audio).map(s=>({start:s.start_frame/30,end:(s.start_frame+s.duration_frames)/30}));
   return heard.words.filter(word=>(word.type==="word"||/singing|vocal|speech|voice/i.test(word.text))&&!windows.some(window=>Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.start>=window.start-0.15&&word.end<=window.end+0.15));
 }
-/** Require the exact exported hold/action inventory, not just a successful summary flag. */
+/** Require the exact exported hold/action/camera inventory, not just a successful summary flag. */
 export function motionIntegrityPassed(plan:Plan,motion:{passed?:boolean;localFontLoaded?:boolean;localImagesDecoded?:boolean;frames?:number;planSha256?:string;comparisons?:{scene:string;frame:number;passed:boolean;ssim:number}[]},seek:{deterministic?:boolean}) {
-  const expected=plan.scenes.flatMap((scene,index)=>[motionSampleFrames(scene,plan,index)[2],...uiActionSampleFrames(scene)].map(frame=>`${scene.id}:${frame}`)).sort();
+  const expected=plan.scenes.flatMap((scene,index)=>{
+    const camera=scene.shotDirection&&scene.presentation?.visual?.kind==="ui-demo"?uiCameraSampleFrames(scene.shotDirection.camera,scene.duration_frames).map(frame=>frame+scene.start_frame):[];
+    // Match motion-render: the hold is compared independently, while an action
+    // and a camera sample at the same frame share one additional comparison.
+    return [motionSampleFrames(scene,plan,index)[2],...new Set([...uiActionSampleFrames(scene),...camera])].map(frame=>`${scene.id}:${frame}`);
+  }).sort();
   const actual=motion.comparisons;
   return motion.passed===true&&motion.localFontLoaded===true&&motion.localImagesDecoded===true&&seek.deterministic===true&&motion.frames===plan.output.duration_frames&&motion.planSha256===createHash("sha256").update(JSON.stringify(plan)).digest("hex")&&Array.isArray(actual)&&actual.length===expected.length&&actual.every(c=>c.passed===true&&Number.isFinite(c.ssim)&&c.ssim>=.97)&&actual.map(c=>`${c.scene}:${c.frame}`).sort().every((key,index)=>key===expected[index]);
 }
@@ -100,7 +107,7 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
   if(hasMotion){
     const motion=JSON.parse(await readFile(join(workspace,"analysis/motion.json"),"utf8")),seek=JSON.parse(await readFile(join(workspace,motion.composition,"seek-check.json"),"utf8"));
     const passed=motionIntegrityPassed(plan,motion,seek);
-    checks.motion_integrity={passed,performed:true,evidence:"Paused local HTML/GSAP clock, exact repeated seek pixel hash, required local font/image loading, hold bounds/overlaps, and every decoded output hold and UI action sample compared with its independently seeked HTML frame (SSIM >=0.97), bound to this exact plan. Semantic readability/style still independently reviewed below."};
+    checks.motion_integrity={passed,performed:true,evidence:"Paused local HTML/GSAP clock, exact repeated seek pixel hash, required local font/image loading, hold bounds/overlaps, and every decoded output hold, UI action and directed camera sample compared with its independently seeked HTML frame (SSIM >=0.97), bound to this exact plan. Semantic readability/style still independently reviewed below."};
     if(!passed)findings.push({severity:"critical",message:"The actual HTML motion capture verification did not pass."});
   }
   const referenceHashes=await Promise.all(plan.assets.filter(a=>a.usage==="reference").map(a=>hash(join(workspace,a.path))));
