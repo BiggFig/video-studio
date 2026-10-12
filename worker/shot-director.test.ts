@@ -1,12 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, mkdir, writeFile, realpath, rm, cp } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, isAbsolute } from "node:path";
+import { chromium } from "playwright";
+import { prepareMotionProject, serveMotionProject, inspectMotionProject } from "./motion-render";
+import { motionBrowserArgs, motionBrowserPath } from "./motion-browser";
+import { mediaEnvironment } from "./media";
 import { applyShotDirector, buildDirectorPlan, persistShotDirector, requiredDirectorFrames, validatePlanShotDirector } from "./shot-director";
 import { stageDigest } from "./research";
 import { expectedSemanticUiCamera, uiStageViewport } from "./ui-camera";
 import { expectedUiState } from "./ui-state";
+import { expectedUiCausalEmphasis } from "./ui-causal-emphasis";
 import type { UiDocument } from "./ui-reconstruction";
 import type { Plan, Scene } from "./types";
 
@@ -72,6 +78,41 @@ test("retained literal framing and repair selection retain absence, hashes and i
   const oldCamera = expectedSemanticUiCamera(legacy.uiDocuments![0], legacy.scenes[0].shotDirection!.camera, 269, uiStageViewport(1920, 1080, true, true, true)); assert.equal(oldCamera.scale, 2.4);
   const fresh = applyShotDirector(literalFixture()), changed = structuredClone(fresh); delete changed.shotDirector!.literalContextVersion;
   assert.throws(() => validatePlanShotDirector(changed));
+});
+
+test("fresh editorial emphasis follows the unique literal change without touching source content, actions or holds", () => {
+  const plan = literalFixture(), content = JSON.stringify({ documents: plan.uiDocuments, scenes: plan.scenes });
+  applyShotDirector(plan); validatePlanShotDirector(plan);
+  assert.equal(plan.shotDirector!.literalEmphasisVersion, 1);
+  const direction = plan.scenes[0].shotDirection!, track = direction.causalEmphasis!;
+  assert.deepEqual(track, { version: 1, input: { elementId: "code", startFrame: 30, completeFrame: 84 }, result: { elementId: "greeting", startFrame: 91, settleFrame: 103, endFrame: 270 } });
+  const original = JSON.parse(content); assert.deepEqual(plan.uiDocuments, original.documents);
+  assert.deepEqual(plan.scenes.map(({ shotDirection: _ink, ...scene }) => scene), original.scenes);
+  for (let frame = 0; frame < 270; frame++) {
+    const ink = expectedUiCausalEmphasis(track, frame);
+    assert.ok(ink.input.opacity >= 0 && ink.input.opacity <= 1 && ink.result.opacity >= 0 && ink.result.opacity <= 1);
+    if (frame < 30) assert.equal(ink.input.opacity, 0);
+    if (frame < 91) assert.equal(ink.result.opacity, 0);
+    if (frame >= 103) assert.deepEqual(ink, { input: { opacity: 0, reveal: 1 }, result: { opacity: .55, reveal: 1 }, settled: true });
+  }
+  assert.equal(expectedUiCausalEmphasis(track, 270).result.opacity, 0);
+  assert.deepEqual(expectedUiCausalEmphasis(track, 91), expectedUiCausalEmphasis(track, 91));
+  for (const mutate of [
+    (p: Plan) => { delete p.shotDirector!.literalEmphasisVersion; },
+    (p: Plan) => { p.scenes[0].shotDirection!.causalEmphasis!.result.startFrame--; },
+    (p: Plan) => { p.scenes[0].shotDirection!.causalEmphasis!.input.elementId = "heading"; },
+  ]) { const changed = structuredClone(plan); mutate(changed); assert.throws(() => validatePlanShotDirector(changed)); }
+});
+
+test("retained context-preserving directors and their repairs never silently acquire editorial emphasis", () => {
+  const retained = applyShotDirector(literalFixture(), undefined, { literalContextVersion: 1 }), saved = JSON.stringify(retained);
+  assert.equal(retained.shotDirector!.literalEmphasisVersion, undefined);
+  assert.equal(retained.scenes[0].shotDirection!.causalEmphasis, undefined);
+  validatePlanShotDirector(retained); applyShotDirector(retained); assert.equal(JSON.stringify(retained), saved);
+  const repair = applyShotDirector(literalFixture(), undefined, { literalContextVersion: 1, literalEmphasisVersion: retained.shotDirector!.literalEmphasisVersion ?? 0 });
+  assert.deepEqual(repair.shotDirector, retained.shotDirector); assert.deepEqual(repair.scenes, retained.scenes);
+  const fresh = applyShotDirector(literalFixture()), freshRepair = applyShotDirector(literalFixture(), undefined, { literalContextVersion: fresh.shotDirector!.literalContextVersion ?? 0, literalEmphasisVersion: fresh.shotDirector!.literalEmphasisVersion ?? 0 });
+  assert.deepEqual(freshRepair.scenes, fresh.scenes);
 });
 
 test("literal framing includes only visible bound context and containing panels", () => {
@@ -222,4 +263,53 @@ test("persisted storyboard and director describe the exact saved composition bef
   assert.deepEqual(saved.scenes[0].direction.camera, plan.scenes[0].shotDirection!.camera);
   assert.match(await readFile(join(path, "SHOT-STORYBOARD.md"), "utf8"), /Quiet result: 4.27/);
   assert.deepEqual(paths, ["analysis/shot-director.json", "SHOT-STORYBOARD.md"]);
+});
+
+test("literal editorial ink preserves source text, contrast and holds through arbitrary browser seeks in all four formats", async t => {
+  const executablePath = motionBrowserPath(); if (!existsSync(executablePath)) { t.skip("Install pinned Chromium for editorial composition verification"); return; }
+  const temporary = await realpath(tmpdir()), workspace = await mkdtemp(join(temporary, "studio-causal-ink-"));
+  t.after(async () => { const actual = await realpath(workspace), path = relative(temporary, actual); assert.ok(!isAbsolute(path) && !path.startsWith("..") && path.startsWith("studio-causal-ink-")); await rm(actual, { recursive: true, force: true }); });
+  await mkdir(join(workspace, "assets")); await mkdir(join(workspace, "analysis"));
+  await writeFile(join(workspace, "assets/source.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2nQAAAAASUVORK5CYII=", "base64"));
+  const browser = await chromium.launch({ headless: true, executablePath, args: motionBrowserArgs, env: mediaEnvironment() }); t.after(() => browser.close());
+  for (const [index, [width, height]] of [[1920, 1080], [1080, 1350], [1080, 1920], [1080, 1080]].entries()) {
+    const plan = literalFixture(); Object.assign(plan.output, { width, height }); applyShotDirector(plan);
+    const source = JSON.stringify(plan.uiDocuments), actions = JSON.stringify(plan.scenes[0].presentation), project = await prepareMotionProject(plan, workspace, index), server = await serveMotionProject(project.root, project.paths.map(path => path.slice(project.directory.length + 1)));
+    try {
+      const page = await browser.newPage({ viewport: { width, height } }); await page.goto(server.origin); await page.evaluate(() => (window as any).__studioReady);
+      const seek = (frame: number) => page.evaluate(value => (window as any).__studio.seekFrame(value), frame);
+      const inspect = () => page.locator("#scene-0").evaluate(scene => ({
+        source: Array.from(scene.querySelectorAll("[data-ui-element]"), element => ({ id: (element as HTMLElement).dataset.uiElement, html: element.outerHTML, rect: element.getBoundingClientRect().toJSON() })),
+        ink: Array.from(scene.querySelectorAll("[data-ui-causal]"), element => ({ role: (element as HTMLElement).dataset.uiCausal, subject: (element as HTMLElement).dataset.editorialSubject, html: element.outerHTML, opacity: Number(getComputedStyle(element).opacity), rect: element.getBoundingClientRect().toJSON(), stroke: getComputedStyle(element.firstElementChild!).stroke, pointer: getComputedStyle(element).pointerEvents, aria: element.getAttribute("aria-hidden") })),
+        camera: (scene.querySelector(".ui-document") as HTMLElement).dataset.uiCamera,
+        essentials: Array.from(scene.querySelectorAll("[data-essential]"), element => { let opacity = 1; for (let parent: Element | null = element; parent; parent = parent.parentElement) opacity *= Number(getComputedStyle(parent).opacity); return { text: element.textContent, opacity, rect: element.getBoundingClientRect().toJSON() }; }),
+      }));
+      for (const frame of [29, 30, 35, 83, 90, 91, 97, 103, 140, 269]) {
+        await seek(frame); const before = await inspect(); await seek(frame < 103 ? 269 : 0); await seek(frame); assert.deepEqual(await inspect(), before, `${width}×${height} frame ${frame}: reverse seek changes rendered state`);
+        assert.equal(before.ink.length, 2); const expected = expectedUiCausalEmphasis(plan.scenes[0].shotDirection!.causalEmphasis!, frame);
+        for (const ink of before.ink) {
+          assert.equal(ink.opacity, expected[ink.role as "input" | "result"].opacity); assert.equal(ink.stroke, "rgb(85, 85, 85)"); assert.equal(ink.pointer, "none"); assert.equal(ink.aria, "true");
+          const subject = before.source.find(value => value.id === ink.subject)!; assert.ok(ink.rect.y >= subject.rect.bottom, "editorial ink must not obscure its text");
+          assert.ok(ink.rect.x >= 0 && ink.rect.right <= width && ink.rect.y >= 0 && ink.rect.bottom <= height);
+          for (const element of before.source.filter(value => value.id !== ink.subject && !value.html.includes("ui-panel"))) assert.ok(ink.rect.right <= element.rect.x || ink.rect.x >= element.rect.right || ink.rect.bottom <= element.rect.y || ink.rect.y >= element.rect.bottom, "editorial ink must not cover adjacent text");
+        }
+        for (const essential of before.essentials) assert.ok(essential.opacity > .99 && essential.rect.x >= 0 && essential.rect.right <= width && essential.rect.y >= 0 && essential.rect.bottom <= height, "headline/disclosure must remain visible");
+      }
+      assert.equal(JSON.stringify(plan.uiDocuments), source); assert.equal(JSON.stringify(plan.scenes[0].presentation), actions);
+      // Compare the rendered source elements against exactly the same unmarked
+      // director; the new ink must never restyle or relocate the actual UI.
+      await seek(103); const fresh = await inspect();
+      const legacy = structuredClone(plan); delete legacy.shotDirector; delete legacy.production!.shotDirectorSha256; delete legacy.production!.shotDirectorVersion; delete legacy.scenes[0].shotDirection;
+      applyShotDirector(legacy, undefined, { literalContextVersion: 1 });
+      const oldProject = await prepareMotionProject(legacy, workspace, index + 10), oldServer = await serveMotionProject(oldProject.root, oldProject.paths.map(path => path.slice(oldProject.directory.length + 1)));
+      try { await page.goto(oldServer.origin); await page.evaluate(() => (window as any).__studioReady); await seek(103); const old = await inspect(); assert.deepEqual(old.source, fresh.source); assert.deepEqual(old.essentials, fresh.essentials); assert.equal(old.ink.length, 0); } finally { await oldServer.close(); }
+      await page.close();
+    } finally { await server.close(); }
+    try { await inspectMotionProject(plan, workspace, project); }
+    catch (error) {
+      const retained = join(process.cwd(), ".local", "causal-replay-failures"); await mkdir(retained, { recursive: true });
+      const target = await mkdtemp(join(retained, `${width}x${height}-`)); await cp(project.root, target, { recursive: true }); await writeFile(join(target, "plan.json"), JSON.stringify(plan));
+      t.diagnostic(`Strict replay failure retained at ${target}`); throw error;
+    }
+  }
 });

@@ -57,6 +57,14 @@ export const requiresStyleReview=(plan:Pick<Plan,"renderer"|"scenes">,evidence:P
 type Sample={path:string;label:string;sceneId:string};
 /** Two complete scenes per semantic review, including every reconstruction action outcome. */
 export const expectedReviewCalls=(plan:Pick<Plan,"scenes">)=>Math.ceil(plan.scenes.length/2);
+/** Isolate expensive UI evidence only when the existing two-scene call envelope
+ * can contain every scene. Original plan order still defines seams and context. */
+export function qualitySceneGroups(plan:Pick<Plan,"scenes">):Plan["scenes"][]{
+  const pairs=(scenes:Plan["scenes"])=>Array.from({length:Math.ceil(scenes.length/2)},(_,index)=>scenes.slice(index*2,index*2+2));
+  const original=pairs(plan.scenes),ui=plan.scenes.filter(scene=>scene.presentation?.visual?.kind==="ui-demo"),other=plan.scenes.filter(scene=>scene.presentation?.visual?.kind!=="ui-demo");
+  const isolated=[...ui.map(scene=>[scene]),...pairs(other)];
+  return isolated.length<=original.length?isolated:original;
+}
 /** Planned visibility only: actual decoded proof remains mandatory in its review batch. */
 export function wholeFilmProofInventory(plan:Plan):WholeFilmProof {
   return {totalScenes:plan.scenes.length,plannedProofScenes:plan.scenes.filter(scene=>presentation(scene,plan).template==="proof").map(scene=>({sceneId:scene.id,assetId:scene.asset_id,startFrame:scene.start_frame,durationFrames:scene.duration_frames})),...(plan.story?{storyRoles:plan.scenes.map(scene=>({sceneId:scene.id,role:scene.storyRole??"unassigned"}))}:{})};
@@ -138,15 +146,15 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
     }
   }
   const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean;groupId:string;sceneIds:string[]})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
-  for(let i=0;i<plan.scenes.length;i+=2) {
-    const sceneIds=new Set(plan.scenes.slice(i,i+2).map(scene=>scene.id));
+  for(const [groupIndex,scenes] of qualitySceneGroups(plan).entries()) {
+    const sceneIds=new Set(scenes.map(scene=>scene.id));
     const batch=reviewBatch(plan,samples.filter(sample=>sceneIds.has(sample.sceneId)));
     const defaultStyle=qualityDefaultStyle(plan);
     if(batch.images.length>32)throw new Error("Required reconstruction review exceeds the complete image allowance");
-    requests.push({groupId:`group-${i/2+1}`,sceneIds:[...sceneIds],prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
+    requests.push({groupId:`group-${groupIndex+1}`,sceneIds:[...sceneIds],prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
   }
   const ordered=orderQualityReviewRequests(requests),orderPath=`analysis/quality-review-order-after-model-${providers.ledger.modelCalls}.json`;
-  await writeJson(join(workspace,orderPath),{version:1,reason:"Complete UI groups first; stable original groups and all samples retained",batches:ordered.map((request,index)=>({reviewOrder:index+1,groupId:request.groupId,sceneIds:request.sceneIds,promptSha256:createHash("sha256").update(request.prompt).digest("hex"),images:request.images}))});await hooks.persist([orderPath]);
+  await writeJson(join(workspace,orderPath),{version:2,reason:"Complete UI evidence first; UI scenes isolated only within the existing two-scene call envelope; all scenes and samples retained",batches:ordered.map((request,index)=>({reviewOrder:index+1,groupId:request.groupId,sceneIds:request.sceneIds,promptSha256:createHash("sha256").update(request.prompt).digest("hex"),images:request.images}))});await hooks.persist([orderPath]);
   for(const [index,request]of ordered.entries()){
     const raw=await providers.claude("review",request.prompt,request.images,{policy:"quality-review-v1"});
     const review=await reviewWithSchemaRetry(raw,{workspace,jobId:plan.job_id,prompt:request.prompt,images:request.images,hooks,parse:parseReview,prepareRetry:async(prompt,images)=>providers.prepareClaude("review",prompt,images,{policy:"quality-review-v1",reserve:await providers.qualityRemainderReserve(ordered.slice(index+1))})});

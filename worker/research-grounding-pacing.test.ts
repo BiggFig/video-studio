@@ -130,6 +130,37 @@ test("a compact source-bound edit advances the changed greeting without trimming
   assert.match(researchRequest(input, f.evidence).prompt, /Authoring does not demonstrate delivery/);
 
   const openingCode = "launch_action_after_static_setup", freshScript = { requireDirection: true, requireSourceSpeedQualifiers: true, requireEarlyLaunchAction: true };
+  await t.test("an actionable opening reaches the real changed value in under two seconds with source and reading gates intact",async()=>{
+    const direct=structuredClone(fastRaw);direct.scenes=direct.scenes.slice(1);direct.scenes[0].durationSeconds=2;
+    const before=JSON.stringify(direct),script=compileScript(direct,input,f.evidence,research,undefined,ui,freshScript);
+    const plan=await compilePlan(input,f.evidence,script,hooks,await workspace(t));
+    assert.equal(plan.scenes[0].start_frame,0);assert.equal(plan.scenes[0].direction?.job,"action");
+    assert.equal(plan.scenes[0].presentation?.visual?.kind,"ui-demo");
+    assert.equal(plan.scenes[0].duration_frames>=120,true,"compiler retains the complete required UI and editorial reading time");
+    assert.equal(expectedUiState(document,actions(false),54).elements.greeting.text,"Hello Ada,");
+    assert.equal(expectedUiState(document,actions(false),55).elements.greeting.text,"Hello Mina,");
+    assert.ok(plan.scenes[0].shotDirection!.resultHold!.endFrame-plan.scenes[0].shotDirection!.resultHold!.startFrame>=45);
+    assert.deepEqual(validateTimeline(plan),[]);assert.equal(JSON.stringify(direct),before);
+    assert.equal(script.audienceLabel,fastScript.audienceLabel);assert.equal(script.uiSha256,fastScript.uiSha256);
+    assert.equal(script.workflowCoherence,undefined,"offline timing proof never invents semantic approval");
+    const pointer=structuredClone(direct);pointer.scenes[0].presentation.visual={kind:"ui-demo",documentId:document.id,actions:[{kind:"pointer",atFrame:30,durationFrames:12,targetId:"name",evidenceId:"fact-1"}]};
+    assert.throws(()=>compileScript(pointer,input,f.evidence,research,undefined,ui,freshScript),/supported UI action|creative concept|source-supported actionable/);
+  });
+  await t.test("fresh launches identify the product by the first demonstration without retroactively changing retained scripts",()=>{
+    const late=structuredClone(fastRaw);late.scenes[1].headline="Edit the name";late.summary="Example is mentioned only in hidden metadata before its closing card";
+    const historical=compileScript(late,input,f.evidence,research,undefined,ui,{requireDirection:true});
+    let rejection:PipelineError|undefined;
+    try{compileScript(late,input,f.evidence,research,undefined,ui,freshScript);}catch(error){assert.ok(error instanceof PipelineError&&error.message.includes("launch_identity_after_first_proof"));rejection=error;}
+    assert.ok(rejection);
+    assert.deepEqual(scriptCorrectionDiagnostics(late,rejection,research,f.evidence,ui,true,true).openingIssues,[{code:"launch_identity_after_first_proof",path:["scenes",1,"headline"],firstActionableSceneIndex:1}]);
+    assert.equal(stageDigest(compileScript(late,input,f.evidence,research,undefined,ui,{requireDirection:true})),stageDigest(historical));
+    late.scenes[1].headline="Exampleware edits the name";
+    assert.throws(()=>compileScript(late,input,f.evidence,research,undefined,ui,freshScript),/launch_identity_after_first_proof/);
+    late.scenes[1].headline="Example: edit the name";
+    assert.doesNotThrow(()=>compileScript(late,input,f.evidence,research,undefined,ui,freshScript));
+    late.product="Exampleware";late.scenes[1].headline="Exampleware: edit the name";
+    assert.throws(()=>compileScript(late,input,f.evidence,research,undefined,ui,freshScript),/launch_product_identity_mismatch/);
+  });
   const bumper = draft(true); bumper.scenes[1].durationSeconds = 3; bumper.scenes[1].presentation = { template: "brand", theme: "dark", transition: "cut" };
   const originalBumper = JSON.stringify(bumper), historical = compileScript(bumper, input, f.evidence, research, undefined, ui, { requireDirection: true });
   await t.test("fresh v19-shaped hook3s plus brand3s fails while the same early UI actions and safe holds remain valid", () => {

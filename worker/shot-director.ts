@@ -5,6 +5,7 @@ import { stageDigest, stageFailure } from "./research";
 import { expectedUiState } from "./ui-state";
 import { validateUiActions, type UiDocument } from "./ui-reconstruction";
 import type { UiCameraTrack } from "./ui-camera";
+import { compileUiCausalEmphasis, type UiCausalEmphasisTrack } from "./ui-causal-emphasis";
 import type { Evidence, Hooks, Plan, Scene } from "./types";
 
 export const SHOT_DIRECTOR_PATH = "analysis/shot-director.json";
@@ -16,6 +17,7 @@ export interface ShotSceneDirection {
   camera: UiCameraTrack;
   actionWindow: Window | null;
   resultHold: Window | null;
+  causalEmphasis?: UiCausalEmphasisTrack;
   layers: { copy: Window & { enterFrames: number }; cursor: Window & { enterFrames: number }; product: Window & { enterFrames: number }; material: Window & { enterFrames: number } };
   exit: { kind: "cut" | "object-match"; documentId?: string; subjectIds?: string[]; nextSceneId?: string; stateSha256?: string };
 }
@@ -23,6 +25,8 @@ export interface ShotDirectorMetadata {
   version: 1;
   /** Absent on retained directors: their original isolated input/result framing stays unchanged. */
   literalContextVersion?: 1;
+  /** Absent on retained directors: no new editorial ink is added on restore. */
+  literalEmphasisVersion?: 1;
   source: { researchSha256: string; evidenceSha256: string; scriptSha256: string; uiSha256: string };
   output: Plan["output"];
   brief: {
@@ -50,7 +54,7 @@ const endOf = (scene: Scene) => scene.presentation?.visual?.kind === "ui-demo" ?
 /** New plans reserve an actual result move plus a quiet 1.5s hold. Old plans never call this. */
 export const requiredDirectorFrames = (presentation: Scene["presentation"], finalScene = false) => presentation?.visual?.kind === "ui-demo" ? Math.max(...presentation.visual.actions.map(action => action.atFrame + action.durationFrames)) + 57 + (!finalScene && presentation.transition !== "cut" ? 12 : 0) : 0;
 
-function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false, literalContextVersion = 0): ShotSceneDirection {
+function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false, literalContextVersion = 0, literalEmphasisVersion = 0): ShotSceneDirection {
   const duration = scene.duration_frames, visual = scene.presentation?.visual;
   const base: ShotSceneDirection = {
     version: 1, subjectIds: [`asset:${scene.asset_id}`], copyRole: scene.direction?.job === "action" ? "support" : "headline",
@@ -127,6 +131,10 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false,
   base.subjectIds = unique([...targeted.map(action => action.targetId!), ...resultIds, ...contextIds]);
   base.actionWindow = { startFrame: visual.actions[0].atFrame, endFrame: last };
   base.resultHold = { startFrame: last + 12, endFrame: duration - exitFrames };
+  if (literalContextVersion === 1 && literalEmphasisVersion === 1) {
+    const emphasis = compileUiCausalEmphasis(document, visual.actions, base.resultHold);
+    if (emphasis) base.causalEmphasis = emphasis;
+  }
   base.layers.cursor = { startFrame: targeted[0]?.atFrame ?? 0, endFrame: last, enterFrames: 0 };
   base.layers.product = { startFrame: 0, endFrame: duration, enterFrames: 12 };
   base.copyRole = "quiet";
@@ -141,14 +149,16 @@ function visibleObject(document: UiDocument, scene: Scene, frame: number, ids: s
 }
 
 /** Deterministic direction, compiled only after script/source/workflow validation. No model call or code generation. */
-export interface ShotDirectorOptions { literalContextVersion: 0 | 1 }
+export interface ShotDirectorOptions { literalContextVersion: 0 | 1; literalEmphasisVersion?: 0 | 1 }
 export function buildDirectorPlan(plan: Plan, evidence?: Evidence, options?: ShotDirectorOptions): { metadata: ShotDirectorMetadata; scenes: ShotSceneDirection[] } {
   const binding = plan.production, story = plan.story;
   const literalContextVersion = options?.literalContextVersion ?? (plan.shotDirector ? plan.shotDirector.literalContextVersion ?? 0 : 1);
+  const literalEmphasisVersion = options ? options.literalEmphasisVersion ?? 0 : plan.shotDirector ? plan.shotDirector.literalEmphasisVersion ?? 0 : 1;
   if (literalContextVersion !== 0 && literalContextVersion !== 1) throw stageFailure("The saved result framing version is unsupported.");
+  if (literalEmphasisVersion !== 0 && literalEmphasisVersion !== 1) throw stageFailure("The saved editorial emphasis version is unsupported.");
   if (!binding?.uiSha256 || !plan.creativeDirection || !story?.primaryAudience || !story.mechanism || !story.outcome) throw stageFailure("The shot director requires a verified current script, audience, action, result and immutable UI binding.");
   if (binding.uiSha256 !== stageDigest({ version: 1, jobId: plan.job_id, evidenceSha256: binding.evidenceSha256, researchSha256: binding.researchSha256, documents: plan.uiDocuments })) throw stageFailure("The shot director UI no longer matches its immutable source binding.");
-  const scenes = plan.scenes.map((scene, index) => { const visual = scene.presentation?.visual; return sceneDirection(scene, visual?.kind === "ui-demo" ? plan.uiDocuments?.find(document => document.id === visual.documentId) : undefined, index === plan.scenes.length - 1, literalContextVersion); });
+  const scenes = plan.scenes.map((scene, index) => { const visual = scene.presentation?.visual; return sceneDirection(scene, visual?.kind === "ui-demo" ? plan.uiDocuments?.find(document => document.id === visual.documentId) : undefined, index === plan.scenes.length - 1, literalContextVersion, literalEmphasisVersion); });
   for (let index = 0; index < scenes.length - 1; index++) {
     const current = plan.scenes[index], next = plan.scenes[index + 1], from = current.presentation?.visual, to = next.presentation?.visual;
     if (from?.kind !== "ui-demo" || to?.kind !== "ui-demo" || from.documentId !== to.documentId) continue;
@@ -174,7 +184,7 @@ export function buildDirectorPlan(plan: Plan, evidence?: Evidence, options?: Sho
   const uiAssets = new Set((plan.uiDocuments || []).flatMap(document => document.sourceAssetIds));
   const media = plan.assets.filter(asset => asset.usage === "output" && asset.kind !== "audio").map(asset => ({ assetId: asset.id, kind: asset.kind, source: asset.source || asset.provenance?.assetUrl || asset.provenance?.pageUrl || null, rights: asset.rights, role: (uiAssets.has(asset.id) ? "product-ui" : asset.provenance?.role === "brand-logo" ? "brand-logo" : "source-media") as ShotDirectorMetadata["media"][number]["role"] }));
   return { metadata: {
-    version: 1, ...(literalContextVersion === 1 ? { literalContextVersion: 1 as const } : {}), source: { researchSha256: binding.researchSha256, evidenceSha256: binding.evidenceSha256, scriptSha256: binding.scriptSha256, uiSha256: binding.uiSha256 }, output: { ...plan.output },
+    version: 1, ...(literalContextVersion === 1 ? { literalContextVersion: 1 as const } : {}), ...(literalEmphasisVersion === 1 ? { literalEmphasisVersion: 1 as const } : {}), source: { researchSha256: binding.researchSha256, evidenceSha256: binding.evidenceSha256, scriptSha256: binding.scriptSha256, uiSha256: binding.uiSha256 }, output: { ...plan.output },
     brief: { audienceMoment: { text: story.problem?.text || story.primaryAudience.text, evidenceIds: unique([...story.primaryAudience.evidenceIds, ...(story.problem?.evidenceIds || [])]) }, visualArgument: { action: story.mechanism.text, result: story.outcome.text, evidenceIds: unique([...story.mechanism.evidenceIds, ...story.outcome.evidenceIds]) }, recurringSubjects: unique(plan.scenes.flatMap((scene, i) => scenes[i].subjectIds.map(id => scene.presentation?.visual?.kind === "ui-demo" ? `ui:${scene.presentation.visual.documentId}:${id}` : id))), contrast: ["scale", "density", "motion-rest"] },
     visualSystem: { family, material: plan.background === "dark" ? "ink" : corners === "rounded" ? "glass" : "paper", depth: family === "editorial" ? "flat" : "layered", corners, palette: { background: brand?.background || (plan.background === "dark" ? "#111111" : "#ffffff"), foreground: brand?.foreground || (plan.background === "dark" ? "#ffffff" : "#111111"), accent: plan.accent }, paletteSource: brand?.sourceUrl || null, typography: (evidence?.brand?.typography || plan.shotDirector?.visualSystem.typography || []).map(value => ({ ...value })) },
     media, unavailableTreatments: ["Human-plus-product requires verified permissioned human footage; generic source media is not assumed to contain a customer.", "Photographic stages and dimensional assets require separately classified, source-bound media; this version uses only documented product surfaces."],

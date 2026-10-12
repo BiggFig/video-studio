@@ -3,11 +3,12 @@ import { motionTimingForPresentation } from "./motion-timing";
 import { motionUsage,resolvePresentation } from "./motion-assets";
 import { focusCamera,motionPalette,logoDimensions } from "./motion-primitives";
 import { uiDocumentHtml,uiCompositionCss,uiEvaluatorSource } from "./ui-composition";
+import { uiCausalEmphasisEvaluatorSource } from "./ui-causal-emphasis";
 import { uiStageViewport,uiCameraEvaluatorSource,uiCameraContinuation,uiCameraContinuationEvaluatorSource } from "./ui-camera";
 import { directedShot,directionMarkup,directedCss,directionEvaluatorSource,directedTimelineSource } from "./motion-direction";
 export { uiActionSampleFrames } from "./ui-state";
 
-export const MOTION_RENDERER_VERSION = "html-motion/3.4.1";
+export const MOTION_RENDERER_VERSION = "html-motion/3.5.0";
 export const MOTION_FPS = 30;
 export type { Presentation } from "./types";
 export const escapeHtml=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
@@ -58,7 +59,7 @@ export function motionHtml(plan:Plan,media:Record<string,string>):string {
     }
     if(visual?.kind==="ui-demo"){
       const stage=uiStageViewport(g.w,g.h,!scene.detail,!!scene.shotDirection,!!plan.uiDocuments!.find(document=>document.id===(visual?.kind==="ui-demo"?visual.documentId:""))?.previewBinding);
-      mediaHtml=uiDocumentHtml(plan.uiDocuments!.find(document=>document.id===visual.documentId)!,index,stage,!!scene.shotDirection);
+      mediaHtml=uiDocumentHtml(plan.uiDocuments!.find(document=>document.id===visual.documentId)!,index,stage,!!scene.shotDirection,scene.shotDirection?.causalEmphasis);
     }
     let logoHtml="";if(usage.logoAssetId){const logo=checkedAsset(usage.logoAssetId);if(logo.asset.kind!=="image")throw new Error("The observed logo must be a raster image");const size=logoDimensions(logo.asset,g.w);logoHtml=`<img class="brand-logo" style="width:${size.width}px;height:${size.height}px" data-brand-mark data-asset-id="${escapeHtml(usage.logoAssetId)}" src="${logo.src}" alt="${escapeHtml(plan.product)} logo">`;}
     let connections="";
@@ -113,10 +114,11 @@ window.__studioReady=(async()=>{
  await document.fonts.load('600 32px Studio');await document.fonts.ready;
  if(!document.fonts.check('600 32px Studio'))throw new Error('Required local font unavailable');
  await Promise.all(Array.from(document.images).map(image=>image.decode()));
- const scenes=${jsonScript(config)},tl=gsap.timeline({paused:true}),expectedUiState=${uiEvaluatorSource()},expectedUiCamera=${uiCameraEvaluatorSource()},applyUiCameraContinuation=${uiCameraContinuationEvaluatorSource()},expectedDirectionFrame=${directionEvaluatorSource()},directedTimeline=${directedTimelineSource()};
+ const scenes=${jsonScript(config)},tl=gsap.timeline({paused:true}),expectedUiState=${uiEvaluatorSource()},expectedUiCamera=${uiCameraEvaluatorSource()},applyUiCameraContinuation=${uiCameraContinuationEvaluatorSource()},expectedDirectionFrame=${directionEvaluatorSource()},directedTimeline=${directedTimelineSource()},expectedUiCausalEmphasis=${uiCausalEmphasisEvaluatorSource()};
  const applyUiFrame=(frame)=>{for(const scene of scenes){const local=Math.max(0,Math.min(Math.round(scene.duration*30)-1,frame-Math.round(scene.start*30)));if(scene.directed){const material=document.getElementById('direction-material-'+scene.index),value=expectedDirectionFrame(scene.directed,local);if(!material)throw new Error('Directed stage missing');material.style.left=value.x+'%';material.style.top=value.y+'%';material.style.transform='translate(-50%,-50%) scale('+value.scale+') rotate('+value.rotation+'deg)';material.style.setProperty('--light-x',value.lightX+'%');material.style.setProperty('--light-y',value.lightY+'%');material.dataset.settled=String(value.settled);}if(!scene.ui)continue;const state=expectedUiState(scene.ui.document,scene.ui.actions,local),container=document.getElementById('ui-document-'+scene.index);if(!container)throw new Error('UI document DOM missing');container.dataset.uiState=state.stateId;container.dataset.uiBasis=state.basis;
   for(const element of container.querySelectorAll('[data-ui-element]')){const value=state.elements[element.dataset.uiElement];if(!value)throw new Error('UI element state missing');element.style.visibility=value.visible?'visible':'hidden';element.dataset.selected=String(value.selected);element.dataset.typing=String(value.typing);element.dataset.textBasis=value.textBasis;const text=element.querySelector('[data-ui-text]');if(text)text.textContent=value.text;}
   const camera=applyUiCameraContinuation(scene.ui.document,expectedUiCamera(scene.ui.document,scene.ui.actions,local,scene.ui.viewport,!!scene.directed,scene.ui.camera),local,scene.ui.viewport,scene.ui.continuation);container.style.transform='translate('+camera.x+'px,'+camera.y+'px) scale('+camera.scale+')';container.dataset.uiCamera=JSON.stringify(camera);
+  if(scene.shotDirection?.causalEmphasis){const ink=expectedUiCausalEmphasis(scene.shotDirection.causalEmphasis,local);for(const element of container.querySelectorAll('[data-ui-causal]')){const value=ink[element.dataset.uiCausal];element.style.opacity=String(value.opacity);element.style.clipPath='inset(0 '+((1-value.reveal)*100)+'% 0 0)';element.dataset.settled=String(ink.settled);}}
   const cursor=container.querySelector('.ui-pointer'),cursorWindow=scene.shotDirection?.layers.cursor,cursorVisible=state.pointer.visible&&(!cursorWindow||(local>=cursorWindow.startFrame&&local<cursorWindow.endFrame));cursor.style.visibility=cursorVisible?'visible':'hidden';cursor.style.left=(state.pointer.x*100)+'%';cursor.style.top=(state.pointer.y*100)+'%';const cursorScale=(scene.shotDirection?Math.min(camera.scale,1.6)/camera.scale:1)*(1-state.pointer.clickProgress*.16);cursor.style.transform=(scene.shotDirection?'translate(-3px,-2px) ':'')+'scale('+cursorScale+')';const ring=cursor.querySelector('i');ring.style.opacity=String(state.pointer.clickProgress*(scene.shotDirection?.55:.8));ring.style.transform='scale('+(1+state.pointer.clickProgress*(scene.shotDirection?.22:.8))+')';
  }};
  for(const scene of scenes){const root='#scene-'+scene.index,start=scene.start,end=start+scene.duration;

@@ -208,7 +208,10 @@ test("animated panels capture matching current-frame pixels/inventory without fi
   const workspace = await mkdtemp(join(tmpdir(), "video-studio-animated-panel-")), browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1000, height: 700 } }); await animatedPanel(page);
-    await assert.rejects(page.locator("#editor").screenshot({ timeout: 150 }), /stable|Timeout/, "the unpaused panel reproduces locator stability starvation");
+    // Chromium can occasionally sample equal boxes at an animation turnaround;
+    // an old locator screenshot timing out is not a deterministic prerequisite.
+    // Prove this is a running-animation fixture, then prohibit that old path.
+    assert.deepEqual(await page.evaluate(() => { const state=(window as any).captureFixture; return [state.finite,state.moving,state.marker].map(animation=>animation.playState); }),["running","running","running"]);
     page.locator = (() => { throw Error("Capture must not perform a second locator scroll/stability action"); }) as Page["locator"];
     const originalShot = page.screenshot.bind(page);
     page.screenshot = async options => {

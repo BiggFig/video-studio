@@ -1,4 +1,5 @@
 import { qualityWorkflowContext } from "./quality-workflow-context";
+import { expandQualityDataTransport } from "./quality-data-transport";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -252,8 +253,15 @@ test("final QC receives exact context, rejects stale actions, and reserves its e
   const evidence = { text: "Links create connections between notes.", assets: [asset] };
   const request: QualityRequest = { plan: batch.plan, motion: batch.motion, evidence, wholeFilmProof: wholeFilmProofInventory(plan), measurements: {}, heard: { text: "", words: [] }, sourceSpeech: [], defaultStyle: null, workflowContext };
   const plain = qualityReviewPrompt({ ...request, workflowContext: undefined }), withContext = qualityReviewPrompt(request);
-  assert.ok(withContext.includes(qualityWorkflowContext(workflowContext)));
-  assert.ok(withContext.includes(paragraph));
+  const transportLine = withContext.split("\n").find(line => line.startsWith("LOSSLESS QC DATA: "));
+  assert.ok(transportLine, "the complete repeated effective context exercises lossless QC sharing");
+  const sections = expandQualityDataTransport(JSON.parse(transportLine.slice("LOSSLESS QC DATA: ".length))) as { workflowContext: any };
+  const packed = sections.workflowContext;
+  assert.equal(JSON.stringify(packed), qualityWorkflowContext(workflowContext), "QC receives every byte of the validated workflow transport after expansion");
+  const restored = packed.transport === "workflow-context-interned-v1" ? { ...packed.context, scenes: packed.context.scenes.map((scene: any) => ({ ...scene, snapshots: scene.snapshots.map(({ visibleRecordIds, ...snapshot }: any) => ({ ...snapshot, visible: visibleRecordIds.map((index: number) => packed.visibleRecords[index]) })) })) } : packed;
+  assert.deepEqual(restored, workflowContext, "every action, snapshot, provenance field, obligation and surrounding beat survives both transports");
+  assertWorkflowContext(restored);
+  assert.ok(restored.scenes.some((scene: any) => scene.snapshots.some((snapshot: any) => snapshot.visible.some((element: any) => element.text === paragraph))));
   const bad = structuredClone(request); const visual = bad.plan.scenes[1].presentation!.visual;
   if (visual?.kind === "ui-demo") visual.actions[0].text = "Changed after context was prepared";
   assert.throws(() => qualityReviewPrompt(bad), error => error instanceof PipelineError && error.code === "invalid_quality_review");

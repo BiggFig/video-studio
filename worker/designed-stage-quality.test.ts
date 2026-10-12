@@ -36,6 +36,17 @@ test("stage facts follow actual activation and never invent a grid for another s
  const nondirected=request(plan);assert.ok(nondirected.motion.every(item=>!("designedStage" in item)));assert.doesNotMatch(qualityReviewPrompt(nondirected),/DESIGNED EDITORIAL STAGE|designedStage/);
 });
 
+test("causal ink is described only for a compiled UI track and remains within the reserved descriptor",()=>{
+ const plan=fixture(),scene=plan.scenes[0],original=designedStageForScene(plan,scene,0)!;
+ scene.shotDirection!.causalEmphasis={version:1,input:{elementId:"code",startFrame:30,completeFrame:54},result:{elementId:"result",startFrame:61,settleFrame:73,endFrame:150}};
+ assert.equal(designedStageForScene(plan,scene,0),original,"a non-UI scene does not render these marks");
+ scene.presentation!.visual={kind:"ui-demo",documentId:"fixture",actions:[]};
+ const described=designedStageForScene(plan,scene,0)!;
+ assert.match(described,/Editorial accent underlines/);assert.match(described,/not product controls or selection states/);
+ assert.ok(Buffer.byteLength(JSON.stringify(described))<=Buffer.byteLength(JSON.stringify(maximumDesignedStageDescription)));
+ delete scene.shotDirection!.causalEmphasis;assert.equal(designedStageForScene(plan,scene,0),original);
+});
+
 test("every legal active-stage description and its exact actual review prompt fit the repair reserve",()=>{
  const plan=fixture(),evidence={text:"Observed capability",assets:plan.assets},research={facts:[{evidenceId:"fact-1",quote:"Observed capability",label:"Capability",kind:"feature" as const}],visuals:[{assetId:"source",description:"Actual source",supportsFactIds:["fact-1"],showsProductUi:true}]};
  const bytes=(value:unknown)=>Buffer.byteLength(JSON.stringify(value),"utf8");

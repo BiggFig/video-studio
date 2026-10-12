@@ -108,10 +108,16 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
       }
     }
     // Seek away and back: identical pixels prove the same clock can be replayed.
-    const frame=Math.min(45,plan.output.duration_frames-1);await seek(frame);const first=await page.screenshot();await seek(plan.output.duration_frames-1);await seek(frame);const again=await page.screenshot();
+    const frame=Math.min(45,plan.output.duration_frames-1);await seek(frame);const first=await page.screenshot();
+    const firstState=await page.locator("#root").evaluate(root=>({html:root.innerHTML,elements:[root,...root.querySelectorAll("*")].map(element=>({rect:element.getBoundingClientRect().toJSON(),style:["transform","opacity","visibility","clip-path","color","background-color","font-size"].map(property=>[property,getComputedStyle(element).getPropertyValue(property)])}))}));
+    await seek(plan.output.duration_frames-1);await seek(frame);const again=await page.screenshot();
     const digest=(bytes:Buffer)=>createHash("sha256").update(bytes).digest("hex"),deterministic=digest(first)===digest(again);
     await writeJson(join(workspace,`${project.directory}/seek-check.json`),{frame,first:digest(first),repeated:digest(again),deterministic});
-    if(!deterministic)throw new PipelineError("nondeterministic_motion","Repeated frame seeking produced different pixels.","The motion composition requires an internal renderer repair.","needs_review");
+    if(!deterministic){
+      const repeatedState=await page.locator("#root").evaluate(root=>({html:root.innerHTML,elements:[root,...root.querySelectorAll("*")].map(element=>({rect:element.getBoundingClientRect().toJSON(),style:["transform","opacity","visibility","clip-path","color","background-color","font-size"].map(property=>[property,getComputedStyle(element).getPropertyValue(property)])}))}));
+      await Promise.all([writeFile(join(project.root,"seek-first.png"),first),writeFile(join(project.root,"seek-repeated.png"),again),writeJson(join(project.root,"seek-state.json"),{frame,first:firstState,repeated:repeatedState,identical:JSON.stringify(firstState)===JSON.stringify(repeatedState)})]);
+      throw new PipelineError("nondeterministic_motion","Repeated frame seeking produced different pixels.","The motion composition requires an internal renderer repair; retained seek pixels and state identify the differing region.","needs_review");
+    }
     return [...screenshots,`${project.directory}/seek-check.json`];
   }finally{try{await browser?.close();}finally{await server.close();}}
 }

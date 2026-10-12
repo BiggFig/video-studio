@@ -1,11 +1,12 @@
 import { ILLUSTRATIVE_PREVIEW_LABEL, MAX_UI_RADIUS, type UiDocument } from "./ui-reconstruction";
 import { expectedUiState } from "./ui-state";
+import { causalUnderlineRect, type UiCausalEmphasisTrack } from "./ui-causal-emphasis";
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
 const color=(value:string)=>{if(!/^(?:#[a-f\d]{6}|transparent)$/i.test(value))throw new Error("UI style colors must be trusted hex values");return value;};
 const number=(value:number,min:number,max:number)=>{if(!Number.isFinite(value)||value<min||value>max)throw new Error("UI geometry exceeds the supported range");return value;};
 
-export function uiDocumentHtml(document:UiDocument,index:number,viewport:{width:number;height:number;left?:number;top?:number},shotDirected=false){
+export function uiDocumentHtml(document:UiDocument,index:number,viewport:{width:number;height:number;left?:number;top?:number},shotDirected=false,emphasis?:UiCausalEmphasisTrack){
  const scale=Math.min(viewport.width/document.viewport.width,viewport.height/document.viewport.height),width=document.viewport.width*scale,height=document.viewport.height*scale;
  const content=document.elements.map(element=>{
   const style=document.styles.find(style=>style.id===element.styleId);if(!style)throw new Error("UI element style missing");
@@ -19,13 +20,17 @@ export function uiDocumentHtml(document:UiDocument,index:number,viewport:{width:
   const code=document.previewBinding&&(element.id===document.previewBinding.codeElementId||element.id===document.previewBinding.templateElementId);
   return`<div class="ui-element ui-${escape(element.type)}${code?" ui-code-example":""}" data-ui-element="${escape(element.id)}" data-ui-type="${escape(element.type)}" data-text-basis="${escape(element.textBasis)}" style="${css}${code?";font-family:monospace;letter-spacing:0":""}"><span data-ui-text>${escape(element.text)}</span><i class="ui-caret" aria-hidden="true"></i></div>`;
  }).join("");
+ const ink=emphasis?(["input","result"] as const).map(role=>{
+  const elementId=emphasis[role].elementId,r=causalUnderlineRect(document,elementId);if(!r)throw new Error("Editorial emphasis has no safe source-bound gutter");
+  return`<svg class="ui-editorial-ink" data-ui-causal="${role}" data-editorial-subject="${escape(elementId)}" aria-hidden="true" viewBox="0 0 100 3" preserveAspectRatio="none" style="position:absolute;pointer-events:none;z-index:98;opacity:0;overflow:visible;left:${r.x*100}%;top:${r.y*100}%;width:${r.width*100}%;height:${r.height*100}%"><path d="M0 1.5 H100" fill="none" stroke="var(--accent)" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
+ }).join(""):"";
  const positionCss=shotDirected||document.previewBinding?`left:${number(viewport.left??0,0,4096)}px;top:${number(viewport.top??0,0,4096)}px;width:${viewport.width}px;height:${viewport.height}px`:"";
  const position=positionCss||document.previewBinding?` style="${positionCss}${document.previewBinding?";overflow:visible":""}"`:"";
  const label=document.previewBinding?`<div class="ui-demo-label" data-essential style="left:0;right:0;bottom:-40px;font-size:26px;text-align:center">${ILLUSTRATIVE_PREVIEW_LABEL}</div>`:"";
  // The camera clips its document while disclosure follows the animated stage
  // outside that clip. Older documents retain their original stage markup.
  const clipStart=document.previewBinding?'<div class="ui-camera-clip" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:inherit">':"",clipEnd=document.previewBinding?"</div>":"";
- return`<div class="ui-demo-stage"${position} data-ui-reconstruction="${escape(document.id)}" role="img" aria-label="${document.previewBinding?ILLUSTRATIVE_PREVIEW_LABEL:"Source-grounded reconstructed product workflow"}">${clipStart}<div class="ui-document" id="ui-document-${index}" style="width:${width}px;height:${height}px">${content}<div class="ui-pointer" aria-hidden="true"><svg viewBox="0 0 28 36"><path d="M 3 2 L 3 28 L 10 22 L 16 34 L 22 31 L 16 20 L 26 19 Z" fill="white" stroke="#191919" stroke-width="2"/></svg><i></i></div></div>${clipEnd}${label}</div>`;
+ return`<div class="ui-demo-stage"${position} data-ui-reconstruction="${escape(document.id)}" role="img" aria-label="${document.previewBinding?ILLUSTRATIVE_PREVIEW_LABEL:"Source-grounded reconstructed product workflow"}">${clipStart}<div class="ui-document" id="ui-document-${index}" style="width:${width}px;height:${height}px">${content}${ink}<div class="ui-pointer" aria-hidden="true"><svg viewBox="0 0 28 36"><path d="M 3 2 L 3 28 L 10 22 L 16 34 L 22 31 L 16 20 L 26 19 Z" fill="white" stroke="#191919" stroke-width="2"/></svg><i></i></div></div>${clipEnd}${label}</div>`;
 }
 
 export const uiCompositionCss=`.ui-demo-stage{position:absolute;display:flex;align-items:center;justify-content:center;opacity:0;perspective:1800px}.ui-document{position:relative;flex:none;overflow:hidden;border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 90px #00000045;background:var(--stage-bg);font-family:Studio,Arial,sans-serif;isolation:isolate}.ui-element{position:absolute;overflow:hidden;display:flex;align-items:center;border:1px solid transparent;line-height:1.3;white-space:pre-wrap;overflow-wrap:break-word;letter-spacing:-.015em;padding:0 .55em}.ui-panel{padding:0}.ui-text,.ui-textarea{display:block;padding:0}.ui-input{align-items:center;padding:0}.ui-node,.ui-icon{justify-content:center;padding:0}.ui-element[data-selected=true]{background:var(--ui-selected-fill)!important;color:var(--ui-selected-color)!important;border-color:var(--ui-selected-border)!important;border-radius:var(--ui-selected-radius)!important;font-size:var(--ui-selected-size)!important;font-weight:var(--ui-selected-weight)!important}.ui-edge{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.ui-caret{display:none;position:relative;flex:none;width:2px;height:1.12em;background:currentColor;margin-left:2px;vertical-align:text-bottom}.ui-element[data-typing=true] .ui-caret{display:inline-block}.ui-pointer{position:absolute;width:28px;height:36px;z-index:99;filter:drop-shadow(0 3px 4px #00000070);pointer-events:none}.ui-pointer svg{width:100%;height:100%}.ui-pointer i{position:absolute;left:-17px;top:-17px;width:40px;height:40px;border:3px solid var(--accent);border-radius:50%;opacity:0}.ui-demo-label{position:absolute;right:36px;bottom:18px;font-size:18px;line-height:1;color:var(--muted);letter-spacing:.02em}`;
