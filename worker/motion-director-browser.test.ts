@@ -7,7 +7,7 @@ import { join,relative,isAbsolute } from "node:path";
 import { chromium } from "playwright";
 import { prepareMotionProject,serveMotionProject } from "./motion-render";
 import { motionBrowserArgs,motionBrowserPath } from "./motion-browser";
-import { mediaEnvironment } from "./media";
+import { command,ffmpeg,mediaEnvironment } from "./media";
 import type { Plan,Scene } from "./types";
 import type { UiDocument } from "./ui-reconstruction";
 
@@ -26,9 +26,35 @@ test("directed copy, UI and materials survive arbitrary browser seeks without in
  const browser=await chromium.launch({headless:true,executablePath,args:motionBrowserArgs,env:mediaEnvironment()});t.after(()=>browser.close());
  const page=await browser.newPage({viewport:{width:1080,height:1350}});await page.goto(server.origin);await page.evaluate(()=>(window as any).__studioReady);
  const seek=(frame:number)=>page.evaluate(n=>(window as any).__studio.seekFrame(n),frame);
+ const snapshot=(frame:number)=>page.evaluate(frame=>{
+  const active=window.document.getElementById(`scene-${Math.floor(frame/120)}`)!;
+  return {comparison:{
+   html:active.outerHTML,
+   elements:[active,...active.querySelectorAll('*')].map(element=>({
+    id:element.id,rect:element.getBoundingClientRect().toJSON(),
+    computed:['transform','opacity','visibility','clip-path','left','top','width','height','color','background-color','font-size'].map(key=>[key,getComputedStyle(element).getPropertyValue(key)])
+   })),
+   // A never-visited hidden scene has no GSAP inline styles yet. Compare its
+   // visibility and exact UI state while retaining its full HTML for diagnosis.
+   sceneVisibility:Array.from(window.document.querySelectorAll('.scene'),element=>{const style=getComputedStyle(element);return{id:element.id,visible:style.visibility==='visible'&&Number(style.opacity)>0};}),
+   uiState:Array.from(window.document.querySelectorAll('.ui-document'),element=>element.outerHTML)
+  },allSceneHtml:Array.from(window.document.querySelectorAll('.scene'),element=>element.outerHTML)};
+ },frame);
  const samples=[18,30,42,60,90,119,120,126,138,162,180,210,239];
  for(const frame of samples){
-  await seek(frame);const first=await page.screenshot();await seek(frame<120?239:0);await seek(frame);assert.ok(first.equals(await page.screenshot()),`frame ${frame} changes after reverse seek`);
+  await seek(frame);const first=await page.screenshot(),firstSnapshot=await snapshot(frame),firstState=JSON.stringify(firstSnapshot.comparison);await seek(frame<120?239:0);await seek(frame);const second=await page.screenshot(),secondSnapshot=await snapshot(frame),secondState=JSON.stringify(secondSnapshot.comparison);
+  const identical=first.equals(second),domIdentical=firstState===secondState;let ssim=1;
+  if(!identical||!domIdentical){
+   const retained=join(process.cwd(),'.local','director-browser-replay');await mkdir(retained,{recursive:true});const evidence=await mkdtemp(join(retained,`frame-${frame}-`));
+   const firstPath=join(evidence,'before.png'),secondPath=join(evidence,'after.png');
+   await Promise.all([writeFile(firstPath,first),writeFile(secondPath,second),writeFile(join(evidence,'before.json'),JSON.stringify(firstSnapshot)),writeFile(join(evidence,'after.json'),JSON.stringify(secondSnapshot))]);
+   const log=await command(ffmpeg,['-hide_banner','-i',firstPath,'-i',secondPath,'-filter_complex','[0:v]format=yuv420p[actual];[1:v]format=yuv420p[expected];[actual][expected]ssim','-frames:v','1','-f','null','-']);
+   ssim=Number(/All:([0-9.]+)/.exec(log)?.[1]);await writeFile(join(evidence,'comparison.json'),JSON.stringify({frame,identical,domIdentical,ssim,threshold:.97,passed:domIdentical&&Number.isFinite(ssim)&&ssim>=.97},null,2));t.diagnostic(`Replay evidence: ${evidence}; exact DOM ${domIdentical}; SSIM ${ssim}`);
+  }
+  // Keep the production export threshold: Chromium can round a composited
+  // background channel by one unit despite identical DOM and camera state.
+  assert.ok(domIdentical,`frame ${frame} changes DOM, state or geometry after reverse seek`);
+  assert.ok(Number.isFinite(ssim)&&ssim>=.97,`frame ${frame} changes visible pixels after reverse seek (SSIM ${ssim})`);
   const current=Math.floor(frame/120),visibility=await page.locator(`#scene-${current} .heading`).evaluate(element=>{let opacity=1;for(let node:Element|null=element;node;node=node.parentElement)opacity*=Number(getComputedStyle(node).opacity);return{opacity,visibility:getComputedStyle(element).visibility};});
   assert.ok(visibility.opacity>.99&&visibility.visibility==="visible",`copy disappeared at frame ${frame}`);
   const visibleStages=await page.locator(".ui-demo-stage").evaluateAll(elements=>elements.filter(element=>{let opacity=1;for(let node:Element|null=element;node;node=node.parentElement)opacity*=Number(getComputedStyle(node).opacity);return opacity>.99;}).length);

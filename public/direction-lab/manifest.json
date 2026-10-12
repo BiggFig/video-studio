@@ -301,7 +301,7 @@
       "number": 8,
       "title": "Connect URL generation",
       "status": "in-progress",
-      "detail": "The automatic worker saves a source-bound shot plan before audio and rendering. End-to-end URL verification is blocked by model-provider access."
+      "detail": "Provider access is restored. All three URL tests reached UI reconstruction, where source and behavior checks stopped invalid demonstrations before audio or rendering."
     },
     {
       "number": 9,
@@ -318,8 +318,8 @@
     {
       "number": 11,
       "title": "Prove it generalizes",
-      "status": "external",
-      "detail": "Plausible, Resend and Baserow captured public sources, then stopped at model-provider access. No automatic videos or automatic passes are claimed."
+      "status": "in-progress",
+      "detail": "Plausible, Resend and Baserow completed research but failed UI fidelity checks. No automatic video passed; workflow selection and reconstruction still need improvement."
     },
     {
       "number": 12,
@@ -361,18 +361,18 @@
   "generalization": [
     {
       "title": "Plausible",
-      "status": "Blocked by provider access",
-      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+      "status": "Needs UI review",
+      "detail": "Research now completes within its existing allowance. UI reconstruction failed source-text provenance checks; no automatic video was produced."
     },
     {
       "title": "Resend",
-      "status": "Blocked by provider access",
-      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+      "status": "Needs UI review",
+      "detail": "Research completed, but the proposed interaction used static code as a confirmation control. Source and behavior validation stopped the demonstration."
     },
     {
       "title": "Baserow",
-      "status": "Blocked by provider access",
-      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+      "status": "Needs UI review",
+      "detail": "Research completed, but the reconstruction invented a Live success state and invalid graph connections. Validation stopped the demonstration."
     }
   ]
 }

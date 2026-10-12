@@ -1,4 +1,5 @@
 import type { StudioLimits } from "../contracts";
+import { resolveModelProvider } from "../../worker/model-provider";
 
 function integer(name: string, fallback: number, min: number, max: number) {
   const value = Number(process.env[name] ?? fallback);
@@ -26,7 +27,11 @@ export function authConfigured() {
 }
 
 export function acceptingJobs() {
-  const modelAuth = process.env.ANTHROPIC_API_KEY || process.env.AI_GATEWAY_API_KEY || process.env.VERCEL === "1" || process.env.VERCEL_OIDC_TOKEN;
+  let modelAuth = false;
+  try {
+    const model = resolveModelProvider(process.env);
+    modelAuth = Boolean(model.credential || (model.provider === "vercel-ai-gateway" && process.env.VERCEL === "1"));
+  } catch { /* An invalid explicit route must not silently use another credential. */ }
   return authConfigured() && process.env.BETA_ACCEPTING_JOBS === "true" && Boolean(process.env.BLOB_READ_WRITE_TOKEN && modelAuth && process.env.ELEVENLABS_API_KEY && process.env.APP_URL && process.env.WORKER_SECRET && process.env.WORKER_SNAPSHOT_ID);
 }
 

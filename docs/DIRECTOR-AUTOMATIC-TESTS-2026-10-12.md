@@ -1,6 +1,8 @@
 # Automatic director acceptance — 2026-10-12
 
-**Result: 0 automatic passes; no automatically generated videos.** All three URL tests captured public sources, then stopped on the first research generation because of provider access failures. The separately authored Tally pilot is not included in automatic acceptance.
+**Current result: 0 automatic passes; no automatically generated videos.** OpenRouter access is now verified and all three products reached UI documentation, where source/behavior checks failed. See [OpenRouter recovery](OPENROUTER-RECOVERY-2026-10-12.md) for the current results. The separately authored Tally pilot is not included in automatic acceptance.
+
+The sections below preserve the earlier Anthropic/Gateway access investigation.
 
 ## Pinned execution
 
@@ -39,4 +41,4 @@ Sanitized supporting records are in the runtime root: `gateway-access-summary.js
 
 Read-only validation confirmed the Plausible saved manifest is intact. Normal resume preserves the original deadline but stops with `model_reservation_unresolved`; the reserved, incomplete research stage also prevents repeated generation. Refreshing credentials alone cannot resume these attempts under the pinned runtime. No safeguards were bypassed.
 
-The user has been asked to replace the direct Anthropic credential through Vercel's secure configuration. Alternatively, Vercel support can diagnose the Gateway failure using the request ID above. There is no evidence that a credit purchase or permission toggle would fix it. Automatic end-to-end acceptance remains incomplete until valid provider access and a separately authorized bounded run succeed.
+The user subsequently supplied an OpenRouter credential. Its independently verified route and new bounded attempts are recorded in the linked recovery report. The earlier Anthropic/Gateway failures remain retained and unresolved; no old reservation or deadline was reset.
