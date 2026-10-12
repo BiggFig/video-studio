@@ -301,7 +301,7 @@
       "number": 8,
       "title": "Connect URL generation",
       "status": "in-progress",
-      "detail": "Provider access is restored. All three URL tests reached UI reconstruction, where source and behavior checks stopped invalid demonstrations before audio or rendering."
+      "detail": "Guide capture, source-bound UI reconstruction and explicit action/outcome review are implemented. Research syntax, source context and final quality checks remain under fresh automatic testing. No automatic video has passed."
     },
     {
       "number": 9,
@@ -319,7 +319,7 @@
       "number": 11,
       "title": "Prove it generalizes",
       "status": "in-progress",
-      "detail": "Plausible, Resend and Baserow completed research but failed UI fidelity checks. No automatic video passed; workflow selection and reconstruction still need improvement."
+      "detail": "Zero automatic passes. One earlier Baserow draft rendered but failed complete acceptance. The latest completed three-product batch stopped before rendering. The six approved authored Tally exports remain available and do not count as automatic URL passes."
     },
     {
       "number": 12,
@@ -361,18 +361,18 @@
   "generalization": [
     {
       "title": "Plausible",
-      "status": "Needs UI review",
-      "detail": "Research now completes within its existing allowance. UI reconstruction failed source-text provenance checks; no automatic video was produced."
+      "status": "Needs reconstruction review",
+      "detail": "The latest test completed research and reconstructed a filter dialog, but invented filtered traffic numbers. Source validation rejected it before rendering. Planning now needs a supported result before UI generation; no automatic video has passed."
     },
     {
       "title": "Resend",
-      "status": "Needs UI review",
-      "detail": "Research completed, but the proposed interaction used static code as a confirmation control. Source and behavior validation stopped the demonstration."
+      "status": "Automatic reconstruction under test",
+      "detail": "Source-seeded reconstruction and coherent capture of animated panels are implemented. Public verification recovered the actual code and matching email greeting. Fresh automatic acceptance is underway; no automatic video has passed."
     },
     {
       "title": "Baserow",
-      "status": "Needs UI review",
-      "detail": "Research completed, but the reconstruction invented a Live success state and invalid graph connections. Validation stopped the demonstration."
+      "status": "Needs workflow correction",
+      "detail": "The latest test captured dashboard documentation and screenshots, then returned no usable research text within its output allowance. No new UI or video was generated. The earlier rendered draft remains unapproved."
     }
   ]
 }

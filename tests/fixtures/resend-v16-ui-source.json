@@ -1,0 +1,471 @@
+{
+  "id": "ui-product-panel-1",
+  "assetId": "product-panel-1",
+  "basis": "dom",
+  "context": "marketing-example",
+  "pageUrl": "https://resend.com/",
+  "rootSelector": "#base-ui-_R_qq4ltabsdb_",
+  "width": 1030,
+  "height": 651,
+  "elements": [
+    {
+      "id": "element-0",
+      "role": "panel",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1
+      },
+      "selector": ":scope",
+      "style": {
+        "color": "#f0f0f0",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 16,
+        "lineHeight": 24,
+        "fontFamily": "inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-1",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.1246,
+        "width": 0.1468,
+        "height": 0.02
+      },
+      "text": "username = 'Steve',",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(5)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-2",
+      "role": "text",
+      "rect": {
+        "x": 0.5631,
+        "y": 0.2708,
+        "width": 0.3689,
+        "height": 0.0517
+      },
+      "text": "Welcome to ACME, user!",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > h2",
+      "style": {
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 24,
+        "lineHeight": 33.6,
+        "fontFamily": "Helvetica",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-3",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.4938,
+        "width": 0.1678,
+        "height": 0.02
+      },
+      "text": "width=\"80\"",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(20)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-4",
+      "role": "link",
+      "rect": {
+        "x": 0.6915,
+        "y": 0.5901,
+        "width": 0.1121,
+        "height": 0.0628
+      },
+      "text": "Get Started",
+      "selector": "",
+      "style": {
+        "borderRadius": 4,
+        "fontSize": 14,
+        "lineHeight": 14,
+        "fontFamily": "Helvetica",
+        "fontWeight": "600"
+      }
+    },
+    {
+      "id": "element-5",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.74,
+        "width": 0.2027,
+        "height": 0.02
+      },
+      "text": "Hello {username},",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(30)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-6",
+      "role": "text",
+      "rect": {
+        "x": 0.5631,
+        "y": 0.7021,
+        "width": 0.3689,
+        "height": 0.0738
+      },
+      "text": "Cheers, The ACME Team",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > p:nth-of-type(3)",
+      "style": {
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 14,
+        "lineHeight": 24,
+        "fontFamily": "Helvetica",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-7",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.1492,
+        "width": 0.1328,
+        "height": 0.02
+      },
+      "text": "company = 'ACME',",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(6)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-8",
+      "role": "text",
+      "rect": {
+        "x": 0.7454,
+        "y": 0.2754,
+        "width": 0.0686,
+        "height": 0.0415
+      },
+      "text": "ACME",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > h2 > strong",
+      "style": {
+        "borderRadius": 0,
+        "fontSize": 24,
+        "lineHeight": 33.6,
+        "fontFamily": "Helvetica",
+        "fontWeight": "700"
+      }
+    },
+    {
+      "id": "element-9",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.5185,
+        "width": 0.1748,
+        "height": 0.02
+      },
+      "text": "height=\"80\"",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(21)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-10",
+      "role": "text",
+      "rect": {
+        "x": 0.5631,
+        "y": 0.3686,
+        "width": 0.3689,
+        "height": 0.0369
+      },
+      "text": "Hello Steve,",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > p:nth-of-type(1)",
+      "style": {
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 14,
+        "lineHeight": 24,
+        "fontFamily": "Helvetica",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-11",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.6662,
+        "width": 0.4335,
+        "height": 0.02
+      },
+      "text": "Welcome to <strong>{company}</strong>, {username}!",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(27)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-12",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.0508,
+        "width": 0.2167,
+        "height": 0.02
+      },
+      "text": "import * as React from 'react';",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(2)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-13",
+      "role": "icon",
+      "rect": {
+        "x": 0.7087,
+        "y": 0.1015,
+        "width": 0.0777,
+        "height": 0.1231
+      },
+      "selector": "",
+      "style": {
+        "borderRadius": 0,
+        "fontSize": 14,
+        "lineHeight": 24,
+        "fontFamily": "Helvetica",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-14",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.5431,
+        "width": 0.2237,
+        "height": 0.02
+      },
+      "text": "alt=\"Logo Example\"",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(22)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-15",
+      "role": "text",
+      "rect": {
+        "x": 0.5631,
+        "y": 0.4301,
+        "width": 0.3689,
+        "height": 0.1108
+      },
+      "text": "We're excited to have you onboard at ACME. We hope you enjoy your journey with us. If you have any questions or need assistance, feel free to reach out.",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > p:nth-of-type(2)",
+      "style": {
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 14,
+        "lineHeight": 24,
+        "fontFamily": "Helvetica",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-16",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.6908,
+        "width": 0.1398,
+        "height": 0.02
+      },
+      "text": "</Heading>",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(28)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-17",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.1,
+        "width": 0.1608,
+        "height": 0.02
+      },
+      "text": "const WelcomeEmail = ({",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(4)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-18",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.5677,
+        "width": 0.2657,
+        "height": 0.02
+      },
+      "text": "className=\"my-0 mx-auto\"",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(23)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    },
+    {
+      "id": "element-19",
+      "role": "text",
+      "rect": {
+        "x": 0.7914,
+        "y": 0.4363,
+        "width": 0.04,
+        "height": 0.0246
+      },
+      "text": "ACME",
+      "selector": ":scope > div:nth-of-type(2) > div > table > tbody > tr > td > p:nth-of-type(2) > strong",
+      "style": {
+        "borderRadius": 0,
+        "fontSize": 14,
+        "lineHeight": 24,
+        "fontFamily": "Helvetica",
+        "fontWeight": "700"
+      }
+    },
+    {
+      "id": "element-20",
+      "role": "text",
+      "rect": {
+        "x": 0.0447,
+        "y": 0.7154,
+        "width": 0.2517,
+        "height": 0.02
+      },
+      "text": "<Text className=\"text-sm\">",
+      "selector": ":scope > div:nth-of-type(1) > div > pre > div:nth-of-type(29)",
+      "codeContainer": ":scope > div:nth-of-type(1) > div > pre",
+      "style": {
+        "color": "#ebeced",
+        "effectiveBackgroundColor": "#000000",
+        "backgroundColor": "transparent",
+        "borderRadius": 0,
+        "fontSize": 12,
+        "lineHeight": 16,
+        "fontFamily": "commitMono, ui-monospace, SFMono-Regular, Menlo, Monaco",
+        "fontWeight": "400"
+      }
+    }
+  ],
+  "limitations": [
+    "One public captured state only; no product interaction was performed or verified.",
+    "Styles describe displayed public elements, not an official design system; fonts may require a local fallback.",
+    "Only visible text and bounded element geometry were retained. Form values, editable text, handlers and raw HTML were excluded.",
+    "Inventory samples semantic controls and spatial regions; redundant nested text is omitted. Records are source references, not a complete layout or instructions to render every record.",
+    "Visible element inventory was shortened to the shared metadata limit."
+  ]
+}

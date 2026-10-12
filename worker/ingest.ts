@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { audioMeasurements, command, ffmpeg, frame, mediaEnvironment, probe, writeJson } from "./media";
 import { safeDownload } from "./security";
@@ -9,27 +9,64 @@ import { extractProductVisuals } from "./product-visuals";
 import { enrichProductResearch, researchDestination } from "./url-research";
 import { extractBrandEvidence } from "./brand-evidence";
 import { UiSourceBudget, type UiSource } from "./ui-sources";
+import { assertNoPartialGuideSelection, compileGuideChoice, selectWorkflowGuide, type GuideCatalog, type GuideChoice } from "./guide-selection";
+
+export const GUIDE_FOLLOWUP_STATE_PATH="analysis/guide-followup-state.json";
+export async function assertNoPartialGuideCapture(workspace:string){
+  try{
+    await assertNoPartialGuideSelection(workspace);
+    try{await stat(join(workspace,GUIDE_FOLLOWUP_STATE_PATH));}catch(error){if(error instanceof Error&&"code"in error&&error.code==="ENOENT")return;throw error;}
+  }catch(error){if(!(error instanceof PipelineError))throw error;}
+  throw new PipelineError("partial_guide_capture","A guide decision has retained capture state but final source evidence is missing.","Inspect the retained guide prefix, choice and followup checkpoint. Automatic recrawl and repeated paid selection were prevented.","needs_review");
+}
+export function assertGuideSupportsResearch(evidence:Evidence){
+  if(evidence.guideProposal?.decision==="insufficient")throw new PipelineError("insufficient_product_evidence","The captured interface and observed guides do not establish a supported action and consequence.","Supply screenshots and a guide showing the same product workflow; the captured evidence and selector reason were retained.","needs_input");
+}
 
 export function callbackAuth() { const url=process.env.WORKER_CALLBACK_URL; const token=process.env.PIPELINE_CALLBACK_TOKEN; return url && token ? {origin:new URL(url).origin,token}:undefined; }
+
+type CaptureDownloadPriority="document"|"resource";
+/** Preserve room for three documents and up to eight focused attempts per page. */
+export class CaptureRequestBudget {
+  private requests=0;private resources=0;private blocked=0;
+  admit(kind:"document"|"focused"|"resource"){
+    if(this.requests>=500||(kind==="resource"&&this.resources>=468)){this.blocked++;return false;}
+    this.requests++;if(kind==="resource")this.resources++;return true;
+  }
+  snapshot(){return{requests:this.requests,ordinaryRequests:this.resources,protectedRequests:this.requests-this.resources,blockedRequestAdmissions:this.blocked,requestLimit:500,protectedRequestReserve:32};}
+}
+/** Only explicit speculative markers qualify; an RSC request can be needed by the current page. */
+export function isSpeculativePrefetch(headers:Record<string,string|undefined>):boolean {
+  return Object.entries(headers).some(([name,value])=>{
+    const key=name.toLowerCase(),text=(value||"").trim();
+    return ["purpose","sec-purpose"].includes(key)&&/(?:^|[\s,;])prefetch(?:$|[\s,;])/i.test(text)
+      || key==="next-router-prefetch"&&text==="1"
+      || key==="next-router-segment-prefetch"&&!!text&&text!=="0";
+  });
+}
 
 /** At most four downloads, with byte capacity reserved before any connection. */
 export class CaptureDownloadBudget {
   private used=0;private reserved=0;private active=0;
-  private waiting:{resolve:(amount:number)=>void;reject:(reason:Error)=>void}[]=[];
+  private waiting:{resolve:(amount:number)=>void;reject:(reason:Error)=>void;priority:CaptureDownloadPriority}[]=[];
   constructor(private total=55_000_000,private perRequest=8_000_000,private concurrency=4){}
   private pump(){
     while(this.waiting.length&&this.active<this.concurrency){
       const available=this.total-this.used-this.reserved;
       if(available<=0){if(this.active===0)for(const waiter of this.waiting.splice(0))waiter.reject(new Error("Capture download budget exhausted"));return;}
-      const amount=Math.min(this.perRequest,available);this.reserved+=amount;this.active++;this.waiting.shift()!.resolve(amount);
+      // Main documents precede optional queued resources, without preempting or
+      // adding a slot. FIFO order is preserved within each priority class.
+      const document=this.waiting.findIndex(waiter=>waiter.priority==="document");
+      const amount=Math.min(this.perRequest,available);this.reserved+=amount;this.active++;this.waiting.splice(document<0?0:document,1)[0].resolve(amount);
     }
   }
-  async run<T extends {bytes:Buffer}>(download:(maxBytes:number)=>Promise<T>):Promise<T>{
-    const amount=await new Promise<number>((resolve,reject)=>{this.waiting.push({resolve,reject});this.pump();});
+  async run<T extends {bytes:Buffer}>(download:(maxBytes:number)=>Promise<T>,priority:CaptureDownloadPriority="resource"):Promise<T>{
+    const amount=await new Promise<number>((resolve,reject)=>{this.waiting.push({resolve,reject,priority});this.pump();});
     try{const result=await download(amount);if(result.bytes.length>amount)throw new Error("Capture download exceeded its reservation");this.used+=result.bytes.length;return result;}
     catch(error){this.used+=amount;throw error;} // Unknown partial transfers consume their full reservation.
     finally{this.reserved-=amount;this.active--;this.pump();}
   }
+  snapshot(){return{active:this.active,pending:this.waiting.length,usedBytes:this.used,reservedBytes:this.reserved};}
 }
 
 function parserFailure(error:unknown,kind:"prd"|"visual"|"reference"):never {
@@ -71,8 +108,13 @@ export async function extractPrd(bytes:Buffer,workspace:string,index:number,expe
   return{path,text};
 }
 
-export interface IngestDependencies { readInput?:typeof downloadInput }
+/** Adaptive guide selection currently sees captured public sources, not uploads. */
+export function usesAdaptiveGuideSelection(input:Pick<WorkerInput,"mode"|"videoType"|"files">){
+  return input.mode==="url"&&input.videoType==="launch"&&!input.files.some(file=>file.kind==="asset");
+}
+export interface IngestDependencies { readInput?:typeof downloadInput; captureProduct?:typeof captureProduct; assertDeadline?:()=>void }
 export async function ingest(input:WorkerInput,workspace:string,providers:Providers,hooks:Hooks,dependencies:IngestDependencies={}):Promise<Evidence> {
+  if(usesAdaptiveGuideSelection(input))await assertNoPartialGuideCapture(workspace);
   const evidence:Evidence={text:"",assets:[]};
   const readInput=dependencies.readInput||downloadInput;
   const limits=input.limits||{maxFiles:12,maxFileBytes:250*1024*1024,maxTotalBytes:500*1024*1024,maxPrdBytes:15*1024*1024,maxReferenceBytes:100*1024*1024,maxSourceDurationSeconds:300,maxReferenceDurationSeconds:180};
@@ -94,8 +136,9 @@ export async function ingest(input:WorkerInput,workspace:string,providers:Provid
   }
   if(input.mode==="url") {
     if(!input.productUrl) throw new PipelineError("missing_url","A product URL is required.","Enter a public product URL.","needs_input");
-    const captured=await captureProduct(input.productUrl,workspace); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;evidence.brand=captured.brand;evidence.uiSources=captured.uiSources;
+    const captured=await (dependencies.captureProduct||captureProduct)(input.productUrl,workspace,usesAdaptiveGuideSelection(input)?{persist:paths=>hooks.persist(paths),guideSelection:({evidence:prefix,catalog})=>selectWorkflowGuide({input,evidence:prefix,catalog,providers,hooks,workspace,assertDeadline:dependencies.assertDeadline})}:{}); evidence.text=captured.text; evidence.assets.push(...captured.assets); evidence.capturedUrl=captured.url;evidence.brand=captured.brand;evidence.uiSources=captured.uiSources;evidence.guideProposal=captured.guideProposal;
     await hooks.persist(captured.artifactPaths);
+    if(evidence.guideProposal?.decision==="insufficient"){await writeJson(join(workspace,"analysis/evidence.json"),evidence);await hooks.persist(["analysis/evidence.json"]);assertGuideSupportsResearch(evidence);}
   } else if(evidence.text.trim().length<100 || !evidence.assets.some(a=>a.usage==="output")) throw new PipelineError("insufficient_prd","The PRD needs readable product information and at least one usable visual.","Upload a text-based PRD plus product screenshots or a screen recording.","needs_input");
   if(input.referenceUrl) {
     const downloaded=await readInput(input.referenceUrl,limits.maxReferenceBytes,"reference");
@@ -140,20 +183,46 @@ export async function ingestMedia(relative:string,id:string,usage:"output"|"refe
   return asset;
 }
 
-export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget}={}):Promise<{text:string;assets:Asset[];url:string;brand?:BrandEvidence;uiSources:UiSource[];artifactPaths:string[]}> {
+export async function captureProduct(url:string,workspace:string,dependencies:{download?:typeof safeDownload;downloadBudget?:CaptureDownloadBudget;guideSelection?:(context:{evidence:Evidence;catalog:GuideCatalog})=>Promise<GuideChoice>;persist?:Hooks["persist"]}={}):Promise<{text:string;assets:Asset[];url:string;brand?:BrandEvidence;uiSources:UiSource[];artifactPaths:string[];guideProposal?:GuideChoice}> {
+  if(dependencies.guideSelection){if(!dependencies.persist)throw new Error("Guide selection requires durable capture checkpoints");await assertNoPartialGuideCapture(workspace);}
   let browser:Awaited<ReturnType<typeof chromium.launch>>;
   try{browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"],env:mediaEnvironment()});}catch{throw new PipelineError("media_runtime_unavailable","The product capture browser is unavailable.","Ask the beta administrator to restore the worker's Chromium runtime.");}
   try {
     const context=await browser.newContext({viewport:{width:1440,height:960},deviceScaleFactor:1,serviceWorkers:"block",acceptDownloads:false,ignoreHTTPSErrors:false,reducedMotion:"reduce"});
-    let bytes=0,requests=0;
+    let bytes=0;const requestBudget=new CaptureRequestBudget();
     const downloads=dependencies.downloadBudget||new CaptureDownloadBudget(),download=dependencies.download||safeDownload;
     const documentUrls=new Map<string,string>();let researchHomepage:string|null=null;
     const diagnostics:{errors:string[];blocked:string[]}={errors:[],blocked:[]};
+    type DownloadTiming={url:string;resourceType:string;priority:CaptureDownloadPriority;state:"queued"|"downloading"|"downloaded"|"failed";queuedAt:number;startedAt?:number;finishedAt?:number};
+    const documentTimings:DownloadTiming[]=[],resourceTimings:DownloadTiming[]=[];
+    let blockedPrefetches=0,maxQueueMs=0;
+    const capturedDownload=async(source:string,maximum:number|undefined,policy:Parameters<typeof safeDownload>[4],priority:CaptureDownloadPriority,resourceType:string)=>{
+      const parsed=new URL(source),timing:DownloadTiming={url:(parsed.origin+parsed.pathname).slice(0,200),resourceType,priority,state:"queued",queuedAt:Date.now()};
+      // Keep every normal research document plus a bounded resource sample.
+      // Query strings and headers are unnecessary for timing diagnosis.
+      const timings=priority==="document"?documentTimings:resourceTimings,limit=priority==="document"?8:16;
+      if(timings.length<limit)timings.push(timing);
+      try{
+        const result=await downloads.run(reservation=>{
+          timing.startedAt=Date.now();timing.state="downloading";maxQueueMs=Math.max(maxQueueMs,timing.startedAt-timing.queuedAt);
+          return download(source,maximum===undefined?reservation:Math.min(maximum,reservation),undefined,0,policy);
+        },priority);
+        bytes+=result.bytes.length;timing.state="downloaded";return result;
+      }catch(error){timing.state="failed";throw error;}
+      finally{timing.finishedAt=Date.now();}
+    };
+    const persistDiagnostics=async()=>{
+      const timingSummary=(timing:DownloadTiming)=>({url:timing.url,resourceType:timing.resourceType,priority:timing.priority,state:timing.state,queueMs:(timing.startedAt??timing.finishedAt??Date.now())-timing.queuedAt,downloadMs:timing.startedAt===undefined?0:(timing.finishedAt??Date.now())-timing.startedAt});
+      await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,...requestBudget.snapshot(),bytes,scheduling:{blockedPrefetches,maxQueueMs,...downloads.snapshot(),documentTimings:documentTimings.map(timingSummary),resourceTimings:resourceTimings.map(timingSummary)}});
+    };
     await context.route("**/*",async route=>{
       try {
-        if(route.request().method()!=="GET" || ["media","websocket"].includes(route.request().resourceType()) || ++requests>500) { await route.abort(); return; }
+        if(route.request().method()!=="GET" || ["media","websocket"].includes(route.request().resourceType())) { await route.abort(); return; }
+        if(isSpeculativePrefetch(route.request().headers())){blockedPrefetches++;await route.abort();return;}
         const policy=researchHomepage&&route.request().resourceType()==="document"?(destination:URL)=>!!researchDestination(destination.href,researchHomepage!):undefined;
-        const result=await downloads.run(maxBytes=>download(route.request().url(),maxBytes,undefined,0,policy)); bytes+=result.bytes.length;
+        const mainDocument=route.request().isNavigationRequest()&&route.request().resourceType()==="document"&&!route.request().frame().parentFrame();
+        if(!requestBudget.admit(mainDocument?"document":"resource")){await route.abort();return;}
+        const result=await capturedDownload(route.request().url(),undefined,policy,mainDocument?"document":"resource",route.request().resourceType());
         if(route.request().resourceType()==="document")documentUrls.set(route.request().url(),result.url);
         await route.fulfill({status:result.status,contentType:result.contentType,headers:result.browserHeaders,body:result.bytes});
       } catch(error) { diagnostics.blocked.push(`${route.request().url().slice(0,200)}: ${error instanceof Error?error.message:"request failed"}`); await route.abort(); }
@@ -185,23 +254,36 @@ export async function captureProduct(url:string,workspace:string,dependencies:{d
     catch(error){diagnostics.errors.push(`Optional public brand extraction unavailable: ${error instanceof Error?error.message.slice(0,350):"unknown error"}`);}
     let focusedAssets=0;const uiSources=new UiSourceBudget();
     const focusedDownload=async(source:string,maxBytes:number)=>{
-        if(++requests>500)throw new Error("Capture request budget exhausted");
-        const result=await downloads.run(reservation=>download(source,Math.min(maxBytes,reservation)));bytes+=result.bytes.length;return result;
+        if(!requestBudget.admit("focused"))throw new Error("Capture request budget exhausted");
+        return capturedDownload(source,maxBytes,undefined,"resource","focused-asset");
     };
     try{
-      const originals=await extractProductVisuals(page,workspace,homepageUrl,{download:focusedDownload,maxAssets:3,maxPanels:3,uiSources});
+      const originals=await extractProductVisuals(page,workspace,homepageUrl,{download:focusedDownload,maxAssets:dependencies.guideSelection?2:3,maxPanels:dependencies.guideSelection?2:3,uiSources});
       focusedAssets+=originals.assets.length;assets.push(...originals.assets);artifactPaths.push(...originals.artifactPaths);
     }catch(error){diagnostics.errors.push(`Complete product image extraction unavailable: ${error instanceof Error?error.message.slice(0,400):"unknown error"}`);}
     researchHomepage=homepageUrl;
     const research=await enrichProductResearch(page,workspace,{homepageUrl,homepageTitle,homepageText:text,resolvedUrl:browserUrl=>documentUrls.get(browserUrl)||browserUrl,
       captureVisuals:async(researchPage,pageUrl,pageKind,index,schedulingMs)=>{
-        if(focusedAssets>=4)return{assets:[],artifactPaths:[]};
-        const result=await extractProductVisuals(researchPage,workspace,pageUrl,{download:focusedDownload,maxAssets:4-focusedAssets,maxPanels:1,prefix:`research-${index}`,pageKind,schedulingLimitMs:schedulingMs,uiSources});
+        const beforeSelection=!!dependencies.guideSelection&&index===1,capacity=(beforeSelection?3:4)-focusedAssets;
+        if(capacity<=0)return{assets:[],artifactPaths:[]};
+        const result=await extractProductVisuals(researchPage,workspace,pageUrl,{download:focusedDownload,maxAssets:beforeSelection?Math.min(1,capacity):capacity,maxPanels:1,prefix:`research-${index}`,pageKind,schedulingLimitMs:schedulingMs,uiSources:beforeSelection&&uiSources.sources.length>=2?undefined:uiSources});
         focusedAssets+=result.assets.length;return result;
-      }});
+      },...(dependencies.guideSelection?{
+        chooseGuide:async(context:{catalog:GuideCatalog;text:string;assets:Asset[];artifactPaths:string[]})=>{
+          await writeJson(join(workspace,"analysis/ui-sources.json"),uiSources.sources);await persistDiagnostics();
+          await dependencies.persist!([...new Set([...artifactPaths,...context.artifactPaths,"analysis/ui-sources.json"])]);
+          const prefix:Evidence={text:context.text,assets:[...assets,...context.assets],capturedUrl:homepageUrl,brand,uiSources:uiSources.sources};
+          const choice=await dependencies.guideSelection!({evidence:prefix,catalog:context.catalog});
+          return compileGuideChoice(choice,context.catalog,prefix);
+        },
+        checkpointGuide:async(choice:GuideChoice,catalog:GuideCatalog,selected?:{url:string})=>{
+          await writeFile(join(workspace,GUIDE_FOLLOWUP_STATE_PATH),JSON.stringify({version:1,status:selected?"scheduled":"not-requested",choice,catalog,selectedUrl:selected?.url||null,meaning:"Durable decision before any selected guide navigation; final evidence confirms collection completion."},null,2)+"\n",{flag:"wx"});
+          await dependencies.persist!([GUIDE_FOLLOWUP_STATE_PATH]);artifactPaths.push(GUIDE_FOLLOWUP_STATE_PATH);
+        }
+      }:{})});
     text=research.text;assets.push(...research.assets);artifactPaths.push(...research.artifactPaths);
     await writeJson(join(workspace,"analysis/ui-sources.json"),uiSources.sources);artifactPaths.push("analysis/ui-sources.json");
-    await writeJson(join(workspace,"analysis/capture-diagnostics.json"),{...diagnostics,requests,bytes});
-    return{text,assets,brand,uiSources:uiSources.sources,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)]};
+    await persistDiagnostics();
+    return{text,assets,brand,uiSources:uiSources.sources,url:homepageUrl,artifactPaths:[...new Set(artifactPaths)],...(research.guideProposal?{guideProposal:research.guideProposal}:{})};
   } finally {await browser.close();}
 }

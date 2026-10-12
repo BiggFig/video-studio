@@ -1,6 +1,18 @@
 # Automatic director acceptance — 2026-10-12
 
-**Current result: 0 automatic passes; no automatically generated videos.** OpenRouter access is now verified and all three products reached UI documentation, where source/behavior checks failed. See [OpenRouter recovery](OPENROUTER-RECOVERY-2026-10-12.md) for the current results. The separately authored Tally pilot is not included in automatic acceptance.
+**Current result: 0 automatic passes; one unapproved Baserow draft.** The v10 Baserow test rendered 26.33 seconds at 1920×1080, then stopped before complete quality review; operator inspection also found an unsupported outcome. V15 cleared the research-format blocker, but all three products stopped before rendering. V16's source-seeded UI was not exercised because research selected an ambiguous context suggestion. V17 corrected that candidate bug and passed 726 tests, TypeScript and the production build. Its fresh Resend test then missed the animated email panel during capture and proposed a new analytics result already visible in the remaining source; the initial-state check rejected it. A paired pixel/DOM capture fix is under unpaid verification before another fresh run. Source and quality checks remain mandatory. The six authored Tally treatment/control exports are unchanged and are not automatic URL passes. See [workflow reconstruction](WORKFLOW-RECONSTRUCTION-2026-10-12.md) for current implementation, retained outcomes and completion criteria; [OpenRouter recovery](OPENROUTER-RECOVERY-2026-10-12.md) records the earlier provider recovery.
+
+## Retained three-product batch: v7
+
+Frozen runtime SHA-256: `3caef2aedc037b1ee7972f73a63c19bf648bd4ded069a2e216bc9a6830aa26a2`. Workspaces are retained under `.local/director-openrouter-v7/.local/`; none was resumed under changed code.
+
+| Product | Recorded stop | Measured model usage | Audio/video |
+|---|---|---|---|
+| Plausible | A relevant guide supplied three additional UI images, but research chose an already-applied filter. Reconstruction fabricated an empty initial view and failed the observed-state check (`production_stage_changed`). | 4 calls; 75,270 input / 6,093 output tokens | None |
+| Baserow | The selector's complete 295-character explanation exceeded its then-current 240-character bound before the selected guide was fetched (`production_stage_changed`). | 1 call; 12,042 input / 144 output tokens | None |
+| Resend | UI documentation and scripting completed. Both bounded workflow reviews rejected a company-name change to Resend that retained “The ACME Team” in the sign-off (`workflow_incoherent`). | 6 calls; 90,424 input / 8,604 output tokens | None |
+
+The fresh v8 Plausible run reached UI generation and received HTTP 400; independent inspection also found an invalid source-count proposal. Baserow reached UI generation after one research correction and proposed an unsupported publish result. Neither produced audio or video; measured usage and source findings are in the workflow reconstruction report. No new Resend run is implied by the v8 revision. The existing job limits remain unchanged. These local provider tests also do not verify the production queue, private storage or owner-access path.
 
 The sections below preserve the earlier Anthropic/Gateway access investigation.
 

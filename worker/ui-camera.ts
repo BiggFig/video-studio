@@ -9,14 +9,15 @@ export function uiCameraEndFrame(actions: CameraAction[]) {
   const last=actions.reduce((end,action)=>Math.max(end,action.atFrame+action.durationFrames),0);
   return last+(actions.some(action=>["pointer","type","click","select"].includes(action.kind||""))?UI_CAMERA_RETURN_FRAMES:0);
 }
-export function uiStageViewport(width:number,height:number,compact=false,shotDirected=false){
+export function uiStageViewport(width:number,height:number,compact=false,shotDirected=false,illustrativePreview=false){
+  const disclosureReserve=illustrativePreview?40:0;
   if(shotDirected){
     const portrait=height/width>1.45,feed=height>width&&!portrait;
     const left=Math.round(width*((portrait||feed) ? .07 : .05)),top=portrait?(compact?330:440):feed?(compact?230:330):(compact?185:270),bottom=portrait?220:feed?110:64;
-    return{left,top,width:width-2*left,height:height-top-bottom};
+    return{left,top,width:width-2*left,height:height-top-bottom-disclosureReserve};
   }
   const portrait=height>width,square=height===width,left=portrait?Math.round(width*.07):64,top=compact?(portrait?330:square?210:180):(portrait?480:square?290:255);
-  return{left,top,width:width-2*left,height:height-top-(portrait?100:56)};
+  return{left,top,width:width-2*left,height:height-top-(portrait?100:56)-disclosureReserve};
 }
 export interface UiCameraShot { atFrame:number;moveFrames:number;job:"establish"|"input"|"context"|"commit"|"result";targetIds:string[];contextIds?:string[];maxZoom?:number }
 export interface UiCameraTrack { shots:UiCameraShot[] }
@@ -84,7 +85,7 @@ export function uiCameraContinuation(plan:Plan,index:number):UiCameraContinuatio
   const end=expectedUiState(document,prior.actions,previous.duration_frames-1),start=expectedUiState(document,current.actions,0);
   for(const id of Object.keys(end.elements)){const a=end.elements[id],b=start.elements[id];if(!b||a.text!==b.text||a.textBasis!==b.textBasis||a.visible!==b.visible||a.selected!==b.selected)throw new Error("Shared UI transition would reset product state");}
   if(!match.subjectIds?.length||match.subjectIds.some(id=>!start.elements[id]?.visible))throw new Error("Shared UI transition subject missing");
-  const viewport=uiStageViewport(plan.output.width,plan.output.height,!previous.detail,true);
+  const viewport=uiStageViewport(plan.output.width,plan.output.height,!previous.detail,true,!!document.previewBinding);
   const camera=applyUiCameraContinuation(document,expectedUiCamera(document,prior.actions,previous.duration_frames-1,viewport,true,previous.shotDirection!.camera),previous.duration_frames-1,viewport,uiCameraContinuation(plan,index-1));
   return{camera,viewport,moveFrames:12};
 }

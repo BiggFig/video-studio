@@ -7,7 +7,7 @@ import { stageDigest, type Research } from "./research";
 import { compileScript, scriptRequest, type Script } from "./scripting";
 import type { UiDocument } from "./ui-reconstruction";
 import { assertLaunchWorkflowDepth, assertLaunchOutcomeContinuity, inspectLaunchResult, launchResultCopy, launchSequenceInventory, launchDepthInstruction, LaunchDepthRejected, LaunchOutcomeRejected, type TerminalResult } from "./workflow-depth";
-import { buildWorkflowContext, workflowTaskEvidence } from "./workflow-coherence";
+import { buildWorkflowContext, workflowTaskEvidence, workflowPromiseEvidence } from "./workflow-coherence";
 import { gateWorkflowScript, loadWorkflowScript } from "./workflow-stage";
 import { PipelineError, type Evidence, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
@@ -225,16 +225,19 @@ test("outcome continuity rejection precedes semantic preflight and review reserv
 });
 
 test("new approvals bind launch requirement and exact result; flag stripping and changed states cannot load", async t => {
-  const f = fixture(), path = await workspace(t), context = buildWorkflowContext(f.script, f.ui);
-  const providers = { ledger, prepareClaude: async () => async () => ({ contextSha256: context.sha256, assessments: context.obligations!.map(obligation => ({ obligationId: obligation.id, status: "supported", reason: "Mocked verdict only; this test measures durable binding." })), taskEntitlementVersion: 1, tasks: workflowTaskEvidence(context).map(scene => ({ sceneId: scene.sceneId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "committed-change", resultAnswer: "visible-result", postconditionIds: scene.postconditions.map(result => result.id) })) }) } as unknown as Providers;
+  const f = fixture(), path = await workspace(t), context = buildWorkflowContext(f.script, f.ui, 2, 1);
+  const providers = { ledger, prepareClaude: async () => async () => ({ contextSha256: context.sha256, assessments: context.obligations!.map(obligation => ({ obligationId: obligation.id, status: "supported", reason: "Mocked verdict only; this test measures durable binding." })), taskEntitlementVersion: 2, tasks: workflowPromiseEvidence(context).map(scene => ({ obligationId: scene.obligationId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "committed-change", resultAnswer: "visible-result", postconditionIds: scene.postconditions.map(result => result.id) })) }) } as unknown as Providers;
   const approved = await gateWorkflowScript(f.script, { input, workspace: path, ui: f.ui, hooks, providers, reserve });
   assert.equal(approved.workflowCoherence!.requireLaunchResult, true);
   assert.equal(approved.workflowCoherence!.requireOutcomeContinuity, true);
+  assert.equal(approved.workflowCoherence!.outcomeObligationVersion, 1);
   assert.deepEqual(await loadWorkflowScript(approved.workflowCoherence!, path), approved);
   const stripped = { ...approved.workflowCoherence! }; delete stripped.requireLaunchResult;
   await assert.rejects(loadWorkflowScript(stripped, path), code("production_stage_changed"));
   const strippedContinuity = { ...approved.workflowCoherence! }; delete strippedContinuity.requireOutcomeContinuity;
   await assert.rejects(loadWorkflowScript(strippedContinuity, path), code("production_stage_changed"));
+  const strippedOutcomes = { ...approved.workflowCoherence! }; delete strippedOutcomes.outcomeObligationVersion;
+  await assert.rejects(loadWorkflowScript(strippedOutcomes, path), code("production_stage_changed"));
 });
 
 test("retained k raw response is rejected only by the new continuity contract; old proof and catalogue stay unchanged", { skip: process.env.STUDIO_WORKFLOW_RETAINED_TEST !== "1" }, async () => {

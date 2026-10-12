@@ -22,6 +22,13 @@ const reviewSchema=reviewShape.superRefine((review,context)=>{
     else if(review[reviewCheckFlags[finding.check]]!==false)context.addIssue({code:"custom",path:["findings",index,"check"],message:"A blocking finding contradicts its passed or unperformed check"});
   }
 });
+
+/** Keep the original complete groups. Reconstruction evidence is usually the
+ * largest request and needs the unused allowance before lighter film beats.
+ * This is ordering only, not a promise that subsequent actual usage will fit. */
+export function orderQualityReviewRequests<T extends {hasUi:boolean}>(requests:readonly T[]):T[]{
+  return requests.map((request,index)=>({request,index})).sort((a,b)=>Number(b.request.hasUi)-Number(a.request.hasUi)||a.index-b.index).map(value=>value.request);
+}
 /** Contradictory positive flags may only become failures; raw provider artifacts stay untouched. */
 export function parseReview(value:unknown) {
   const review=reviewShape.parse(value);
@@ -123,17 +130,19 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
       const out=`analysis/qc-${scene.id}-${i}.jpg`;await frameIndex(path,join(workspace,out),index,1600);samples.push({path:out,sceneId:scene.id,label:`ACTUAL RENDER ${scene.id}, frame ${index} / nominal ${(index/30).toFixed(3)} seconds (${label})`});
     }
   }
-  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
+  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean;groupId:string;sceneIds:string[]})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
   for(let i=0;i<plan.scenes.length;i+=2) {
     const sceneIds=new Set(plan.scenes.slice(i,i+2).map(scene=>scene.id));
     const batch=reviewBatch(plan,samples.filter(sample=>sceneIds.has(sample.sceneId)));
     const defaultStyle=qualityDefaultStyle(plan);
     if(batch.images.length>32)throw new Error("Required reconstruction review exceeds the complete image allowance");
-    requests.push({prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
+    requests.push({groupId:`group-${i/2+1}`,sceneIds:[...sceneIds],prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
   }
-  for(const [index,request]of requests.entries()){
+  const ordered=orderQualityReviewRequests(requests),orderPath=`analysis/quality-review-order-after-model-${providers.ledger.modelCalls}.json`;
+  await writeJson(join(workspace,orderPath),{version:1,reason:"Complete UI groups first; stable original groups and all samples retained",batches:ordered.map((request,index)=>({reviewOrder:index+1,groupId:request.groupId,sceneIds:request.sceneIds,promptSha256:createHash("sha256").update(request.prompt).digest("hex"),images:request.images}))});await hooks.persist([orderPath]);
+  for(const [index,request]of ordered.entries()){
     const raw=await providers.claude("review",request.prompt,request.images,{policy:"quality-review-v1"});
-    const review=await reviewWithSchemaRetry(raw,{workspace,jobId:plan.job_id,prompt:request.prompt,images:request.images,hooks,parse:parseReview,prepareRetry:async(prompt,images)=>providers.prepareClaude("review",prompt,images,{policy:"quality-review-v1",reserve:await providers.qualityRemainderReserve(requests.slice(index+1))})});
+    const review=await reviewWithSchemaRetry(raw,{workspace,jobId:plan.job_id,prompt:request.prompt,images:request.images,hooks,parse:parseReview,prepareRetry:async(prompt,images)=>providers.prepareClaude("review",prompt,images,{policy:"quality-review-v1",reserve:await providers.qualityRemainderReserve(ordered.slice(index+1))})});
     reviews.push(review);if(request.hasUi)uiReviews.push(review);findings.push(...review.findings);
   }
   const all=(key:"readabilityPassed"|"claimsPassed"|"realVisualsPassed"|"renderIntegrityPassed"|"audioTranscriptPassed")=>reviews.length>0&&reviews.every(r=>r[key]);

@@ -150,6 +150,20 @@ test("compact actual QC prompt retains visible cards, source identity and full s
   assert.ok(prompt.includes('"template":"features"')); assert.ok(prompt.includes('"evidenceId":"fact-1"'));
 });
 
+test("repair maximum reserves distinct long quotes in every scene even when its synthetic maximum repeats one quote",()=>{
+  const value=fixture(2),small=structuredClone(value.research),large=structuredClone(value.research);
+  small.facts[0].quote="A".repeat(300);large.facts[0].quote="A".repeat(900);
+  large.facts.push({...large.facts[0],quote:"B".repeat(900)});
+  const smallEnvelope=qualityRepairEnvelope(value.plan,value.evidence,small),largeEnvelope=qualityRepairEnvelope(value.plan,value.evidence,large);
+  // Two scenes each retain one complete claim quote and three card quotes.
+  // Equal length is not equal content: all eight slots need the upper bound.
+  assert.equal(largeEnvelope.batches[0].variableBytes-smallEnvelope.batches[0].variableBytes,8*600);
+  const request=context(value);request.plan.scenes.forEach((scene,index)=>{scene.evidence=large.facts[index].quote;});
+  const prompt=qualityReviewPrompt(request);
+  assert.ok(prompt.includes("A".repeat(900)));assert.ok(prompt.includes("B".repeat(900)));
+  assert.ok(!prompt.includes('"evidenceQuoteIndex"'));
+});
+
 test("trusted visibility separates exact rendered copy from full grounding evidence and rejects false media flags", () => {
   const value=fixture(6),templates=["hook","brand","proof","features","offer","cta"] as const;
   for(const [i,scene]of value.plan.scenes.entries())scene.presentation={template:templates[i],theme:"light",transition:"cut"};

@@ -10,9 +10,9 @@ import { buildPlanWorkflowContext, buildWorkflowContext, planWorkflowProjection,
 import { assertLaunchWorkflowDepth, assertLaunchOutcomeContinuity, launchResultReadingFrames } from "./workflow-depth";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const workflowBindingSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), contextSha256: hash, verdictSha256: hash, scriptSha256: hash, requireLaunchResult: z.literal(true).optional(), requireOutcomeContinuity: z.literal(true).optional() }).strict();
+export const workflowBindingSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), contextSha256: hash, verdictSha256: hash, scriptSha256: hash, requireLaunchResult: z.literal(true).optional(), requireOutcomeContinuity: z.literal(true).optional(), outcomeObligationVersion: z.literal(1).optional() }).strict();
 export type WorkflowBinding = z.infer<typeof workflowBindingSchema>;
-const markerSchema = z.object({ version: z.literal(1), jobId: z.string(), contextSha256: hash, scriptSha256: hash, evidenceSha256: hash, researchSha256: hash, uiSha256: hash, requireLaunchResult: z.literal(true).optional(), requireOutcomeContinuity: z.literal(true).optional(), status: z.enum(["reserved", "completed"]), outcome: z.enum(["passed", "failed"]).optional(), verdictSha256: hash.optional() }).strict().superRefine((value, context) => {
+const markerSchema = z.object({ version: z.literal(1), jobId: z.string(), contextSha256: hash, scriptSha256: hash, evidenceSha256: hash, researchSha256: hash, uiSha256: hash, requireLaunchResult: z.literal(true).optional(), requireOutcomeContinuity: z.literal(true).optional(), outcomeObligationVersion: z.literal(1).optional(), status: z.enum(["reserved", "completed"]), outcome: z.enum(["passed", "failed"]).optional(), verdictSha256: hash.optional() }).strict().superRefine((value, context) => {
   if (value.status === "completed" ? !value.outcome || !value.verdictSha256 : !!value.outcome || !!value.verdictSha256) context.addIssue({ code: "custom", message: "Incomplete workflow review marker" });
 });
 const paths = (contextSha256: string) => ({ marker: `analysis/workflow-coherence-${contextSha256}-state.json`, artifact: `analysis/workflow-coherence-${contextSha256}.json` });
@@ -45,8 +45,9 @@ export async function gateWorkflowScript(script: Script, options: { input: Worke
   const requireOutcomeContinuity = options.requireOutcomeContinuity ?? requireLaunchResult;
   if (requireOutcomeContinuity && !requireLaunchResult) throw stageFailure("Outcome continuity requires its launch-result contract.");
   const outcomeContinuity = requireOutcomeContinuity ? assertLaunchOutcomeContinuity(script, options.ui) : undefined;
-  const depthBinding = { ...(requireLaunchResult ? { requireLaunchResult: true as const } : {}), ...(requireOutcomeContinuity ? { requireOutcomeContinuity: true as const } : {}) };
-  const context = buildWorkflowContext(script, options.ui, options.version || 2), names = paths(context.sha256);
+  const outcomeObligationVersion = (options.version || 2) === 2 ? 1 as const : undefined;
+  const depthBinding = { ...(requireLaunchResult ? { requireLaunchResult: true as const } : {}), ...(requireOutcomeContinuity ? { requireOutcomeContinuity: true as const } : {}), ...(outcomeObligationVersion ? { outcomeObligationVersion } : {}) };
+  const context = buildWorkflowContext(script, options.ui, options.version || 2, outcomeObligationVersion), names = paths(context.sha256);
   for (const path of Object.values(names)) {
     try { await readFile(join(options.workspace, path)); throw stageFailure("This exact workflow review is already consumed or its completion is unconfirmed."); } catch (error) { if (!missing(error)) throw error; }
   }
@@ -81,7 +82,7 @@ export function assertScriptWorkflowBinding(script: Script, ui?: UiDocumentBundl
 /** Read-only validation of an immutable, passed review and its exact reviewed script. */
 export async function loadWorkflowScript(binding: WorkflowBinding, workspace: string): Promise<Script> {
   const verified = workflowBindingSchema.parse(binding), names = paths(verified.contextSha256);
-  let saved: { script: Script; context: unknown; verdict: unknown; requireLaunchResult?: true; launchDepth?: unknown; requireOutcomeContinuity?: true; outcomeContinuity?: unknown }, marker: z.infer<typeof markerSchema>;
+  let saved: { script: Script; context: unknown; verdict: unknown; requireLaunchResult?: true; launchDepth?: unknown; requireOutcomeContinuity?: true; outcomeContinuity?: unknown; outcomeObligationVersion?: 1 }, marker: z.infer<typeof markerSchema>;
   try {
     saved = JSON.parse(await readFile(join(workspace, names.artifact), "utf8"));
     marker = markerSchema.parse(JSON.parse(await readFile(join(workspace, names.marker), "utf8")));
@@ -89,6 +90,7 @@ export async function loadWorkflowScript(binding: WorkflowBinding, workspace: st
   const script = { ...saved.script, workflowCoherence: verified }, context = buildWorkflowContext(script, undefined, verified.version);
   assertWorkflowScenes(script, verified.version);
   const verdict = workflowVerdictSchema.parse(saved.verdict);
+  if (saved.outcomeObligationVersion !== verified.outcomeObligationVersion || marker.outcomeObligationVersion !== verified.outcomeObligationVersion) throw stageFailure("The saved workflow approval changed its outcome obligation contract.");
   if (saved.requireLaunchResult !== verified.requireLaunchResult || marker.requireLaunchResult !== verified.requireLaunchResult || (verified.requireLaunchResult && (saved.launchDepth === undefined || stageDigest(saved.launchDepth) !== stageDigest(assertLaunchWorkflowDepth(script))))) throw stageFailure("The saved workflow approval changed its launch-result requirement or demonstrated result.");
   if (saved.requireOutcomeContinuity !== verified.requireOutcomeContinuity || marker.requireOutcomeContinuity !== verified.requireOutcomeContinuity || (verified.requireOutcomeContinuity && (saved.outcomeContinuity === undefined || stageDigest(saved.outcomeContinuity) !== stageDigest(assertLaunchOutcomeContinuity(script))))) throw stageFailure("The saved workflow approval changed its outcome continuity requirement.");
   validateWorkflowVerdict(verdict, context);

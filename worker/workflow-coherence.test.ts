@@ -1,3 +1,4 @@
+import { qualityWorkflowContext } from "./quality-workflow-context";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -251,7 +252,7 @@ test("final QC receives exact context, rejects stale actions, and reserves its e
   const evidence = { text: "Links create connections between notes.", assets: [asset] };
   const request: QualityRequest = { plan: batch.plan, motion: batch.motion, evidence, wholeFilmProof: wholeFilmProofInventory(plan), measurements: {}, heard: { text: "", words: [] }, sourceSpeech: [], defaultStyle: null, workflowContext };
   const plain = qualityReviewPrompt({ ...request, workflowContext: undefined }), withContext = qualityReviewPrompt(request);
-  assert.ok(withContext.includes(JSON.stringify(workflowContext)));
+  assert.ok(withContext.includes(qualityWorkflowContext(workflowContext)));
   assert.ok(withContext.includes(paragraph));
   const bad = structuredClone(request); const visual = bad.plan.scenes[1].presentation!.visual;
   if (visual?.kind === "ui-demo") visual.actions[0].text = "Changed after context was prepared";

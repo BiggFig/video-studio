@@ -7,7 +7,7 @@ import { PipelineError, type Evidence, type Hooks, type PipelineResult, type Pla
 import { safeDownload, safePath } from "./security";
 import { cancelCommands, command, doctor, frame, hash, json, probe, writeJson } from "./media";
 import { Providers } from "./providers";
-import { callbackAuth, ingest,type IngestDependencies } from "./ingest";
+import { assertGuideSupportsResearch,assertNoPartialGuideCapture,callbackAuth, ingest,usesAdaptiveGuideSelection,type IngestDependencies } from "./ingest";
 import { compilePlan, preparePlanRepair, savePlan, validateTimeline } from "./planning";
 import { researchProduct, stageDigest, stageFailure } from "./research";
 import { writeScript } from "./scripting";
@@ -80,7 +80,8 @@ export async function runPipeline(raw:WorkerInput,workspace:string,hooks:Hooks,d
   await hooks.state("reading",{stage:"ingest"});
   let evidence:Evidence;
   try {evidence=await json<Evidence>(join(workspace,"analysis/evidence.json"));if(!evidence||typeof evidence.text!=="string"||!Array.isArray(evidence.assets))throw stageFailure("The retained source evidence is invalid.");}
-  catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(providers.ledger.modelCalls)throw stageFailure("The source evidence for previous paid work is missing.");evidence=await ingest(input,workspace,providers,hooks,dependencies);}
+  catch(error){if(!(error instanceof Error&&"code"in error&&error.code==="ENOENT"))throw error;if(usesAdaptiveGuideSelection(input))await assertNoPartialGuideCapture(workspace);if(providers.ledger.modelCalls)throw stageFailure("The source evidence for previous paid work is missing.");evidence=await ingest(input,workspace,providers,hooks,{...dependencies,assertDeadline:()=>{deadline();dependencies.assertDeadline?.();}});}
+  assertGuideSupportsResearch(evidence);
   deadline();await hooks.state("reading",{stage:"research"});
   const research=await researchProduct(input,evidence,providers,hooks,workspace);
   deadline();await hooks.state("planning",{stage:"ui-documentation",researchSha256:stageDigest(research)});

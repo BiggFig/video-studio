@@ -9,7 +9,7 @@ import { compileScript, prepareScriptRepair, scriptBinding, validateScript, writ
 import { compilePlan } from "./planning";
 import { compileScriptWithRetry, SCRIPT_RETRY_PATH, SCRIPT_REJECTION_PATH } from "./script-review";
 import { buildShotRecipeCatalog, RECIPE_SCRIPT_TRANSPORT_VERSION } from "./shot-recipes";
-import { buildWorkflowContext, parseWorkflowVerdict, workflowTaskEvidence, type WorkflowContext } from "./workflow-coherence";
+import { buildWorkflowContext as baseWorkflowContext, parseWorkflowVerdict, workflowTaskEvidence, workflowPromiseEvidence, type WorkflowContext } from "./workflow-coherence";
 import { assertWorkflowUnstarted, gateWorkflowScript, loadWorkflowScript, validatePlanWorkflowCoherence, verifyScriptWorkflowBinding, workflowArtifactPaths, WorkflowCoherenceRejected } from "./workflow-stage";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Providers } from "./providers";
@@ -51,7 +51,8 @@ async function setup(t: TestContext) {
   const events: string[] = [], ledger = { modelCalls: 3, inputTokens: 25000, outputTokens: 5000, reservedInputTokens: 0, reservedOutputTokens: 0 };
   return { workspace, events, ledger, hooks: { ...hooks, persist: async (paths: string[]) => { events.push(...paths); } } };
 }
-const taskAnswers = (context: WorkflowContext) => ({ taskEntitlementVersion: 1, tasks: workflowTaskEvidence(context).map(scene => ({ sceneId: scene.sceneId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })) });
+const buildWorkflowContext = (...args: Parameters<typeof baseWorkflowContext>) => baseWorkflowContext(args[0], args[1], args[2] || 2, args[3] || (args[2] === undefined ? args[0].workflowCoherence?.outcomeObligationVersion || 1 : undefined));
+const taskAnswers = (context: WorkflowContext) => context.outcomeObligationVersion ? ({ taskEntitlementVersion: 2, tasks: workflowPromiseEvidence(context).map(promise => ({ obligationId: promise.obligationId, promiseExcerpt: promise.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })) }) : ({ taskEntitlementVersion: 1, tasks: workflowTaskEvidence(context).map(scene => ({ sceneId: scene.sceneId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })) });
 function verdict(context: WorkflowContext, passed = true) {
   if (context.version === 2) return { ...taskAnswers(context), contextSha256: context.sha256, assessments: context.obligations!.map((obligation, index) => ({ obligationId: obligation.id, status: !passed && index === 0 ? "contradictory" : "supported", reason: !passed && index === 0 ? "The fixture result does not support its stated completion." : "The documented edit supports this fixture's visible task and context." })) };
   return { contextSha256: context.sha256, scenes: context.scenes.map(scene => ({ sceneId: scene.sceneId, passed })), findings: passed ? [] : [{ severity: "major", sceneId: context.scenes[0].sceneId, actionId: "final", elementIds: ["note"], code: "context_contradiction", message: "The visible result does not support the stated completion." }] };
@@ -373,7 +374,7 @@ test("workflow gates require their full versioned output plus downstream reserve
     const f = fixture(), w = await setup(t), allocation = version === 1 ? 768 : 2048;
     w.ledger.reservedOutputTokens = 100;
     const exactCap = w.ledger.outputTokens + w.ledger.reservedOutputTokens + allocation + qc.outputTokens;
-    const context = buildWorkflowContext(f.script, f.ui, version); let prepared = 0, invoked = 0;
+    const context = buildWorkflowContext(f.script, f.ui, version, version === 2 ? 1 : undefined); let prepared = 0, invoked = 0;
     const providers = { ledger: w.ledger, prepareClaude: async (_purpose: string, _prompt: string, _images: unknown, options: any) => {
       prepared++; assert.equal(options.maxOutputTokens, allocation); assert.deepEqual(options.reserve, qc);
       return async () => { invoked++; return verdict(context); };
