@@ -9,6 +9,7 @@ const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 export function layout(plan:Plan) {
   const {width:w,height:h}=plan.output;
   if(w>h) return {x:760,y:168,width:1060,height:750,textX:100,textY:270,textWidth:580,font:70,detail:28};
+  if(h>w&&h/w<=1.45) return {x:70,y:575,width:940,height:645,textX:76,textY:150,textWidth:900,font:66,detail:27};
   if(h>w) return {x:70,y:720,width:940,height:1090,textX:76,textY:226,textWidth:900,font:88,detail:34};
   return {x:64,y:460,width:952,height:554,textX:70,textY:130,textWidth:940,font:66,detail:27};
 }

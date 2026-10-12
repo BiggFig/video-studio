@@ -2,7 +2,7 @@ import type { Plan, Scene } from "./types";
 
 /** Trusted staging surrounds evidence. These surfaces never become product UI. */
 export type DirectionFrame = { x:number;y:number;scale:number;lightX:number;lightY:number;rotation:number;settled:boolean };
-export type DirectedShot = { version:1|2;concept:"focus"|"connect"|"consolidate";job:string;motion:string;from:{x:number;y:number};to:{x:number;y:number};travelFrames:number;continues:boolean };
+export type DirectedShot = { version:1|2;concept:"focus"|"connect"|"consolidate";job:string;motion:string;from:{x:number;y:number};to:{x:number;y:number};travelFrames:number;continues:boolean;system?:"editorial"|"workbench"|"relationships";materialStartFrame?:number };
 
 export function directedShot(plan:Plan,scene:Scene,index:number):DirectedShot|undefined {
   if(!plan.creativeDirection||!scene.direction||scene.preserve_audio)return undefined;
@@ -15,19 +15,25 @@ export function directedShot(plan:Plan,scene:Scene,index:number):DirectedShot|un
   const actionEnd=visual?.kind==="ui-demo"?visual.actions.reduce((last,action)=>Math.max(last,action.atFrame+action.durationFrames),0):0;
   // Decorative motion can accompany actions; it stops before the stable reading outcome.
   const travelFrames=scene.direction.motion==="hold"?18:Math.min(Math.max(24,actionEnd||Math.round(scene.duration_frames*.40)),Math.max(18,scene.duration_frames-45));
+  if(scene.shotDirection){
+    const system=plan.shotDirector?.visualSystem;
+    if(!system||!["editorial","workbench","relationships"].includes(system.family)||!["paper","ink","glass"].includes(system.material)||!["square","rounded"].includes(system.corners))throw new Error("Unsupported shot visual system");
+    return{version,concept,job,motion:scene.direction.motion,from,to,travelFrames:Math.max(1,Math.min(travelFrames,scene.shotDirection.resultHold?.startFrame??travelFrames)-scene.shotDirection.layers.material.startFrame),continues,system:system.family,materialStartFrame:scene.shotDirection.layers.material.startFrame};
+  }
   return{version,concept,job,motion:scene.direction.motion,from,to,travelFrames,continues};
 }
 
 /** Frame-only material clock. Identical seeks cannot accumulate transforms or noise. */
 export function expectedDirectionFrame(shot:DirectedShot,frame:number):DirectionFrame {
   if(!Number.isInteger(frame)||frame<0||shot.travelFrames<1)throw new Error("Invalid directed frame");
-  const p=Math.min(1,frame/shot.travelFrames),ease=p*p*(3-2*p);
+  const p=Math.max(0,Math.min(1,(frame-(shot.materialStartFrame||0))/shot.travelFrames)),ease=p*p*(3-2*p);
   if(shot.version===2)return{x:shot.from.x+(shot.to.x-shot.from.x)*ease,y:shot.from.y+(shot.to.y-shot.from.y)*ease,scale:shot.continues?1:1.06-.06*ease,lightX:61,lightY:34,rotation:shot.continues?0:-4+4*ease,settled:p===1};
   return{x:shot.from.x+(shot.to.x-shot.from.x)*ease,y:shot.from.y+(shot.to.y-shot.from.y)*ease,scale:shot.continues?1:1.10-.10*ease,lightX:shot.continues?61:24+37*ease,lightY:shot.continues?34:18+16*ease,rotation:shot.continues?5:-14+19*ease,settled:p===1};
 }
 export const directionEvaluatorSource=()=>expectedDirectionFrame.toString();
 
 export function directionMarkup(_shot:DirectedShot,index:number){
+  if(_shot.system)return`<div class="shot-atmosphere" data-designed-stage data-stage-version="shot-1" aria-hidden="true"><div class="shot-ground"></div><div class="shot-axis"></div><div class="direction-material shot-material" id="direction-material-${index}"><i></i><i></i><i></i></div></div>`;
   if(_shot.version===2)return`<div class="editorial-atmosphere editorial-${_shot.job}" data-designed-stage data-stage-version="2" aria-hidden="true"><div class="editorial-paper"></div><div class="editorial-axis"></div><div class="direction-material editorial-material" id="direction-material-${index}"><i class="editorial-sheet"></i><i class="editorial-sheet"></i><i class="editorial-sheet"></i></div><div class="editorial-corner"></div></div>`;
   return`<div class="directed-atmosphere" data-designed-stage aria-hidden="true"><div class="direction-wash"></div><div class="direction-grain"></div><div class="direction-material" id="direction-material-${index}"><i class="direction-volume"></i><i class="direction-rim"></i><i class="direction-orbit"></i></div><svg class="direction-thread" viewBox="0 0 1000 700" preserveAspectRatio="none"><path d="M-50 580 C160 580 140 300 430 340 S710 120 1060 240"/></svg><div class="direction-floor"></div></div>`;
 }
@@ -68,11 +74,64 @@ export const directedCss=`
 .editorial-cta .editorial-axis{top:auto;bottom:16%}.editorial-cta .editorial-material{width:58%;height:80%}.editorial-cta .editorial-sheet{border:0;box-shadow:none;background:var(--accent);transform:rotate(-18deg)}.editorial-cta .editorial-sheet:nth-child(2){background:var(--stage-bg);transform:translate(-4%,-12%) rotate(-18deg)}.editorial-cta .editorial-sheet:nth-child(3){display:none}
 .directed-v2 .hook-planes{display:none}.directed-v2 .ui-demo-stage{outline:none;box-shadow:none;border-radius:0}.directed-v2 .ui-document{border:1px solid #ffffff20;border-radius:10px;box-shadow:0 20px 54px #00000018}
 .directed-v2 .connection-node{border-radius:8px;background:var(--stage-bg);box-shadow:0 16px 42px #00000020,inset 0 1px 0 #ffffff12}.directed-v2 .connection-edge{stroke-width:5;filter:none}
+.shot-atmosphere{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.shot-ground{position:absolute;inset:0;background:linear-gradient(120deg,color-mix(in srgb,var(--stage-fg) 3%,transparent),transparent 72%)}
+.shot-axis{position:absolute;left:5%;right:5%;bottom:6%;height:1px;background:var(--line)}
+.shot-material{width:60%;height:105%;opacity:.32}
+.shot-material i{position:absolute;inset:20%;border:1px solid var(--line)}
+.system-editorial .shot-material i{border:0;background:color-mix(in srgb,var(--stage-fg) 7%,transparent);transform:rotate(-9deg)}
+.system-editorial .shot-material i:nth-child(2){inset:28% 16% 12% 28%;background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.system-editorial .shot-material i:nth-child(3){display:none}
+.system-workbench .shot-ground{background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:100px 100px;opacity:.14}
+.system-workbench .shot-material i{border-radius:22px;box-shadow:0 28px 60px #0000000d;transform:rotate(-5deg);background:var(--surface)}
+.system-workbench .shot-material i:nth-child(2){transform:translate(12%,12%) rotate(1deg)}
+.system-workbench .shot-material i:nth-child(3){transform:translate(24%,24%) rotate(7deg)}
+.system-relationships .shot-material i{border-radius:50%;border-width:2px;transform:scaleX(1.6) rotate(-30deg);background:none}
+.system-relationships .shot-material i:nth-child(2){inset:30%;transform:scaleX(1.6) rotate(30deg)}
+.system-relationships .shot-material i:nth-child(3){inset:42%;border-color:var(--accent);background:var(--accent)}
+.shot-directed.job-action .shot-material,.shot-directed.job-result .shot-material{opacity:.08}
+.shot-directed .ui-demo-stage{outline:none;box-shadow:none;background:transparent;border-radius:0}
+.scene.shot-directed .ui-document{will-change:auto}
+.scene.shot-directed .ui-demo-stage{perspective:none}
+.shot-directed .word,.shot-directed .letter,.shot-directed .direction-material{will-change:auto;backface-visibility:visible}
+.shot-directed .ui-pointer{transform-origin:3px 2px}
+.shot-directed .ui-pointer i{left:-11px;top:-12px;width:28px;height:28px;border-width:2px}
+.shot-directed.corners-square .ui-document{border-radius:8px}.shot-directed.corners-rounded .ui-document{border-radius:22px}
+.shot-directed.material-paper .ui-document{box-shadow:0 24px 70px #00000012;border-color:var(--line)}
+.shot-directed.material-ink .ui-document{box-shadow:0 26px 80px #00000050;border-color:var(--line)}
+.shot-directed.material-glass .ui-document{box-shadow:0 20px 60px #00000018,0 1px 0 #ffffff60 inset;border-color:var(--line)}
 `;
 
 /** Separate choreography tracks stay within existing entry/reading windows. */
 export function directedTimeline(tl:any,root:string,scene:any,start:number){
  const immediateRender=false,hold=scene.directed.motion==="hold";
+ if(scene.shotDirection){
+  const animate=(selector:string,from:unknown,to:Record<string,unknown>,at:number)=>tl.fromTo(selector,from,{...to,force3D:false},at);
+  const layers=scene.shotDirection.layers,copy=start+layers.copy.startFrame/30,copyDuration=Math.min(.3,(layers.copy.enterFrames??9)/30),product=start+layers.product.startFrame/30,productDuration=Math.min(.4,(layers.product.enterFrames??12)/30);
+  tl.set(root+' .heading, '+root+' .brand-group',{opacity:1},copy);
+  animate(root+' .shot-atmosphere',{opacity:0},{opacity:1,duration:(layers.material.enterFrames??18)/30,ease:'power2.out',immediateRender},start+layers.material.startFrame/30);
+  animate(root+' .word',{y:24,opacity:0,clipPath:'inset(0 0 100% 0)'},{y:0,opacity:1,clipPath:'inset(0 0 0% 0)',duration:copyDuration,stagger:{amount:.12},ease:'power4.out',immediateRender},copy);
+  animate(root+' .letter',{y:20,opacity:0},{y:0,opacity:1,duration:copyDuration,stagger:{amount:.20},ease:'power3.out',immediateRender},copy);
+  animate(root+' .detail',{y:12,opacity:0},{y:0,opacity:1,duration:copyDuration,ease:'power3.out',immediateRender},copy+.18);
+  animate(root+' .audience-label',{y:8,opacity:0},{y:0,opacity:1,duration:copyDuration,ease:'power3.out',immediateRender},copy);
+  animate(root+' .brand-line',{y:20,opacity:0},{y:0,opacity:1,duration:copyDuration,ease:'power4.out',immediateRender},copy+.16);
+  animate(root+' .brand-pill',{y:10,opacity:0},{y:0,opacity:1,duration:copyDuration,ease:'power3.out',immediateRender},copy+.45);
+  animate(root+' .brand-logo',{y:10,opacity:0},{y:0,opacity:1,duration:copyDuration,ease:'power3.out',immediateRender},copy);
+  if(scene.ui?.continuation)tl.set(root+' .ui-demo-stage',{y:0,scale:1,opacity:1},start);
+  else animate(root+' .ui-demo-stage',{y:16,scale:.985,opacity:0},{y:0,scale:1,opacity:1,duration:productDuration,ease:'power3.out',immediateRender},product);
+  if(scene.visual==='focus'){tl.set(root+' .proof-media',{y:0,scale:1,opacity:1},product);animate(root+' .focus-image',scene.focus.from,{...scene.focus.to,duration:.8,ease:'power2.inOut',immediateRender},product+.08);}
+  else if(scene.visual==='panels'){tl.set(root+' .proof-media',{y:0,scale:1,opacity:1},product);animate(root+' .source-panel',{x:(i:number)=>i%2?70:-70,opacity:0},{x:0,opacity:1,duration:productDuration,stagger:.18,ease:'power4.out',immediateRender},product);}
+  else animate(root+' .proof-media',{y:26,scale:.97,opacity:0},{y:0,scale:1,opacity:1,duration:productDuration,ease:'power4.out',immediateRender},product);
+  animate(root+' .connection-node',{y:20,scale:.96,opacity:0},{y:0,scale:1,opacity:1,duration:productDuration,stagger:.12,ease:'power3.out',immediateRender},product);
+  animate(root+' .connection-edge',{strokeDashoffset:1},{strokeDashoffset:0,duration:.45,stagger:.22,ease:'power2.inOut',immediateRender},product+.24);
+  animate(root+' .info-card',{x:(i:number)=>scene.template==='hook'?(i%2?80:-80):0,y:scene.template==='hook'?0:20,opacity:0},{x:0,y:0,opacity:1,duration:productDuration,stagger:.12,ease:'power3.out',immediateRender},product+.12);
+  // Opacity is local to the layer. Inherited visibility from an initially hidden
+  // scene must never become GSAP's cached "before" value during reverse seeks.
+  tl.set(root+' .heading, '+root+' .brand-group',{opacity:0},start+layers.copy.endFrame/30);
+  tl.set(root+' .ui-demo-stage, '+root+' .proof-media, '+root+' .cards, '+root+' .connection-graphic',{opacity:0},start+layers.product.endFrame/30);
+  tl.set(root+' .shot-atmosphere',{opacity:0},start+layers.material.endFrame/30);
+  return;
+ }
  if(scene.directed.version===2){
   const job=scene.directed.job,side=job==="hook"||job==="cta",action=job==="action"||job==="result";
   // Every essential entrance still finishes within the original timing contract.

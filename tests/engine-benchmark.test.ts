@@ -63,3 +63,15 @@ test("workflow-gated acceptance requires immutable passed evidence for both the 
   assert.equal(assessBenchmark({ ...run, ledger: { ...run.ledger, providerRequests: run.ledger.providerRequests.filter(request => request.operation !== "workflow-coherence") } }).automaticLocalPass, false);
   assert.equal(assessBenchmark(completed()).automaticLocalPass, true, "Historical acceptance does not acquire a new paid review requirement");
 });
+
+test("new director runs cannot pass with a missing or altered storyboard contract", () => {
+  const directorRecord = { version: 1, scenes: [{ sceneId: "input", direction: { subjectIds: ["field"] } }] };
+  const run = { ...completed(), script: { shotDirectorVersion: 1 }, plan: { production: { shotDirectorVersion: 1, shotDirectorSha256: stageDigest(directorRecord) } }, directorRecord, directorVerified: true };
+  run.verifiedArtifacts.push("analysis/shot-director.json", "SHOT-STORYBOARD.md");
+  assert.equal(assessBenchmark(run).automaticLocalPass, true);
+  assert.equal(assessBenchmark({ ...run, directorVerified: false }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, directorRecord: { ...directorRecord, scenes: [] } }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, script: {} }).automaticLocalPass, false);
+  assert.equal(assessBenchmark({ ...run, verifiedArtifacts: run.verifiedArtifacts.filter(path => path !== "SHOT-STORYBOARD.md") }).automaticLocalPass, false);
+  assert.equal(assessBenchmark(completed()).automaticLocalPass, true);
+});

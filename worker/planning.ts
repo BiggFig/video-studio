@@ -11,6 +11,7 @@ import { buildUiDocuments, loadUiDocuments, uiExampleCopy, validateUiActions } f
 import { alignAudioToPlan, soundCueIssues } from "./audio-direction";
 import { validatePlanWorkflowCoherence, verifyScriptWorkflowBinding, workflowBindingSchema } from "./workflow-stage";
 import { launchResultReadingFrames } from "./workflow-depth";
+import { applyShotDirector, persistShotDirector, requiredDirectorFrames, validatePlanShotDirector } from "./shot-director";
 export { evidenceCatalog } from "./research";
 
 const directorSchema=scriptDraftSchema;
@@ -41,7 +42,7 @@ export function brandFromEvidence(evidence:Evidence):Plan["brand"] {
 
 export function dimensions(format:WorkerInput["format"],referenceAspect?:number) {
   const selected=format==="auto"?(referenceAspect ? referenceAspect>1.25?"16:9":referenceAspect<0.8?"9:16":"1:1" :"16:9"):format;
-  return selected==="9:16"?{width:1080,height:1920}:selected==="1:1"?{width:1080,height:1080}:{width:1920,height:1080};
+  return selected==="9:16"?{width:1080,height:1920}:selected==="4:5"?{width:1080,height:1350}:selected==="1:1"?{width:1080,height:1080}:{width:1920,height:1080};
 }
 export async function makePlan(input:WorkerInput,evidence:Evidence,providers:Providers,hooks:Hooks,workspace:string,repair?:{plan:Plan;findings:Finding[]}):Promise<Plan> {
   const research=await researchProduct(input,evidence,providers,hooks,workspace);
@@ -64,6 +65,7 @@ export async function prepareRetainedPlanRepair(input:WorkerInput,evidence:Evide
 export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknown,hooks:Hooks,workspace:string,repair?:{plan:Plan;findings:Finding[]}):Promise<Plan> {
   if(repair?.plan.production){
     const script=scriptSchema.safeParse(raw),previous=repair.plan.production;
+    if(!script.success||script.data.shotDirectorVersion!==previous.shotDirectorVersion)throw stageFailure("A repair cannot change its retained shot director contract.");
     if(!script.success||(script.data.workflowCoherence?.version??0)!==(previous.workflowCoherence?.version??0)||script.data.workflowCoherence?.requireLaunchResult!==previous.workflowCoherence?.requireLaunchResult||script.data.workflowCoherence?.requireOutcomeContinuity!==previous.workflowCoherence?.requireOutcomeContinuity)throw stageFailure("A repaired plan cannot acquire, drop or change its workflow coherence contract version or launch-result requirement.");
     if(!script.success||repair.plan.job_id!==input.jobId||script.data.jobId!==input.jobId||script.data.researchSha256!==previous.researchSha256||script.data.evidenceSha256!==previous.evidenceSha256||script.data.shotRecipeSha256!==previous.shotRecipeSha256||script.data.uiSha256!==previous.uiSha256||stageDigest(script.data.uiDocuments||null)!==stageDigest(repair.plan.uiDocuments||null)||stageDigest(script.data.creativeDirection||null)!==stageDigest(repair.plan.creativeDirection||null))throw stageFailure("A production-bound plan requires a repaired script verified against the same research, creative direction and evidence.");
   }
@@ -97,7 +99,7 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
     let presentation:Presentation|undefined;
     if(s.presentation){
       if(s.presentation.template==="offer"&&!explicitPrice(fact.text))throw new PipelineError("unsupported_claim","The offer scene has no actual pricing or free-offer evidence.","Supply the product's current offer or omit this scene.","needs_review");
-      if(s.presentation.cards&&!["features","offer"].includes(s.presentation.template))throw new Error("Only feature and offer scenes support informational cards");
+      if(s.presentation.cards&&!["hook","features","offer"].includes(s.presentation.template))throw new Error("Only hook, feature and offer scenes support informational cards");
       presentation={...s.presentation,cards:s.presentation.cards?.map(card=>{
         const evidence=facts.find(f=>f.id===card.evidenceId)?.text;
         if(!evidence)throw new PipelineError("unsupported_claim","An informational card references an unavailable source fact.","Supply the missing feature evidence.","needs_review");
@@ -156,7 +158,7 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
     const uiDocument=uiVisual&&script.success?script.data.uiDocuments?.find(document=>document.id===uiVisual.documentId):undefined;
     const uiWords=uiDocument?uiExampleCopy(uiDocument,uiVisual!.actions).reduce((sum,text)=>sum+visibleWordCount(text),0):0;
     const readingFrames=uiDocument&&script.success&&script.data.workflowCoherence?.requireLaunchResult?launchResultReadingFrames(uiDocument,{detail:s.detail,presentation},words,i===draft.scenes.length-1,visibleWordCount):Math.ceil(((Math.max(words,uiWords)*32+120)*30)/100)+motion.entryFrames+(i===draft.scenes.length-1?0:motion.exitFrames);
-    const duration=Math.max(requestedFrames,readingFrames,speech?Math.ceil((asset.duration_seconds||0)*30):0);
+    const duration=Math.max(requestedFrames,readingFrames,speech?Math.ceil((asset.duration_seconds||0)*30):0,script.success&&script.data.shotDirectorVersion?requiredDirectorFrames(presentation,i===draft.scenes.length-1):0);
     if(asset.kind==="video" && s.sourceInSeconds+duration/30>(asset.duration_seconds||0)+0.04) throw new Error("Planned scene exceeds actual source duration");
     if(s.preserveAudio&&!asset.has_audio) throw new Error("Plan requests audio absent from source");
     const scene={...(s.recipeId?{recipeId:s.recipeId}:{}),id:`scene-${i+1}`,start_frame:output.duration_frames,duration_frames:duration,asset_id:asset.id,source_in_seconds:s.sourceInSeconds,playback_rate:1 as const,preserve_audio:s.preserveAudio,fit:"contain" as const,purpose:s.purpose,reference_technique:s.referenceTechnique,headline:s.headline,detail:s.detail,evidence:fact.text,evidence_id:fact.id,...(s.storyRole?{storyRole:s.storyRole}:{}),...(script.success&&script.data.scenes[i].direction?{direction:script.data.scenes[i].direction}:{}),...(presentation?{presentation}:{}),effects:[{type:"reveal",implementation:presentation?`Trusted frame-driven HTML ${presentation.template} template${presentation.visual?` with ${presentation.visual.kind}`:""}; ${presentation.transition} outgoing transition; source-grounded copy and actual proof media.`:"FFmpeg eased vertical card entrance and restrained scene fade; whole actual source remains contained."}]}; output.duration_frames+=duration; return scene;
@@ -166,18 +168,21 @@ export async function compilePlan(input:WorkerInput,evidence:Evidence,raw:unknow
   const plan:Plan={version:1,job_id:input.jobId,mode:"create",renderer:scenes.some(scene=>scene.presentation)?"hyperframes":"ffmpeg",output,product:draft.product,summary:draft.summary,accent:current?brand?.accent||"#333333":draft.accent,background:current?(brand&&luminance(brand.background)<.179?"dark":"light"):draft.background,...(brand?{brand}:{}),...(current?{story:script.data.story}:{}),...(script.success&&script.data.creativeDirection?{creativeDirection:script.data.creativeDirection}:{}),...(script.success&&script.data.version===3?{uiDocuments:script.data.uiDocuments,audienceLabel:script.data.audienceLabel}:{}),assets:[...evidence.assets,...stillBindings],scenes,captions:[],audio:[],music_prompt:repair?.plan.music_prompt||draft.musicPrompt,sfx_prompt:repair?.plan.sfx_prompt||draft.sfxPrompt,assumptions:draft.assumptions};
   const binding=z.object({researchSha256:z.string().regex(/^[a-f0-9]{64}$/),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/),uiSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),shotRecipeSha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),workflowCoherence:workflowBindingSchema.optional()}).safeParse(raw);
   if(binding.success)plan.production={...binding.data,scriptSha256:stageDigest(raw)};
+  if(script.success&&script.data.shotDirectorVersion)applyShotDirector(plan,evidence);
   if(repair) { plan.assets.push(...repair.plan.assets.filter(a=>a.kind==="audio")); plan.audio=alignAudioToPlan(plan,repair.plan.audio); }
   if(current){await writeJson(join(workspace,"analysis/copy-audit.json"),{version:1,scriptSha256:stageDigest(raw),visibleWords:scriptVisibleWords({...draft,audienceLabel:script.data.audienceLabel}),maximumVisibleWords:48,targetSeconds:[20,28],actualSeconds:output.duration_frames/30,scenes:draft.scenes.map((scene,index)=>({sceneId:scenes[index].id,storyRole:scene.storyRole,visibleWords:scriptVisibleText(draft.product,scene,index===0?script.data.audienceLabel:undefined).reduce((sum,text)=>sum+visibleWordCount(text),0),durationFrames:scenes[index].duration_frames}))});await hooks.persist(["analysis/copy-audit.json"]);}
   await validatePlanWorkflowCoherence(plan,workspace);
   await savePlan(plan,workspace,hooks); return plan;
 }
 export async function savePlan(plan:Plan,workspace:string,hooks:Hooks) {
+  await persistShotDirector(plan,workspace,hooks);
   await writeJson(join(workspace,"plan.json"),plan);
   await writeFile(join(workspace,"STORYBOARD.md"),`# ${plan.product}\n\n${plan.summary}\n\n`+plan.scenes.map(s=>`## ${s.id} · ${(s.start_frame/30).toFixed(2)}–${((s.start_frame+s.duration_frames)/30).toFixed(2)}s\n\n${s.headline}\n\n${s.detail}\n\nAsset: ${s.asset_id}; purpose: ${s.purpose}\n\nEvidence: ${s.evidence}\n\nMotion: ${s.effects.map(e=>e.implementation).join("; ")}\n`).join("\n"));
   await hooks.persist(["plan.json","STORYBOARD.md"]);
 }
 export function validateTimeline(plan:Plan):string[] {
   const errors:string[]=[];let end=0;
+  try{validatePlanShotDirector(plan);}catch(error){errors.push(error instanceof Error?error.message:"Invalid shot director contract");}
   for(const scene of plan.scenes) { if(scene.start_frame!==end || !Number.isInteger(scene.duration_frames) || scene.duration_frames<=0) errors.push(`${scene.id}: timeline gap or invalid duration`);end=scene.start_frame+scene.duration_frames;const asset=plan.assets.find(a=>a.id===scene.asset_id);if(!asset||asset.usage!=="output")errors.push(`${scene.id}: missing or reference-only media`);if(asset?.kind==="video" && scene.source_in_seconds+scene.duration_frames/30>(asset.duration_seconds||0)+0.04)errors.push(`${scene.id}: source range overflow`); }
   if(end!==plan.output.duration_frames)errors.push("Timeline duration mismatch");
   for(const [i,layer]of plan.audio.entries()) {

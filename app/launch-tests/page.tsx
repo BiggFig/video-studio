@@ -28,7 +28,7 @@ export default function LaunchTestsPage() {
       <h1>A reason to stop.<br /><span>A reason to act.</span></h1>
       <p className={styles.intro}>A familiar problem. One clear action. A result that matters. Three new stories, each composed for vertical viewing and the feed. Watch with sound off first.</p>
       <nav className={styles.navigation} aria-label="Choose a film">{films.map(film => <a key={film.id} href={`#${film.id}`}>{film.name}<span aria-hidden="true">↘</span></a>)}</nav>
-      <div className={styles.headerLinks}><a href="/ad-references">Explore the reference portfolio ↗</a><a href="/launch-tests/social-ad-test-plan.md" download>Get the testing brief ↓</a></div>
+      <div className={styles.headerLinks}><a href="/direction-lab">Review the new director pilot ↗</a><a href="/ad-references">Explore the reference portfolio ↗</a><a href="/launch-tests/social-ad-test-plan.md" download>Get the testing brief ↓</a></div>
     </header>
     <div className={styles.films}>{films.map((film, index) => <section key={film.id} id={film.id} className={styles.film} aria-labelledby={`${film.id}-title`}>
       <div className={styles.caption}><div><span className={styles.number}>0{index + 1}</span><h2 id={`${film.id}-title`}>{film.name}</h2></div><span className={styles.duration}>New story · Two formats</span></div>

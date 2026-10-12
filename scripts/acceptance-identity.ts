@@ -11,7 +11,7 @@ const timestamp = z.string().refine(value => Number.isFinite(Date.parse(value)))
 const inputSchema = z.object({
   jobId: z.string().min(1), ownerId: z.string().min(1), mode: z.enum(["url", "prd"]),
   productUrl: z.string().url().optional(), referenceUrl: z.string().url().optional(),
-  videoType: z.enum(["launch", "feature-demo"]), format: z.enum(["auto", "16:9", "9:16", "1:1"]),
+  videoType: z.enum(["launch", "feature-demo"]), format: z.enum(["auto", "16:9", "4:5", "9:16", "1:1"]),
   files: z.array(z.object({ id: z.string(), name: z.string(), kind: z.enum(["prd", "asset", "reference"]), url: z.string().url(), mimeType: z.string(), size: z.number().nonnegative().optional() })),
   runtimeHash: sha, runtimeId: z.string().min(1),
   budgets: z.record(z.string(), z.number().finite().nonnegative()),

@@ -8,16 +8,16 @@ import { acceptanceInputIdentity, validateAcceptanceResume } from "../scripts/ac
 import type { WorkerInput } from "../worker/types";
 
 const input: WorkerInput = { jobId: "local-acceptance-url", ownerId: "local-acceptance-operator", mode: "url", productUrl: "https://example.com/a", videoType: "launch", format: "auto", files: [], runtimeHash: "a".repeat(64), runtimeId: "local-test", budgets: { maxModelCalls: 10, maxRepairPasses: 2, maxWallSeconds: 1800 } };
-async function savedRun(t: TestContext) {
+async function savedRun(t: TestContext, runInput: WorkerInput = input) {
   const root = await mkdtemp(join(tmpdir(), "video-studio-acceptance-"));
   t.after(async () => { const rel = relative(tmpdir(), root); if (!rel.startsWith("video-studio-acceptance-") || rel.startsWith("..") || isAbsolute(rel)) throw new Error("Unsafe test cleanup"); await rm(root, { recursive: true, force: true }); });
-  const provenance = { kind: "local-provider-acceptance", paidProviders: true, productionQueueVerified: false, productionPrivateStorageVerified: false, productionOwnerAccessVerified: false, input, localFixture: null, startedAt: "2026-09-30T12:00:00Z", retainedReviewRepair: null };
+  const provenance = { kind: "local-provider-acceptance", paidProviders: true, productionQueueVerified: false, productionPrivateStorageVerified: false, productionOwnerAccessVerified: false, input: runInput, localFixture: null, startedAt: "2026-09-30T12:00:00Z", retainedReviewRepair: null };
   await writeFile(join(root, "acceptance-provenance.json"), JSON.stringify(provenance));
   await writeFile(join(root, "acceptance-stages.json"), JSON.stringify([{ status: "planning", at: "2026-09-30T12:01:00Z" }]));
   const manifest: Record<string, { sha256: string; size: number; verifiedAt: string }> = {};
   async function artifact(path: string, data: unknown) { const bytes = Buffer.from(typeof data === "string" ? data : JSON.stringify(data)); await writeFile(join(root, path), bytes); manifest[path] = { sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, verifiedAt: "2026-09-30T12:01:00Z" }; await writeFile(join(root, "acceptance-artifacts.json"), JSON.stringify(manifest)); }
-  await artifact("job.json", input);
-  await artifact("versions.json", { runtimeHash: input.runtimeHash, runtimeId: input.runtimeId, skill: "skill-hash", pipeline: "1.0.0" });
+  await artifact("job.json", runInput);
+  await artifact("versions.json", { runtimeHash: runInput.runtimeHash, runtimeId: runInput.runtimeId, skill: "skill-hash", pipeline: "1.0.0" });
   await artifact("ledger.json", { modelCalls: 1, inputTokens: 20, outputTokens: 10, reservedInputTokens: 0, reservedOutputTokens: 0, audioGenerations: 0, asrSeconds: 0, providerRequests: [], audio: {} });
   return { root, artifact };
 }
@@ -62,4 +62,12 @@ test("PRD resume identity binds verified fixture bytes even when local file URLs
   const fixture = { transport: "verified-local-fixture-bytes", productionUploadTransportVerified: false, manifestSha256: "c".repeat(64), files: [{ path: "prd.md", kind: "prd", size_bytes: 123, sha256: "d".repeat(64) }] };
   assert.notEqual(acceptanceInputIdentity(prd, fixture), acceptanceInputIdentity(prd, { ...fixture, manifestSha256: "e".repeat(64) }));
   assert.throws(() => acceptanceInputIdentity(prd, null), /no verifiable fixture/);
+});
+
+test("feed acceptance resumes its own format and rejects a switch to vertical", async t => {
+  const feed = { ...input, format: "4:5" as const };
+  const { root } = await savedRun(t, feed);
+  const verified = await validateAcceptanceResume(root, feed, null);
+  assert.equal(verified.inputIdentity, acceptanceInputIdentity(feed, null));
+  await assert.rejects(validateAcceptanceResume(root, { ...feed, format: "9:16" }, null), /input differs/);
 });

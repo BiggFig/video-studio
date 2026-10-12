@@ -5,6 +5,8 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { safePath } from "../worker/security";
 import { stageDigest } from "../worker/research";
+import { validatePlanShotDirector } from "../worker/shot-director";
+import type { Plan } from "../worker/types";
 import { validatePlanWorkflowCoherence, verifyScriptWorkflowBinding, workflowArtifactPaths } from "../worker/workflow-stage";
 
 export const benchmarkCases = [
@@ -16,7 +18,7 @@ export const benchmarkCases = [
 const requiredChecks = ["technical", "timeline", "motion_integrity", "reference_exclusion", "readability", "claims", "real_visuals", "render_integrity", "storytelling", "ui_fidelity", "ui_behavior", "reference_style", "audio"];
 export const requiredArtifacts = ["analysis/evidence.json", "analysis/research.json", "analysis/ui.json", "analysis/creative-brief.json", "analysis/script.json", "plan.json", "qc.json", "ledger.json"];
 type RecordValue = Record<string, any>;
-export function assessBenchmark(input: { provenance: RecordValue | null; result: RecordValue | null; qc: RecordValue | null; ledger: RecordValue | null; script?: RecordValue | null; plan?: RecordValue | null; recipeCatalog?: RecordValue | null; workflowVerified?: boolean; workflowArtifacts?: string[]; stages: RecordValue[]; verifiedArtifacts: string[]; integrityFailures: string[] }) {
+export function assessBenchmark(input: { provenance: RecordValue | null; result: RecordValue | null; qc: RecordValue | null; ledger: RecordValue | null; script?: RecordValue | null; plan?: RecordValue | null; recipeCatalog?: RecordValue | null; directorRecord?: RecordValue | null; directorVerified?: boolean; workflowVerified?: boolean; workflowArtifacts?: string[]; stages: RecordValue[]; verifiedArtifacts: string[]; integrityFailures: string[] }) {
   const { provenance, result, qc, ledger, stages } = input;
   const reasons = [...input.integrityFailures];
   if (provenance?.kind !== "local-provider-acceptance" || provenance?.paidProviders !== true || provenance?.localFixture || provenance?.input?.mode !== "url" || !provenance?.input?.productUrl || !/^[a-f0-9]{64}$/.test(provenance?.input?.runtimeHash || "")) reasons.push("Not a runtime-pinned provider-backed URL acceptance.");
@@ -29,6 +31,9 @@ export function assessBenchmark(input: { provenance: RecordValue | null; result:
   const video = result?.result?.videoPath;
   if (!video || !input.verifiedArtifacts.includes(video) || requiredArtifacts.some(path=>!input.verifiedArtifacts.includes(path))) reasons.push("Final video or required source, stage, plan, QC and usage artifacts are not verified against persisted hashes.");
   const recipeHash = input.script?.shotRecipeSha256;
+  if (input.script?.shotDirectorVersion !== undefined || input.plan?.production?.shotDirectorVersion !== undefined || input.plan?.shotDirector || input.directorRecord) {
+    if (input.script?.shotDirectorVersion !== 1 || input.plan?.production?.shotDirectorVersion !== 1 || input.directorVerified !== true || !input.directorRecord || stageDigest(input.directorRecord) !== input.plan?.production?.shotDirectorSha256 || !["analysis/shot-director.json", "SHOT-STORYBOARD.md"].every(path => input.verifiedArtifacts.includes(path))) reasons.push("The shot director and storyboard are missing, changed, or not bound to the automatic script and plan.");
+  }
   if (recipeHash !== undefined || input.plan?.production?.shotRecipeSha256 !== undefined || input.recipeCatalog) {
     if (!/^[a-f0-9]{64}$/.test(recipeHash || "") || input.plan?.production?.shotRecipeSha256 !== recipeHash || !input.recipeCatalog || stageDigest(input.recipeCatalog) !== recipeHash || !input.verifiedArtifacts.includes("analysis/shot-recipes.json")) reasons.push("The directed shot catalogue is missing, changed, or not bound to both the script and plan.");
   }
@@ -42,6 +47,13 @@ export async function benchmarkReport(workspace: string) {
   async function json(path: string) { try { return JSON.parse(await readFile(safePath(workspace, path), "utf8")); } catch { return null; } }
   const [provenance, result, qc, ledger, stages, manifest, script, plan, recipeCatalog] = await Promise.all(["acceptance-provenance.json", "acceptance-result.json", "qc.json", "ledger.json", "acceptance-stages.json", "acceptance-artifacts.json", "analysis/script.json", "plan.json", "analysis/shot-recipes.json"].map(json));
   const verifiedArtifacts: string[] = [], integrityFailures: string[] = [];
+  const directorRecord = await json("analysis/shot-director.json");
+  const hasDirector = !!(script?.shotDirectorVersion || plan?.production?.shotDirectorVersion || plan?.shotDirector || directorRecord);
+  let directorVerified: boolean | undefined;
+  if (hasDirector) {
+    try { validatePlanShotDirector(plan as Plan); directorVerified = !!plan?.shotDirector; }
+    catch { directorVerified = false; integrityFailures.push("The saved shot director failed source and timeline validation."); }
+  }
   let workflowVerified: boolean | undefined; const workflowArtifacts: string[] = [];
   if (script?.workflowCoherence || plan?.production?.workflowCoherence) {
     workflowVerified = false;
@@ -54,12 +66,13 @@ export async function benchmarkReport(workspace: string) {
     } catch { integrityFailures.push("The saved workflow verdict or its script/plan binding could not be verified."); }
   }
   const paths = [...requiredArtifacts, ...(recipeCatalog || script?.shotRecipeSha256 !== undefined || plan?.production?.shotRecipeSha256 !== undefined ? ["analysis/shot-recipes.json"] : []), ...workflowArtifacts, ...Object.keys(manifest||{}).filter(path=>/^renders\/draft-\d+\.mp4$/.test(path)), ...(typeof result?.result?.videoPath === "string" ? [result.result.videoPath] : [])];
+  if (hasDirector) paths.push("analysis/shot-director.json", "SHOT-STORYBOARD.md");
   for (const path of paths) {
     if (!manifest?.[path]) continue;
     try { const bytes = await readFile(safePath(workspace, path)); if (bytes.length !== manifest[path].size || createHash("sha256").update(bytes).digest("hex") !== manifest[path].sha256) throw Error("hash"); verifiedArtifacts.push(path); }
     catch { integrityFailures.push(`Persisted artifact missing or changed: ${path}`); }
   }
-  return assessBenchmark({ provenance, result, qc, ledger, script, plan, recipeCatalog, workflowVerified, workflowArtifacts, stages: Array.isArray(stages) ? stages : [], verifiedArtifacts, integrityFailures });
+  return assessBenchmark({ provenance, result, qc, ledger, script, plan, recipeCatalog, directorRecord, directorVerified, workflowVerified, workflowArtifacts, stages: Array.isArray(stages) ? stages : [], verifiedArtifacts, integrityFailures });
 }
 
 async function main() {
