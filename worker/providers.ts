@@ -18,6 +18,7 @@ import { inputReservation, modelUsage, TOKEN_BUDGET_VIOLATION, TOKEN_COUNT_MARGI
 import { parseProviderLedger } from "./provider-ledger";
 import { audioFailure, audioFailureError, MAX_AUDIO_ATTEMPTS, nextAudioAttemptAt, uncertainAudioError } from "./audio-retry";
 import { workerTimeRemainingMs } from "./deadline";
+import { resolveModelProvider } from "./model-provider";
 
 /** Programmatic test seam only; never accepted through job JSON or environment. */
 export interface AudioRuntime {
@@ -171,7 +172,8 @@ export class Providers {
   private modelLedgerInvalid = false;
   private audioCheckpointPending = false;
   private readonly audioStartedAt: number;
-  model = process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6" : process.env.AI_GATEWAY_MODEL || "anthropic/claude-sonnet-4.6";
+  private readonly modelProvider = resolveModelProvider(process.env);
+  model = this.modelProvider.model;
   constructor(public workspace: string, private input: WorkerInput, private hooks: Hooks, private audioRuntime: AudioRuntime = defaultAudioRuntime) { this.audioStartedAt = audioRuntime.now(); }
   async init(skillRoot: string) {
     const chapters = ["SKILL.md","references/job-contract.md","references/story-and-formats.md","references/motion-and-captions.md","references/audio-and-assets.md","references/rendering.md","references/quality-and-delivery.md"];
@@ -184,7 +186,7 @@ export class Providers {
       }
     }
     this.assertResolvedModelBudget();
-    if ((!process.env.ANTHROPIC_API_KEY && !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) || !process.env.ELEVENLABS_API_KEY) throw new PipelineError("provider_not_configured","Video production is not configured yet.","Ask the beta administrator to configure the required providers.");
+    if (!this.modelProvider.credential || !process.env.ELEVENLABS_API_KEY) throw new PipelineError("provider_not_configured","Video production is not configured yet.","Ask the beta administrator to configure the selected model provider and audio provider.");
   }
   async save() { await writeJson(join(this.workspace,"ledger.json"),this.ledger); await this.hooks.persist(["ledger.json"]); }
   private assertResolvedModelBudget() {
@@ -199,14 +201,15 @@ export class Providers {
   async prepareClaude<T>(purpose: string, prompt: string, images: {path:string;label:string}[] = [], options?:ClaudeOptions): Promise<()=>Promise<T>> {
     const policy=options&&stagePolicies[options.policy];
     if(options && (!policy || purpose!==policy.purpose)) throw new Error(`The scoped ${options.policy} policy is restricted to ${policy?.purpose||"its matching stage"} requests`);
-    const direct=!!process.env.ANTHROPIC_API_KEY,model=this.model;
+    const {direct,provider,credential,endpoint}=this.modelProvider,model=this.model;
+    if(!credential)throw new PipelineError("provider_not_configured","The selected model provider is not configured.","Configure its credential before starting a new bounded job.");
     // Manual thinking is still supported on these native 4.5/4.6 models. Never
     // silently substitute a weaker mode or newer unsupported model. Gateway's
-    // Anthropic Messages API accepts the same thinking configuration.
+    // and OpenRouter Messages APIs accept the same thinking configuration.
     // https://platform.claude.com/docs/en/build-with-claude/extended-thinking
     const thinking=options?.policy==="workflow-coherence-v2"?WORKFLOW_THINKING:undefined;
     const supportsThinking=direct?/^claude-(?:sonnet|opus)-4-(?:5|6)(?:-\d{8})?$/.test(model):/^anthropic\/claude-(?:sonnet|opus)-4\.(?:5|6)$/.test(model);
-    if(thinking&&!supportsThinking)throw new PipelineError("workflow_model_unsupported","The configured provider does not support this bounded workflow review mode.","Configure a compatible Claude Sonnet or Opus 4.5/4.6 model on Anthropic or Vercel AI Gateway before continuing. No review request was sent.","needs_review");
+    if(thinking&&!supportsThinking)throw new PipelineError("workflow_model_unsupported","The configured provider does not support this bounded workflow review mode.","Configure a compatible Claude Sonnet or Opus 4.5/4.6 model on Anthropic, Vercel AI Gateway, or OpenRouter before continuing. No review request was sent.","needs_review");
     if(options?.maxOutputTokens!==undefined&&(!Number.isSafeInteger(options.maxOutputTokens)||options.maxOutputTokens<=0||!policy||options.maxOutputTokens>policy.output))throw new Error("Invalid stage output allocation");
     const reserve=options?.reserve||{calls:0,inputTokens:0,outputTokens:0};
     if(Object.values(reserve).some(value=>!Number.isSafeInteger(value)||value<0))throw new Error("Invalid follow-up quality reservation");
@@ -232,17 +235,23 @@ export class Providers {
     if(thinking&&(outputRemaining<workflowOutputLimit(2)||(options?.maxOutputTokens!==undefined&&options.maxOutputTokens!==workflowOutputLimit(2))))throw new PipelineError("model_budget","The workflow review requires its full thinking and final-answer allocation after all mandatory follow-up reserves.","Ask the administrator to review the retained job. No smaller or unreserved review request was sent.","needs_review");
     if(outputRemaining<512)throw new PipelineError("model_budget","The next quality step would exceed this job's reserved model budget.","Ask the beta administrator to review the retained draft.","needs_review");
     const maxOutput=Math.min(options?.maxOutputTokens??policy?.output??7000,outputRemaining);
-    const providerHeaders:Record<string,string>=direct?{"x-api-key":process.env.ANTHROPIC_API_KEY!}:{Authorization:`Bearer ${process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN}`};
+    const providerHeaders:Record<string,string>=direct?{"x-api-key":credential}:{Authorization:`Bearer ${credential}`};
     const headers={...providerHeaders,"anthropic-version":"2023-06-01","content-type":"application/json"};
-    const outputConfig=scriptOutputConfig(model,direct,options?.policy,options?.scriptConstraints,options?.uiConstraints,options?.workflowConstraints);
+    // Map only known Claude aliases for the existing schema capability check.
+    // Gateway keeps its saved behavior; OpenRouter exposes native output_config.
+    const schemaModel=provider==="openrouter"&&/^anthropic\/claude-(?:sonnet|opus)-4\.[56]$/.test(model)?model.replace(/^anthropic\//,"").replace(/4\.([56])$/,"4-$1"):model;
+    const outputConfig=scriptOutputConfig(schemaModel,direct||provider==="openrouter",options?.policy,options?.scriptConstraints,options?.uiConstraints,options?.workflowConstraints);
     if(outputConfig)conservativeTokens+=Buffer.byteLength(JSON.stringify({output_config:outputConfig}),"utf8");
     if(thinking)conservativeTokens+=Buffer.byteLength(JSON.stringify({thinking}),"utf8");
-    const inputPayload={model,system,messages:[{role:"user",content}],...(outputConfig?{output_config:outputConfig}:{}),...(thinking?{thinking}:{})};
+    const routing=provider==="openrouter"?{provider:{require_parameters:true}}:{};
+    if(provider==="openrouter")conservativeTokens+=Buffer.byteLength(JSON.stringify(routing),"utf8");
+    const inputPayload={model,system,messages:[{role:"user",content}],...(outputConfig?{output_config:outputConfig}:{}),...(thinking?{thinking}:{}),...routing};
     const exactInputBody=JSON.stringify(inputPayload),requestBody=JSON.stringify({...inputPayload,max_tokens:maxOutput,...(thinking?{}:{temperature:0})});
     const estimate=await inputReservation(exactInputBody,conservativeTokens,direct?headers:undefined);
+    if(provider==="openrouter")estimate.fallbackReason="openrouter";
     if(estimate.inputTokens>inputRemaining)throw new PipelineError("model_budget","The next quality step would exceed this job's reserved model budget.","Ask the beta administrator to review the retained draft.","needs_review");
     const budgetPath=`analysis/model-${this.ledger.modelCalls+1}-${purpose}-budget.json`;
-    const audit={version:1,provider:direct?"anthropic":"vercel-ai-gateway",model,purpose,systemPolicy:options?.policy??"full-skill",...(thinking?{thinking}:{}),skillHash:this.skillHash,requestHash:createHash("sha256").update(requestBody).digest("hex"),inputRequestHash:createHash("sha256").update(exactInputBody).digest("hex"),estimate,margin:estimate.method==="anthropic-count-tokens"?TOKEN_COUNT_MARGIN:null,reservation:{inputTokens:estimate.inputTokens,outputTokens:maxOutput},followupQualityReserve:reserve,limits,remainingBefore:{inputTokens:inputRemaining,outputTokens:outputRemaining}};
+    const audit={version:1,provider,model,purpose,systemPolicy:options?.policy??"full-skill",...(thinking?{thinking}:{}),skillHash:this.skillHash,requestHash:createHash("sha256").update(requestBody).digest("hex"),inputRequestHash:createHash("sha256").update(exactInputBody).digest("hex"),estimate,margin:estimate.method==="anthropic-count-tokens"?TOKEN_COUNT_MARGIN:null,reservation:{inputTokens:estimate.inputTokens,outputTokens:maxOutput},followupQualityReserve:reserve,limits,remainingBefore:{inputTokens:inputRemaining,outputTokens:outputRemaining}};
     const preparedLedger=JSON.stringify(this.ledger);let invoked=false;
     return async()=>{
     this.assertResolvedModelBudget();
@@ -251,14 +260,14 @@ export class Providers {
     this.ledger.modelCalls++;this.ledger.reservedInputTokens+=estimate.inputTokens;this.ledger.reservedOutputTokens+=maxOutput;
     await this.save();
     await writeJson(join(this.workspace,budgetPath),{...audit,status:"reserved"});await this.hooks.persist([budgetPath]);
-    const response=await fetch(direct?"https://api.anthropic.com/v1/messages":"https://ai-gateway.vercel.sh/v1/messages",{method:"POST",headers,body:requestBody,signal:AbortSignal.timeout(180_000)});
+    const response=await fetch(endpoint,{method:"POST",headers,body:requestBody,signal:AbortSignal.timeout(180_000),redirect:"error"});
     if(!response.ok) throw new PipelineError("model_unavailable",`The planning provider returned ${response.status}.`,"Try again later or contact the beta administrator.","failed",response.status>=500 || response.status===429);
     const data=await response.json();
     const usage=modelUsage(data.usage);
     if(!usage)throw new PipelineError("missing_model_usage","The model provider did not return verifiable usage.","Ask the beta administrator to inspect the retained budget reservation.","needs_review");
     this.ledger.reservedInputTokens-=estimate.inputTokens;this.ledger.reservedOutputTokens-=maxOutput;
     this.ledger.inputTokens+=usage.inputTokens;this.ledger.outputTokens+=usage.outputTokens;
-    const receipt={provider:direct?"anthropic":"vercel-ai-gateway",requestId:response.headers.get("request-id")||response.headers.get("x-request-id"),units:usage.inputTokens+usage.outputTokens,unit:"tokens",model:String(data.model||model)};
+    const receipt={provider,requestId:response.headers.get("request-id")||response.headers.get("x-request-id")||(provider==="openrouter"&&typeof data.id==="string"&&data.id.length>0&&data.id.length<=512?data.id:null),units:usage.inputTokens+usage.outputTokens,unit:"tokens",model:String(data.model||model)};
     this.ledger.providerRequests.push({...receipt,operation:purpose});
     const violations=usageViolations(usage,audit.reservation,this.ledger,limits);
     if(violations.length)this.ledger.providerRequests.push({...receipt,operation:TOKEN_BUDGET_VIOLATION,units:0});
@@ -276,11 +285,11 @@ export class Providers {
     const calls=requests.length;
     if(this.ledger.modelCalls+1+calls>Math.min(this.input.budgets?.maxModelCalls||10,12))throw new PipelineError("model_budget","The remaining model allowance cannot cover a re-review and every remaining quality batch.","Ask the administrator to inspect the retained draft and review. No re-review was started.","needs_review");
     if(this.ledger.outputTokens+QUALITY_MAX_OUTPUT_TOKENS*(calls+1)>(this.input.budgets?.maxModelOutputTokens||35_000))throw new PipelineError("model_budget","The remaining output allowance cannot cover a complete re-review and every remaining quality batch.","Ask the administrator to inspect the retained draft and review. No re-review was started.","needs_review");
-    const system=qualitySystem(this.skillHash),direct=!!process.env.ANTHROPIC_API_KEY;
+    const system=qualitySystem(this.skillHash),direct=this.modelProvider.direct;
     let inputTokens=0;
     for(const request of requests){
       if(request.images.length>32)throw qualityEnvelopeError();
-      let conservative=Buffer.byteLength(system+request.prompt,"utf8")+1024;
+      let conservative=Buffer.byteLength(system+request.prompt,"utf8")+1024+(this.modelProvider.provider==="openrouter"?Buffer.byteLength(JSON.stringify({provider:{require_parameters:true}}),"utf8"):0);
       const content:unknown[]=[];
       for(const image of request.images){
         const buffer=await readFile(join(this.workspace,image.path)),info=await this.audioRuntime.probe(join(this.workspace,image.path));
@@ -289,7 +298,7 @@ export class Providers {
         content.push({type:"text",text:image.label},{type:"image",source:{type:"base64",media_type:image.path.endsWith(".png")?"image/png":"image/jpeg",data:buffer.toString("base64")}});
       }
       content.push({type:"text",text:request.prompt});
-      const estimate=await inputReservation(JSON.stringify({model:this.model,system,messages:[{role:"user",content}]}),conservative,direct?{"x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01","content-type":"application/json"}:undefined);
+      const estimate=await inputReservation(JSON.stringify({model:this.model,system,messages:[{role:"user",content}]}),conservative,direct?{"x-api-key":this.modelProvider.credential!,"anthropic-version":"2023-06-01","content-type":"application/json"}:undefined);
       // A later count outage must not consume the mandatory remaining checks.
       inputTokens+=Math.max(conservative,estimate.inputTokens);
     }
@@ -319,9 +328,9 @@ export class Providers {
     if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<=0||height<=0||!Number.isSafeInteger(plan.output.duration_frames)||plan.output.duration_frames<=0||plan.output.duration_frames>9000)throw qualityEnvelopeError();
     // Labels are bounded by the actual QC template, ten scene IDs and 300s.
     const renderedImageCost=imageTokens(width,height,"ACTUAL RENDER scene-10, frame 9999 / nominal 300.000 seconds (last frame / outgoing seam; may be covered by planned next-scene transition)")+(plan.uiDocuments?.length?768:0);
-    const system=qualitySystem(this.skillHash),conservative=Buffer.byteLength(system+envelope.prompt,"utf8")+1024;
-    const direct=!!process.env.ANTHROPIC_API_KEY;
-    const estimate=await inputReservation(JSON.stringify({model:this.model,system,messages:[{role:"user",content:[{type:"text",text:envelope.prompt}]}]}),conservative,direct?{"x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01","content-type":"application/json"}:undefined);
+    const system=qualitySystem(this.skillHash),conservative=Buffer.byteLength(system+envelope.prompt,"utf8")+1024+(this.modelProvider.provider==="openrouter"?Buffer.byteLength(JSON.stringify({provider:{require_parameters:true}}),"utf8"):0);
+    const direct=this.modelProvider.direct;
+    const estimate=await inputReservation(JSON.stringify({model:this.model,system,messages:[{role:"user",content:[{type:"text",text:envelope.prompt}]}]}),conservative,direct?{"x-api-key":this.modelProvider.credential!,"anthropic-version":"2023-06-01","content-type":"application/json"}:undefined);
     // The byte fallback must remain affordable even if the exact counter becomes
     // unavailable after repair. A successful small historical count is no guarantee.
     const fixedTokens=Math.max(conservative,estimate.inputTokens);

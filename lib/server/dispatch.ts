@@ -10,6 +10,7 @@ import { dispatchErrorSummary, type LaunchStage } from "./dispatch-error";
 import { workerNetworkPolicy } from "./sandbox-policy";
 import type { WorkerInput } from "../../worker/types";
 import workerBundle from "../generated/worker-bundle.json";
+import { workerModelEnvironment } from "./model-environment";
 export async function stopWorker(name:unknown,jobId:string) {
   if(typeof name!=="string"||!name.startsWith(`video-studio-job-${jobId}-`)) return;
   try { const sandbox=await Sandbox.get({name,resume:false}); await sandbox.stop(); }
@@ -48,10 +49,7 @@ async function launchJob(job:JobRow,onStage:(stage:LaunchStage)=>void) {
     onStage("lease_refresh");
     await heartbeatJob(job.id,leaseToken,180);
     onStage("provider_configuration");
-    const env:Record<string,string>={WORKER_CALLBACK_URL:`${endpoint}/checkpoint`,PIPELINE_CALLBACK_TOKEN:callbackToken,ELEVENLABS_API_KEY:requiredEnv("ELEVENLABS_API_KEY"),ANTHROPIC_MODEL:process.env.ANTHROPIC_MODEL??"claude-sonnet-4-6",AI_GATEWAY_MODEL:process.env.AI_GATEWAY_MODEL??"anthropic/claude-sonnet-4.6",NODE_ENV:"production"};
-    if(process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
-    else if(process.env.AI_GATEWAY_API_KEY) env.AI_GATEWAY_API_KEY=process.env.AI_GATEWAY_API_KEY;
-    else env.VERCEL_OIDC_TOKEN=await getVercelOidcToken();
+    const env:Record<string,string>={WORKER_CALLBACK_URL:`${endpoint}/checkpoint`,PIPELINE_CALLBACK_TOKEN:callbackToken,ELEVENLABS_API_KEY:requiredEnv("ELEVENLABS_API_KEY"),...await workerModelEnvironment(process.env,getVercelOidcToken),NODE_ENV:"production"};
     // Provisioning, bundle upload and token acquisition all consume the same original allowance.
     input.budgets!.maxWallSeconds=remainingExecutionSeconds(executionBudget,Date.now());
     onStage("input_upload");

@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { publicAddress, safePath, safeDestination } from "./security";
 import { compilePlan,dimensions,evidenceCatalog,validateTimeline } from "./planning";
@@ -14,6 +14,12 @@ import { command,ffmpeg,frame,frameIndex,probe } from "./media";
 import { localFixtureInput } from "../scripts/local-fixture-input";
 
 const fixture=():Plan=>({version:1,job_id:"unit",mode:"create",renderer:"ffmpeg",output:{width:1920,height:1080,fps:30,duration_frames:180},product:"A <script> test",summary:"",accent:"#5577ff",background:"light",assets:[{id:"screen",path:"assets/screen.jpg",kind:"image",usage:"output",rights:"test",width:1440,height:960}],scenes:[{id:"s1",start_frame:0,duration_frames:180,asset_id:"screen",source_in_seconds:0,playback_rate:1,preserve_audio:false,fit:"contain",purpose:"proof",reference_technique:"",headline:"Actual product proof",detail:"Clear, supported copy.",evidence:"Actual product proof",effects:[]}],captions:[],audio:[],music_prompt:"",sfx_prompt:"",assumptions:[]});
+function mockGatewayEnvironment(t: TestContext) {
+  for (const [key, value] of Object.entries({ MODEL_PROVIDER: "vercel-ai-gateway", AI_GATEWAY_API_KEY: "offline-pipeline-test-only", AI_GATEWAY_MODEL: "anthropic/claude-sonnet-4.6" })) {
+    const previous = process.env[key]; process.env[key] = value;
+    t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
+  }
+}
 test("review null optionals preserve concrete findings and reject unknown repairs",()=>{
   const review={readabilityPassed:true,claimsPassed:false,realVisualsPassed:true,renderIntegrityPassed:true,referenceStyleReviewed:false,audioTranscriptPassed:true,notes:[],findings:[{severity:"minor",message:"Intentional entrance",repair:null,sceneId:null,timeSeconds:null},{severity:"major",message:"Mixed product context",check:"claims",evidence:"Scene-3 hold shows unrelated baked-in trading claims beside the supplied product copy.",repair:"change_asset",sceneId:"scene-3"}]};
   const parsed=parseReview(review);assert.equal(parsed.findings.length,2);assert.equal(parsed.findings[0].repair,undefined);assert.equal(parsed.findings[1].severity,"major");assert.equal(parsed.findings[1].repair,"change_asset");
@@ -117,20 +123,27 @@ test("an interrupted paid audio reservation never repeats generation",async()=>{
   assert.equal(providers.ledger.audioGenerations,1);
 });
 
-test("durable usage reservation happens before any paid provider request",async()=>{
+test("durable usage reservation happens before any paid provider request",async t=>{
+  mockGatewayEnvironment(t); let requests=0;
+  t.mock.method(globalThis,"fetch",async()=>{requests++;throw Error("No provider request allowed before persistence");});
   const workspace=await mkdtemp(join(tmpdir(),"video-studio-ledger-"));let persisted=false;
   const providers=new Providers(workspace,{jobId:"test",ownerId:"test",mode:"url",videoType:"launch",format:"auto",files:[],budgets:{maxModelCalls:1}},{persist:async paths=>{assert.deepEqual(paths,["ledger.json"]);const ledger=JSON.parse(await readFile(join(workspace,"ledger.json"),"utf8"));assert.equal(ledger.modelCalls,1);persisted=true;throw new Error("checkpoint unavailable");},state:async()=>{},complete:async()=>{}});
   await assert.rejects(providers.claude("test","never call provider"),/checkpoint unavailable/);assert.equal(persisted,true);assert.equal(providers.ledger.modelCalls,1);
   await assert.rejects(providers.claude("test","never call provider"),(error:unknown)=>error instanceof Error&&"code"in error&&error.code==="model_budget");
+  assert.equal(requests,0);
 });
-test("model reservations reject an over-budget request before a provider call",async()=>{
+test("model reservations reject an over-budget request before a provider call",async t=>{
+  mockGatewayEnvironment(t); let requests=0;
+  t.mock.method(globalThis,"fetch",async()=>{requests++;throw Error("No provider request allowed above budget");});
   const workspace=await mkdtemp(join(tmpdir(),"video-studio-budget-"));let saved=false;
   const providers=new Providers(workspace,{jobId:"test",ownerId:"test",mode:"url",videoType:"launch",format:"auto",files:[],budgets:{maxModelInputTokens:100,maxModelOutputTokens:1000}},{persist:async()=>{saved=true;},state:async()=>{},complete:async()=>{}});
   await assert.rejects(providers.claude("test","evidence"),(error:unknown)=>error instanceof Error&&"code"in error&&error.code==="model_budget");assert.equal(saved,false);assert.equal(providers.ledger.modelCalls,0);
+  assert.equal(requests,0);
 });
-test("Claude max_tokens is clipped to remaining output allowance and usage reconciles",async()=>{
-  const workspace=await mkdtemp(join(tmpdir(),"video-studio-budget-"));await mkdir(join(workspace,"analysis"));const original=globalThis.fetch;let requestedMax=0;
+test("Claude max_tokens is clipped to remaining output allowance and usage reconciles",async t=>{
+  mockGatewayEnvironment(t);
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-budget-"));await mkdir(join(workspace,"analysis"));let requestedMax=0;
   const providers=new Providers(workspace,{jobId:"test",ownerId:"test",mode:"url",videoType:"launch",format:"auto",files:[],budgets:{maxModelOutputTokens:1500}},{persist:async()=>{},state:async()=>{},complete:async()=>{}});providers.ledger.outputTokens=900;
-  globalThis.fetch=(async(_url,options)=>{requestedMax=JSON.parse(String(options?.body)).max_tokens;assert.equal(providers.ledger.reservedOutputTokens,600);assert.ok(providers.ledger.reservedInputTokens>0);return new Response(JSON.stringify({model:"fixture-model",content:[{type:"text",text:'{"ok":true}'}],usage:{input_tokens:200,output_tokens:20}}),{status:200});}) as typeof fetch;
-  try{assert.deepEqual(await providers.claude("test","fixture evidence"),{ok:true});assert.equal(requestedMax,600);assert.equal(providers.ledger.outputTokens,920);assert.equal(providers.ledger.inputTokens,200);assert.equal(providers.ledger.reservedInputTokens,0);assert.equal(providers.ledger.reservedOutputTokens,0);}finally{globalThis.fetch=original;}
+  t.mock.method(globalThis,"fetch",async(url:RequestInfo|URL,options?:RequestInit)=>{assert.equal(String(url),"https://ai-gateway.vercel.sh/v1/messages");requestedMax=JSON.parse(String(options?.body)).max_tokens;assert.equal(providers.ledger.reservedOutputTokens,600);assert.ok(providers.ledger.reservedInputTokens>0);return new Response(JSON.stringify({model:"fixture-model",content:[{type:"text",text:'{"ok":true}'}],usage:{input_tokens:200,output_tokens:20}}),{status:200});});
+  assert.deepEqual(await providers.claude("test","fixture evidence"),{ok:true});assert.equal(requestedMax,600);assert.equal(providers.ledger.outputTokens,920);assert.equal(providers.ledger.inputTokens,200);assert.equal(providers.ledger.reservedInputTokens,0);assert.equal(providers.ledger.reservedOutputTokens,0);
 });

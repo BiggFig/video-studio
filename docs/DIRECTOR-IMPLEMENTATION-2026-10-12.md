@@ -23,11 +23,11 @@ The director pilot is budgeted at 24 seconds: hook 0–3; editor 3–10 (Publish
 | 5. Persistent objects | Complete | Exact semantic state matching preserves objects; state replacement, hidden future controls and duplicate ghosts have regression coverage. |
 | 6. Independent tracks | Complete | Camera, cursor, copy, UI and materials have separate timing on one clock; replay checks preserve DOM/state and render tolerance. |
 | 7. Visual systems | Partial | Brand-based materials and layouts implemented. Tally uses paper, ink and observed blue controls with Geist fallback typography; richer source-media treatments remain unverified. |
-| 8. URL integration | Implemented; end-to-end verification blocked | Automatic worker saves the source-bound director and storyboard before audio. Provider access blocks live generation. |
+| 8. URL integration | Implemented; end-to-end acceptance incomplete | OpenRouter access verified. Research reaches UI documentation; source/behavior validation stops invalid demonstrations. |
 | 9. Three placements | Complete | Separate 1920×1080, 1080×1350 and 1080×1920 treatment/control exports, 720 frames each. |
 | 10. Review the pilot | Technical/visual checks complete; external evidence pending | Subjective listening and five distinct unfamiliar viewer responses still required. |
-| 11. Generalization | Blocked | Plausible, Resend and Baserow captured sources but failed first research generation: direct 401, Gateway 403. Zero automatic passes; see automatic acceptance report. |
-| 12. Publish and test | Release verification in progress | Audience outcomes remain pending; paid budget must be agreed before spend. |
+| 11. Generalization | Incomplete | Plausible, Resend and Baserow reached UI documentation but failed source/behavior checks. Zero automatic passes; see OpenRouter recovery report. |
+| 12. Publish and test | Pilot gallery live; audience test pending | Six approved exports and viewer form deployed. Audience outcomes remain pending; paid budget must be agreed before spend. |
 
 ## Comprehension collection
 
@@ -55,3 +55,7 @@ Review interface animations are avoided; films require explicit play and include
 - Step 12's status wording and the test-plan introduction received metadata-only edits after that build; media and application code were unchanged. The deployment build must compile that final text. Deployment verification, five unfamiliar viewer responses, paid performance evidence and subjective listening review remain separate requirements.
 - Matched feed and vertical controls rendered at 1080×1350 and 1080×1920, each 720 frames at 30fps with full decode, layout and 28 replay checks. Eight decoded final MP4 frames per control were visually inspected; the corresponding `result.json` records `reviewedVideoSha256`, contact-sheet frames and the limits of that sampled review. Small UI labels in the wider control composition remain a comparison limitation. Audio packets are byte-identical to the owned 24-second source track; this establishes matching sound, not a listening review. Evidence: `.local/director-pilot-20261012/control-comparison.json`.
 - A pilot-only shared-reference bug was corrected by cloning authored scenes before adding director metadata. The focused regression test proves control/treatment authored-script identity and saved-plan binding in all three placements. `scripts/director-repair-pilot-metadata.ts` corrected existing scripts only after regenerated plan JSON equaled each saved plan and its script binding matched. It did not rewrite plans, rendered videos or the automatic runtime. Repair history and hashes are recorded in `.local/director-pilot-20261012/authored-script-metadata-repair.json`.
+
+## Provider recovery follow-up
+
+The [OpenRouter recovery report](OPENROUTER-RECOVERY-2026-10-12.md) supersedes the provider-access block above. Real research and UI requests succeeded, compact research was verified, and the final suite passed 504 tests with 35 optional skips. All three automatic tests still fail UI fidelity/behavior checks before audio and rendering; these failures remain visible in the live checklist.

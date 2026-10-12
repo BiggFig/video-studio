@@ -7,7 +7,7 @@ const seconds = z.number().finite().nonnegative();
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const identifier = z.string().min(1).max(512);
 const receipt = z.object({
-  provider: z.enum(["anthropic", "vercel-ai-gateway", "elevenlabs"]),
+  provider: z.enum(["anthropic", "vercel-ai-gateway", "openrouter", "elevenlabs"]),
   operation: z.string().min(1).max(128),
   requestId: identifier.nullable(),
   units: seconds,
