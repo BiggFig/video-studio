@@ -1,6 +1,6 @@
 export type InputMode = "url" | "prd";
 export type VideoType = "launch" | "feature-demo";
-export type OutputFormat = "auto" | "16:9" | "9:16" | "1:1";
+export type OutputFormat = "auto" | "16:9" | "4:5" | "9:16" | "1:1";
 export type UploadKind = "prd" | "asset" | "reference";
 export type JobStatus = "queued" | "reading" | "planning" | "rendering" | "checking" | "ready" | "needs_input" | "needs_review" | "failed" | "cancelled";
 export interface StudioUser { id: string; email: string; name: string; isAdmin: boolean }

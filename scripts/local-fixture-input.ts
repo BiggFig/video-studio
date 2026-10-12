@@ -7,7 +7,7 @@ import { safePath } from "../worker/security";
 import type { IngestDependencies } from "../worker/ingest";
 import type { WorkerInput } from "../worker/types";
 
-const fixtureSchema=z.object({mode:z.literal("prd"),videoType:z.enum(["launch","feature-demo"]),format:z.enum(["auto","16:9","9:16","1:1"]),files:z.array(z.object({path:z.string(),kind:z.enum(["prd","asset","reference"]),size_bytes:z.number().int().positive(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).min(2).max(12)});
+const fixtureSchema=z.object({mode:z.literal("prd"),videoType:z.enum(["launch","feature-demo"]),format:z.enum(["auto","16:9","4:5","9:16","1:1"]),files:z.array(z.object({path:z.string(),kind:z.enum(["prd","asset","reference"]),size_bytes:z.number().int().positive(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).min(2).max(12)});
 const mime=(path:string)=>({".md":"text/markdown",".txt":"text/plain",".pdf":"application/pdf",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".mp4":"video/mp4",".webm":"video/webm",".mov":"video/quicktime"}[extname(path).toLowerCase()]||"application/octet-stream");
 export async function localFixtureInput(manifestPath:string){
   const file=resolve(manifestPath),root=await realpath(dirname(file)),raw=await readFile(file),manifest=fixtureSchema.parse(JSON.parse(raw.toString("utf8")));

@@ -239,7 +239,7 @@ test("uncertain or mixed obligation judgments never spend the initial script cor
   for (const mixed of [false, true]) {
     const f = fixture(), w = await setup(t), raw = structuredClone(f.raw);
     if (mixed) raw.scenes.splice(2, 0, structuredClone(raw.scenes[1]));
-    const script = compileScript(raw, input, evidence, f.research, undefined, f.ui), context = buildWorkflowContext(script, f.ui);
+    const script = compileScript(raw, input, evidence, f.research, undefined, f.ui, { requireDirection: true }), context = buildWorkflowContext(script, f.ui);
     let reviews = 0, corrections = 0;
     const response = { ...taskAnswers(context), contextSha256: context.sha256, assessments: context.obligations!.map((obligation, index) => ({ obligationId: obligation.id, status: index === 0 ? "uncertain" : mixed ? "contradictory" : "supported", reason: index === 0 ? "The exact result cannot be established from retained context." : "The fixture contains a separate contradicted result." })) };
     const providers = { ledger: w.ledger, prepareClaude: async (purpose: string) => {
@@ -285,7 +285,7 @@ test("semantic failure can consume only existing script correction and must pass
   for (const succeeds of [true, false]) {
     const f = fixture(), w = await setup(t); let reviews = 0, corrections = 0;
     const corrected = structuredClone(f.raw); corrected.scenes[1].headline = "Write a note";
-    const contexts = [buildWorkflowContext(f.script, f.ui), buildWorkflowContext(compileScript(corrected, input, evidence, f.research, undefined, f.ui), f.ui)];
+    const contexts = [buildWorkflowContext(f.script, f.ui), buildWorkflowContext(compileScript(corrected, input, evidence, f.research, undefined, f.ui, { requireDirection: true }), f.ui)];
     const providers = { ledger: w.ledger, prepareClaude: async (purpose: string, prompt: string, _images: unknown, options: any) => {
       if (purpose === "script") { assert.match(prompt, /TRUSTED VALIDATION DIAGNOSTICS.*workflow/); assert.equal(options.reserve.calls, 3); assert.equal(options.reserve.outputTokens, 8048); return async () => { corrections++; w.ledger.modelCalls++; return corrected; }; }
       assert.equal(purpose, "workflow-coherence"); return async () => { const index = reviews++; w.ledger.modelCalls++; return verdict(contexts[index], index === 1 && succeeds); };

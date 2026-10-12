@@ -1,10 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import { confinedPath } from "../scripts/acceptance-deployed";
+import { confinedPath, specSchema } from "../scripts/acceptance-deployed";
 
 test("acceptance source and credential files remain inside their designated ignored directories", () => {
   const base = resolve(".local/deployed-acceptance/inputs");
   assert.equal(confinedPath(base, "product/screen.png"), resolve(base, "product/screen.png"));
   for (const path of ["..", "../.env.local", "../../outside", resolve(".env.local")]) assert.throws(() => confinedPath(base, path));
+});
+
+test("deployed acceptance parses a feed spec without silently changing its format", () => {
+  const spec = { mode: "url", productUrl: "https://example.com/", videoType: "launch", format: "4:5" };
+  assert.equal(specSchema.parse(spec).format, "4:5");
+  assert.equal(specSchema.safeParse({ ...spec, format: "5:4" }).success, false);
 });

@@ -30,7 +30,7 @@ function fixture() {
 function flat(raw: ReturnType<typeof fixture>["raw"]) {
   return { ...raw, transportVersion: "flat-script-v2", scenes: raw.scenes.map(({ storyRole, evidenceId, presentation, ...scene }) => {
     const visual = (presentation.visual || { kind: "none" }) as Record<string, any>;
-    return { ...scene, storyEvidence: `${storyRole}:${evidenceId}`, presentation: { ...presentation, cards: [], visual: { kind: "none", regionId: "", secondaryAssetId: "", secondaryEvidenceId: "", nodes: [], documentId: "", actions: [], ...visual, ...(visual.actions ? { actions: visual.actions.map((action: object) => ({ targetId: "", stateId: "", text: "", ...action })) } : {}) } } };
+    return { ...scene, storyEvidence: `${storyRole}:${evidenceId}`, presentation: { ...presentation, cards: [] as { title: string; body: string; evidenceId: string }[], visual: { kind: "none", regionId: "", secondaryAssetId: "", secondaryEvidenceId: "", nodes: [], documentId: "", actions: [], ...visual, ...(visual.actions ? { actions: visual.actions.map((action: object) => ({ targetId: "", stateId: "", text: "", ...action })) } : {}) } } };
   }) };
 }
 function recipeResponse(f: ReturnType<typeof fixture>) {
@@ -91,6 +91,10 @@ test("v2 transport compiles one grounded concept and source identity into the ac
   assert.equal(script.scenes[1].direction!.continuityKey, "ui:notes"); assert.equal(script.scenes[2].direction!.continuityKey, "asset:graph");
   assert.equal(script.scenes[0].direction!.continuityKey, undefined);
   const plan = await compilePlan(input, f.evidence, script, hooks, await workspace(t));
+  assert.equal(script.shotDirectorVersion, 1);
+  assert.equal(plan.shotDirector?.version, 1);
+  assert.deepEqual(plan.scenes[1].shotDirection?.camera.shots.map(shot => shot.job), ["establish", "input", "result"]);
+  assert.ok(plan.scenes[1].shotDirection!.resultHold!.endFrame - plan.scenes[1].shotDirection!.resultHold!.startFrame >= 45);
   assert.deepEqual(plan.creativeDirection, script.creativeDirection); assert.deepEqual(plan.scenes.map(scene => scene.direction), script.scenes.map(scene => scene.direction));
   assert.equal(plan.scenes[1].evidence, "Edit notes and link ideas."); assert.equal(plan.brand!.accent, "#6633bb");
   assert.ok(plan.output.duration_frames <= 840);
@@ -114,6 +118,29 @@ test("fresh directed scripts cannot omit direction, invent motion, override iden
     (raw: ReturnType<typeof fixture>["raw"]) => { (raw.scenes[1].direction as any).script = "fetch('https://example.com')"; },
   ]) { const next = fixture(); change(next.raw); assert.throws(() => compileScript(flat(next.raw), input, next.evidence, next.research, undefined, next.ui)); }
   assert.throws(() => compileShotDirection({ storyRole: "mechanism", assetId: "editor", evidenceId: "fact-2", preserveAudio: true, presentation: { template: "proof", theme: "light", transition: "cut", visual: { kind: "showcase" } }, direction: { job: "action", motion: "focus" } }), /Preserved source speech/);
+});
+
+test("production hook recipes accept bounded source-bound editorial fragments without weakening UI or claim validation", async t => {
+  const f = fixture();
+  f.research.story!.problem = { text: "Scattered research", basis: "inferred", evidenceIds: ["fact-1"] };
+  Object.assign(f.raw.scenes[0], { storyRole: "problem", headline: "Atlas connects your research" });
+  f.raw.scenes[0].presentation.template = "hook";
+  f.raw.scenes[0].direction.job = "hook";
+  const stage = compileUiDocuments({ sufficientEvidence: true, reason: "Fixture", documents: f.ui.documents }, input, f.evidence, f.research);
+  f.ui = { documents: stage.documents, sha256: stageDigest(stage) };
+  const raw = recipeResponse(f);
+  raw.scenes[0].presentation.cards = [{ title: "Research notes", body: "", evidenceId: "fact-1" }];
+  const compile = (value: unknown) => compileScript(value, input, f.evidence, f.research, undefined, f.ui, { requireDirection: true, requireRecipes: true });
+  const script = compile(raw), plan = await compilePlan(input, f.evidence, script, hooks, await workspace(t));
+  assert.equal(plan.scenes[0].presentation!.cards![0].evidence, "Atlas organizes sources for researchers.");
+  assert.equal(plan.scenes[0].presentation!.template, "hook");
+  assert.equal(plan.shotDirector!.version, 1);
+  const unknown = structuredClone(raw); unknown.scenes[0].presentation.cards[0].evidenceId = "fact-99";
+  assert.throws(() => compile(unknown));
+  const excess = structuredClone(raw); excess.scenes[0].presentation.cards = Array.from({ length: 4 }, () => ({ ...raw.scenes[0].presentation.cards[0] }));
+  assert.throws(() => compile(excess));
+  const uiCards = structuredClone(raw); uiCards.scenes[1].presentation.cards = raw.scenes[0].presentation.cards;
+  assert.throws(() => compile(uiCards), /unsupported actions, nodes or cards/);
 });
 
 test("flat script diagnostics identify cross-asset focus and a missing outcome without trusting model prose", () => {

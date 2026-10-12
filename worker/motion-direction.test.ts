@@ -82,3 +82,19 @@ test("v2 material clock remains seekable and stable while scene-specific staging
  assert.deepEqual(expectedDirectionFrame(shot,shot.travelFrames),expectedDirectionFrame(shot,149));
  const html=motionHtml(plan,{real:"assets/real.png"});assert.equal((html.match(/data-proof data-asset-id="real"/g)||[]).length,2);assert.equal((html.match(/data-stage-version="2"/g)||[]).length,2);
 });
+
+test("shot director separates entry tracks, retains its supplied theme and uses bounded material families",()=>{
+ const plan=fixture(),scene=plan.scenes[0];scene.direction!.version=2;scene.presentation!.theme="dark";
+ plan.shotDirector={version:1,visualSystem:{family:"workbench",material:"ink",corners:"rounded"}} as Plan["shotDirector"];
+ scene.shotDirection={version:1,subjectIds:["asset:real"],copyRole:"headline",camera:{shots:[]},actionWindow:null,resultHold:null,layers:{copy:{startFrame:0,endFrame:150,enterFrames:9},cursor:{startFrame:0,endFrame:0,enterFrames:0},product:{startFrame:8,endFrame:150,enterFrames:12},material:{startFrame:2,endFrame:150,enterFrames:18}},exit:{kind:"cut"}};
+ const html=motionHtml(plan,{real:"assets/real.png"}),section=html.match(/<section\b[\s\S]*?<\/section>/)![0];
+ assert.match(section,/system-workbench material-ink corners-rounded/);assert.match(section,/data-stage-version="shot-1"/);assert.match(section,/--stage-bg:#0b0b0c/);
+ const tracks:{selector:string;at:number;end:number}[]=[],sets:{selector:string;at:number}[]=[];
+ const tl={set(selector:string,_value:unknown,at:number){sets.push({selector,at});},fromTo(selector:string,_from:unknown,to:any,at:number){tracks.push({selector,at,end:at+to.duration});}};
+ const embedded=runInNewContext(`(${directedTimelineSource()})`);embedded(tl,"#scene",{directed:{version:2,motion:"reveal"},shotDirection:scene.shotDirection,visual:"showcase"},0);
+ assert.equal(tracks.find(t=>t.selector.endsWith(' .word'))!.at,0);assert.equal(tracks.find(t=>t.selector.endsWith(' .proof-media'))!.at,8/30);assert.equal(tracks.find(t=>t.selector.endsWith(' .shot-atmosphere'))!.at,2/30);
+ assert.ok(tracks.find(t=>t.selector.endsWith(' .proof-media'))!.end<1,"product settles before actions become legal");
+ tracks.length=0;embedded(tl,"#scene",{directed:{version:2,motion:"reveal"},shotDirection:scene.shotDirection,visual:"ui-demo",ui:{continuation:{}}},0);
+ assert.ok(!tracks.some(t=>t.selector.endsWith(' .ui-demo-stage')),"same UI does not enter for a second time");assert.ok(sets.some(t=>t.selector.endsWith(' .ui-demo-stage')&&t.at===0));
+ (plan.shotDirector!.visualSystem as any).family='untrusted" onload="x';assert.throws(()=>motionHtml(plan,{real:"assets/real.png"}),/Unsupported shot visual system/);
+});

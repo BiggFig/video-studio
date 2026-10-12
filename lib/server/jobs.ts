@@ -21,7 +21,7 @@ export interface JobRow {
 export const createJobSchema = z.object({
   mode: z.enum(["url", "prd"]), productUrl: z.string().max(2048).optional(),
   videoType: z.enum(["launch", "feature-demo"]).default("launch"),
-  format: z.enum(["auto", "16:9", "9:16", "1:1"]).default("auto"),
+  format: z.enum(["auto", "16:9", "4:5", "9:16", "1:1"]).default("auto"),
   uploadIds: z.array(z.string().uuid()).max(30).default([]),
   referenceUrl: z.string().max(2048).optional(), idempotencyKey: z.string().uuid(),
 }).strict().superRefine((input, ctx) => {
@@ -157,8 +157,8 @@ export function assertQualityPassed(quality: Record<string, unknown>) {
 export async function completeJob(id: string, leaseToken: string, output: { video: JobArtifact; poster: JobArtifact; quality: Record<string, unknown>; costUsd: number | null; durationSeconds: number; width: number; height: number }): Promise<JobRow> {
   assertQualityPassed(output.quality); validateArtifact(id, output.video); validateArtifact(id, output.poster);
   if (output.video.contentType !== "video/mp4" || !["image/jpeg", "image/png"].includes(output.poster.contentType)) throw new ApiError(422, "INVALID_OUTPUT", "The output needs an MP4 and preview image.");
-  if (!Number.isFinite(output.durationSeconds) || output.durationSeconds <= 0 || output.durationSeconds > 300 || (output.costUsd !== null && (!Number.isFinite(output.costUsd) || output.costUsd < 0)) || !["1920x1080", "1080x1920", "1080x1080"].includes(`${output.width}x${output.height}`)) throw new ApiError(422, "INVALID_OUTPUT", "The output does not meet the video delivery requirements.");
-  return leaseMutation(`UPDATE studio_jobs SET status='ready',video=$3::jsonb,poster=$4::jsonb,quality=$5::jsonb,quality_passed=true,cost_usd=GREATEST(cost_usd,$6),duration_seconds=$7,width=$8,height=$9,completed_at=now(),updated_at=now(),lease_token=NULL,lease_expires_at=NULL,worker_id=NULL,error=NULL,stages=stages||jsonb_build_array(jsonb_build_object('stage','ready','at',now())) WHERE ${activeLease} AND status='checking' AND (input->>'format' IN ('auto',$10)) RETURNING *`, [id, leaseToken, JSON.stringify(output.video), JSON.stringify(output.poster), JSON.stringify(output.quality), output.costUsd, output.durationSeconds, output.width, output.height, output.width === output.height ? "1:1" : output.width > output.height ? "16:9" : "9:16"]);
+  if (!Number.isFinite(output.durationSeconds) || output.durationSeconds <= 0 || output.durationSeconds > 300 || (output.costUsd !== null && (!Number.isFinite(output.costUsd) || output.costUsd < 0)) || !["1920x1080", "1080x1350", "1080x1920", "1080x1080"].includes(`${output.width}x${output.height}`)) throw new ApiError(422, "INVALID_OUTPUT", "The output does not meet the video delivery requirements.");
+  return leaseMutation(`UPDATE studio_jobs SET status='ready',video=$3::jsonb,poster=$4::jsonb,quality=$5::jsonb,quality_passed=true,cost_usd=GREATEST(cost_usd,$6),duration_seconds=$7,width=$8,height=$9,completed_at=now(),updated_at=now(),lease_token=NULL,lease_expires_at=NULL,worker_id=NULL,error=NULL,stages=stages||jsonb_build_array(jsonb_build_object('stage','ready','at',now())) WHERE ${activeLease} AND status='checking' AND (input->>'format' IN ('auto',$10)) RETURNING *`, [id, leaseToken, JSON.stringify(output.video), JSON.stringify(output.poster), JSON.stringify(output.quality), output.costUsd, output.durationSeconds, output.width, output.height, output.width === output.height ? "1:1" : output.width > output.height ? "16:9" : output.height === 1350 ? "4:5" : "9:16"]);
 }
 export async function failJob(id: string, leaseToken: string, failure: { code: string; message: string; action: string; retryable?: boolean; status?: "failed" | "needs_input" | "needs_review"; maxAttempts?: number; quality?: Record<string, unknown>; costUsd?: number | null }): Promise<JobRow> {
   const { maxAttempts = 3, status = "failed" } = failure;

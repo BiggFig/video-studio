@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "updated": "2026-10-12",
+  "films": [
+    {
+      "id": "tally",
+      "name": "Tally",
+      "audience": "Freelancers and small studios collecting client enquiries",
+      "promise": "Give the client brief a home.",
+      "duration": 24,
+      "approval": "Approved storyboard · Three verified exports",
+      "treatment": "White paper, dark ink and the product’s blue controls. The same form and the same three answers carry the story. Scattered messages establish the problem; they are never imported into Tally.",
+      "shots": [
+        {
+          "id": "tally-01",
+          "start": 0,
+          "end": 3,
+          "title": "Recognize the problem",
+          "copy": "Still taking client briefs in DMs?",
+          "view": "fragments",
+          "framing": "A bold question with three surrounding fragments; snap from tight to wide.",
+          "subject": "The missing client brief",
+          "action": "Three editorial cards ask What’s your email?, What do you need? and One more thing… around the opening question.",
+          "result": "The audience recognizes the friction of asking for details one message at a time.",
+          "transition": "Fragments leave before a clean form arrives. This is an editorial cut, not a DM import.",
+          "sourceIds": []
+        },
+        {
+          "id": "tally-02",
+          "start": 3,
+          "end": 4.3,
+          "title": "Establish the form",
+          "copy": "Build it like a doc.",
+          "view": "editor",
+          "framing": "Wide enough to establish the Project enquiry form, then approach its next field.",
+          "subject": "Project enquiry form",
+          "action": "The existing name field and project question settle; the email insertion point becomes the next focus.",
+          "result": "The viewer understands they are building a form.",
+          "transition": "Move into the same document. Keep the title and existing field recognizable.",
+          "sourceIds": [
+            "create"
+          ]
+        },
+        {
+          "id": "tally-03",
+          "start": 4.3,
+          "end": 7.5,
+          "title": "Make the field tangible",
+          "copy": "Build it like a doc.",
+          "view": "input",
+          "framing": "Input close-up with enough context to recognize the form.",
+          "subject": "Email insertion",
+          "action": "Type /email, select Email and reveal Your email between the existing name field and What do you need? project question.",
+          "result": "The added email field completes three questions: name, email and project details.",
+          "transition": "Retain the form while the view cuts to its Publish control.",
+          "sourceIds": [
+            "create",
+            "blocks",
+            "questions"
+          ]
+        },
+        {
+          "id": "tally-04",
+          "start": 7.5,
+          "end": 10,
+          "title": "Commit one clear action",
+          "copy": "Build it like a doc.",
+          "view": "publish",
+          "framing": "Large, isolated Publish control; a small edge of form context stays visible.",
+          "subject": "Publish button",
+          "action": "Pointer approaches, pauses and presses Publish at approximately 7.67–8.07 seconds; the form holds through 10 seconds.",
+          "result": "A clear editorial handoff to the respondent’s form view after the action has settled.",
+          "transition": "Cut to the same questions in respondent mode. Do not invent a share modal or send event.",
+          "sourceIds": [
+            "create"
+          ]
+        },
+        {
+          "id": "tally-05",
+          "start": 10,
+          "end": 15.3,
+          "title": "Show the actual exchange",
+          "copy": "Ask once. Get the details.",
+          "view": "respondent",
+          "framing": "Follow each input, then give Submit a distinct close-up.",
+          "subject": "Ada’s example enquiry",
+          "action": "Enter Ada, ada@example.com and A new landing page. Press Submit after the values are visible.",
+          "result": "One respondent has completed all three questions.",
+          "transition": "Only the Submit action triggers the next confirmation view.",
+          "sourceIds": [
+            "blocks",
+            "questions",
+            "thanks"
+          ]
+        },
+        {
+          "id": "tally-06",
+          "start": 15.3,
+          "end": 18,
+          "title": "Confirm the consequence",
+          "copy": "Ask once. Get the details.",
+          "view": "confirmation",
+          "framing": "Quiet, centered confirmation after the tight action view.",
+          "subject": "Post-submit confirmation",
+          "action": "Display the default Thanks for completing this form! state with product branding.",
+          "result": "The viewer sees that the submission completed.",
+          "transition": "Move to an explicitly editorial recap, rather than fabricating a Tally dashboard.",
+          "sourceIds": [
+            "thanks"
+          ]
+        },
+        {
+          "id": "tally-07",
+          "start": 18,
+          "end": 21,
+          "title": "Let the payoff land",
+          "copy": "The brief. In one place.",
+          "view": "brief",
+          "framing": "A complete, aligned brief. Settle the camera and hold all three answers.",
+          "subject": "The same three submitted values",
+          "action": "An Example brief label introduces three aligned cards containing the previously entered answers.",
+          "result": "Ada / ada@example.com / A new landing page remain unchanged.",
+          "transition": "The editorial recap leaves before the final action; do not duplicate or replace its answers.",
+          "sourceIds": [
+            "questions"
+          ]
+        },
+        {
+          "id": "tally-08",
+          "start": 21,
+          "end": 24,
+          "title": "Make the next step specific",
+          "copy": "Create a free form",
+          "view": "cta",
+          "framing": "Large product name, one action and tally.so. Hold through the final frame.",
+          "subject": "Create a free form",
+          "action": "A short directional reveal settles into the offer and destination.",
+          "result": "The viewer knows what to create and where to start.",
+          "transition": "Clean end hold. No extra claim or new feature.",
+          "sourceIds": [
+            "faq"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "id": "create",
+          "title": "Create and publish a form",
+          "url": "https://tally.so/help/create-a-form",
+          "checked": "2026-10-05"
+        },
+        {
+          "id": "blocks",
+          "title": "Input blocks",
+          "url": "https://tally.so/help/input-blocks",
+          "checked": "2026-10-05"
+        },
+        {
+          "id": "questions",
+          "title": "Name question fields",
+          "url": "https://tally.so/help/how-to-name-fields",
+          "checked": "2026-10-05"
+        },
+        {
+          "id": "thanks",
+          "title": "Thank-you pages",
+          "url": "https://tally.so/help/how-to-create-a-thank-you-page",
+          "checked": "2026-10-05"
+        },
+        {
+          "id": "faq",
+          "title": "Free form offer and FAQ",
+          "url": "https://tally.so/help/faq",
+          "checked": "2026-10-05"
+        }
+      ],
+      "placements": {
+        "landscape": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-director-landscape.mp4",
+          "poster": "/direction-lab/media/tally-director-landscape.jpg",
+          "width": 1920,
+          "height": 1080,
+          "note": "Approved authored pilot through the shared engine. Separate composition for this placement."
+        },
+        "feed": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-director-feed.mp4",
+          "poster": "/direction-lab/media/tally-director-feed.jpg",
+          "width": 1080,
+          "height": 1350,
+          "note": "Approved authored pilot through the shared engine. Separate composition for this placement."
+        },
+        "reels": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-director-reels.mp4",
+          "poster": "/direction-lab/media/tally-director-reels.jpg",
+          "width": 1080,
+          "height": 1920,
+          "note": "Approved authored pilot through the shared engine. Separate composition for this placement."
+        }
+      },
+      "baseline": {
+        "landscape": {
+          "status": "ready",
+          "src": "/launch-tests/media/tally-hook.mp4",
+          "poster": "/launch-tests/media/tally-hook.jpg",
+          "width": 1920,
+          "height": 1080,
+          "note": "Previous landscape hook cut. Its script differs, so this is a historical comparison, not an isolated camera test."
+        },
+        "feed": {
+          "status": "ready",
+          "src": "/launch-tests/media/tally-social-feed.mp4",
+          "poster": "/launch-tests/media/tally-social-feed.jpg",
+          "width": 1080,
+          "height": 1350,
+          "note": "October 5 social cut, 18 seconds. The new 24-second pilot extends action/result holds, so this is a historical comparison rather than a camera-only test."
+        },
+        "reels": {
+          "status": "ready",
+          "src": "/launch-tests/media/tally-social-reels.mp4",
+          "poster": "/launch-tests/media/tally-social-reels.jpg",
+          "width": 1080,
+          "height": 1920,
+          "note": "October 5 social cut, 18 seconds. The new 24-second pilot extends action/result holds, so this is a historical comparison rather than a camera-only test."
+        }
+      },
+      "control": {
+        "landscape": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-control-landscape.mp4",
+          "poster": "/direction-lab/media/tally-control-landscape.jpg",
+          "width": 1920,
+          "height": 1080,
+          "note": "24-second matched source plan and soundtrack; prior director treatment (camera, layers and materials)."
+        },
+        "feed": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-control-feed.mp4",
+          "poster": "/direction-lab/media/tally-control-feed.jpg",
+          "width": 1080,
+          "height": 1350,
+          "note": "24-second matched source plan and soundtrack; prior director treatment (camera, layers and materials)."
+        },
+        "reels": {
+          "status": "ready",
+          "src": "/direction-lab/media/tally-control-reels.mp4",
+          "poster": "/direction-lab/media/tally-control-reels.jpg",
+          "width": 1080,
+          "height": 1920,
+          "note": "24-second matched source plan and soundtrack; prior director treatment (camera, layers and materials)."
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Define the quality benchmark",
+      "status": "complete",
+      "detail": "Eight reference films inspected; selected mechanisms and their purpose are documented below."
+    },
+    {
+      "number": 2,
+      "title": "Rebuild Tally as the pilot",
+      "status": "complete",
+      "detail": "The approved 24-second authored pilot and matched control passed export checks in all three placements using the shared engine."
+    },
+    {
+      "number": 3,
+      "title": "Plan every shot",
+      "status": "complete",
+      "detail": "The user approved the storyboard before final rendering. Eight views preserve one action/result story."
+    },
+    {
+      "number": 4,
+      "title": "Build stronger camera controls",
+      "status": "complete",
+      "detail": "Source-bound camera targets now distinguish context, input, commit and result, with readable holds and deterministic seeking."
+    },
+    {
+      "number": 5,
+      "title": "Carry objects between views",
+      "status": "complete",
+      "detail": "Matching subjects retain their identity and values. State changes and replacement results are checked for resets and ghost objects."
+    },
+    {
+      "number": 6,
+      "title": "Separate animation layers",
+      "status": "complete",
+      "detail": "Camera, cursor, copy, product state and materials have independent timing on the same frame clock."
+    },
+    {
+      "number": 7,
+      "title": "Create reusable visual styles",
+      "status": "in-progress",
+      "detail": "Reusable brand-based materials and layouts are implemented. Tally retains paper, ink and observed blue controls; its font uses a fallback. Richer media treatments still need source assets and review."
+    },
+    {
+      "number": 8,
+      "title": "Connect URL generation",
+      "status": "in-progress",
+      "detail": "The automatic worker saves a source-bound shot plan before audio and rendering. End-to-end URL verification is blocked by model-provider access."
+    },
+    {
+      "number": 9,
+      "title": "Compose all three placements",
+      "status": "complete",
+      "detail": "Six verified 24-second exports: the new director and matched control, each composed separately for 16:9, 4:5 and 9:16."
+    },
+    {
+      "number": 10,
+      "title": "Review and refine the pilot",
+      "status": "external",
+      "detail": "Export, frame, layout and muted visual checks passed. Five unfamiliar viewer responses and subjective listening review remain outstanding."
+    },
+    {
+      "number": 11,
+      "title": "Prove it generalizes",
+      "status": "external",
+      "detail": "Plausible, Resend and Baserow captured public sources, then stopped at model-provider access. No automatic videos or automatic passes are claimed."
+    },
+    {
+      "number": 12,
+      "title": "Publish and test performance",
+      "status": "external",
+      "detail": "The gallery includes matched variants and a viewer test. Audience performance remains unmeasured; agree a paid-test budget before buying traffic."
+    }
+  ],
+  "benchmarks": [
+    {
+      "name": "ClickUp",
+      "range": "15–20 seconds",
+      "technique": "Input → context → commit → thinking",
+      "purpose": "Several framings make one interaction feel cinematic without losing the query.",
+      "url": "https://youtu.be/VFzmZBERFQ4?t=15"
+    },
+    {
+      "name": "Commas",
+      "range": "4–10 seconds",
+      "technique": "An offer becomes checkout and confirmation",
+      "purpose": "The viewer can trace one object through action and consequence.",
+      "url": "https://addxstudio.com/launch"
+    },
+    {
+      "name": "SOVRA FM",
+      "range": "20–27 seconds",
+      "technique": "Prompt → Create → progress → original track",
+      "purpose": "A clear state change earns the result reveal while preserving the brand palette.",
+      "url": "https://youtu.be/16xygqeHet0?t=20"
+    },
+    {
+      "name": "CraftedStays",
+      "range": "28–32 seconds",
+      "technique": "Approach the assistant, then reveal the result",
+      "purpose": "A familiar subject and independent camera movement connect the workflow.",
+      "url": "https://youtu.be/prcwCUzqnwA?t=28"
+    }
+  ],
+  "generalization": [
+    {
+      "title": "Plausible",
+      "status": "Blocked by provider access",
+      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+    },
+    {
+      "title": "Resend",
+      "status": "Blocked by provider access",
+      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+    },
+    {
+      "title": "Baserow",
+      "status": "Blocked by provider access",
+      "detail": "Public source capture completed. Research generation returned 401 with the direct provider and 403 through the alternative route. No automatic video was produced."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+export type Placement = 'landscape' | 'feed' | 'reels';
+export type Media = { status: 'pending' | 'ready'; src?: string; poster?: string; width: number; height: number; note: string };
+export type Shot = { id: string; start: number; end: number; title: string; copy: string; view: 'fragments' | 'editor' | 'input' | 'publish' | 'respondent' | 'confirmation' | 'brief' | 'cta' | 'generic'; framing: string; subject: string; action: string; result: string; transition: string; sourceIds: string[] };
+export type Film = { id: string; name: string; audience: string; promise: string; duration: number; approval: string; treatment: string; shots: Shot[]; sources: { id: string; title: string; url: string; checked: string }[]; placements: Record<Placement, Media>; baseline: Record<Placement, Media>; control?: Record<Placement, Media> };
+export type ViewerFilm = Pick<Film, 'id' | 'placements' | 'baseline' | 'control'>;
+export type LabManifest = { version: number; updated: string; films: Film[]; steps: { number: number; title: string; status: 'complete' | 'in-progress' | 'review' | 'pending' | 'external'; detail: string }[]; benchmarks: { name: string; range: string; technique: string; purpose: string; url: string }[]; generalization: { title: string; status: string; detail: string }[] };

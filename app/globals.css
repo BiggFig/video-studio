@@ -266,7 +266,7 @@ input::placeholder { color: var(--text-tertiary); opacity: .9; }
 .reference-control { margin-bottom: 17px; }
 .reference-control label { font-size: 10px; }
 .reference-body .upload-zone { padding-inline: 10px; }
-.format-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.format-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .format-choice { display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 5px; min-height: 88px; border: 1px solid var(--line-strong); border-radius: 7px; cursor: pointer; padding: 12px 3px; color: var(--text-secondary); position: relative; transition: border .15s, background .15s; }
 .format-choice:hover { background: var(--surface-soft); }
 .format-choice.selected { background: var(--accent-soft); border-color: var(--accent-line); }

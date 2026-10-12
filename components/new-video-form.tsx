@@ -8,7 +8,7 @@ import { api, formatBytes, useStudio } from "./studio-context";
 import { FilmArtwork } from "./brand";
 import { UploadField, type SelectedUpload } from "./upload-field";
 
-const formats: { value: OutputFormat; label: string; detail: string; icon: typeof Monitor }[] = [{ value: "auto", label: "Auto", detail: "Recommended", icon: Sparkles }, { value: "16:9", label: "Landscape", detail: "16:9", icon: Monitor }, { value: "9:16", label: "Vertical", detail: "9:16", icon: RectangleVertical }, { value: "1:1", label: "Square", detail: "1:1", icon: Square }];
+const formats: { value: OutputFormat; label: string; detail: string; icon: typeof Monitor }[] = [{ value: "auto", label: "Auto", detail: "Recommended", icon: Sparkles }, { value: "16:9", label: "Landscape", detail: "16:9", icon: Monitor }, { value: "4:5", label: "Feed", detail: "4:5", icon: RectangleVertical }, { value: "9:16", label: "Vertical", detail: "9:16", icon: RectangleVertical }, { value: "1:1", label: "Square", detail: "1:1", icon: Square }];
 
 export function NewVideoForm() {
   const { session } = useStudio();

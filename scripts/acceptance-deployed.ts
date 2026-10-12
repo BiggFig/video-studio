@@ -89,7 +89,7 @@ async function provision(state: RunState, role: "primary" | "secondary") {
   await scopedUser(identity);
   record(state, `${role}: non-admin single-use invite and secure session`, true);
 }
-const specSchema = z.object({ mode: z.enum(["url", "prd"]), productUrl: z.string().url().optional(), videoType: z.enum(["launch", "feature-demo"]), format: z.enum(["auto", "16:9", "9:16", "1:1"]), referenceUrl: z.string().url().optional(), files: z.array(z.object({ path: z.string(), kind: z.enum(["prd", "asset", "reference"]), contentType: z.string() }).strict()).max(12).default([]) }).strict();
+export const specSchema = z.object({ mode: z.enum(["url", "prd"]), productUrl: z.string().url().optional(), videoType: z.enum(["launch", "feature-demo"]), format: z.enum(["auto", "16:9", "4:5", "9:16", "1:1"]), referenceUrl: z.string().url().optional(), files: z.array(z.object({ path: z.string(), kind: z.enum(["prd", "asset", "reference"]), contentType: z.string() }).strict()).max(12).default([]) }).strict();
 async function submit(state: RunState) {
   if (!process.argv.includes("--allow-paid")) throw new Error("Submission requires separately approved paid acceptance and --allow-paid.");
   await scopedUser(state.primary);

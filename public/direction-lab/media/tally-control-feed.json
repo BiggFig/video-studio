@@ -1,0 +1,20 @@
+{
+  "kind": "authored-pilot-shared-engine",
+  "automaticUrlAcceptance": false,
+  "sha256": "8e5bad1e671af3c2e1c64febb42531f5a2c1bcc127ca40d6ec7e5bfad1be211c",
+  "durationSeconds": 24,
+  "width": 1080,
+  "height": 1350,
+  "frames": 720,
+  "renderer": "html-motion/3.4.0",
+  "planSha256": "0b681e7e1a9ce44a3ee7b08505fad686abbcaabce3da3bfd67b300bef0a780f9",
+  "scriptSha256": "9baf1ed7d97f27e666241cdf31e86831dbf1019825e7793274d1a7214422a191",
+  "htmlExportSamples": 15,
+  "replaySamples": 28,
+  "byteIdenticalSamples": 24,
+  "minimumReplaySsim": 0.997453,
+  "exactReplayDom": true,
+  "audioPacketHash": "SHA256=5d6d5fcc91e497bf13679d55248235d2951d25ea2948588c29ad970dca8ef074",
+  "auditoryReviewPerformed": false,
+  "semanticReviewPerformed": true
+}
