@@ -1,5 +1,6 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -31,6 +32,19 @@ function google(): Research {
   research.visuals.find(visual => visual.assetId === assetId)!.supportsFactIds.push("fact-61");
   research.story!.mechanism = { text: "Select Google to inspect its visitors", basis: "explicit", evidenceIds: ["fact-61"], steps: [{ action: "Click Google", assetId, evidenceId: "fact-61" }] };
   return research;
+}
+function flatProposal(research: Research) {
+  return {
+    transportVersion: "research-flat-v1", sufficientEvidence: research.sufficientEvidence, reason: research.reason, product: research.product, summary: research.summary,
+    documentTargets: research.documentTargets!.map(target => {
+      const workflow = target.workflow!;
+      return { id: target.id, sourceAssetIds: target.sourceAssetIds, capabilityFactIds: target.capabilityFactIds, goal: target.goal, observedStartSourceAssetId: workflow.observedStart.sourceAssetId, observedStartDescription: workflow.observedStart.description, actions: workflow.actions.map(action => ({ ...action, sourceElementId: action.sourceElementId || "" })), resultKind: workflow.result.kind, resultSourceAssetId: workflow.result.sourceAssetId, resultSurface: workflow.result.surface, resultChange: workflow.result.change, resultBasis: workflow.result.basis, resultEvidenceId: workflow.result.evidenceId, valueDerivations: workflow.result.valueDerivation ? [workflow.result.valueDerivation] : [], contentDerivations: workflow.result.contentDerivation ? [workflow.result.contentDerivation] : [] };
+    }),
+    facts: research.facts.map(({ evidenceId, kind, kinds, label }) => ({ evidenceId, kind, kinds: kinds || [], label })),
+    visuals: research.visuals.map(visual => ({ ...visual, regions: visual.regions || [] })),
+    claims: Object.entries(research.story!).filter(([, claim]) => !!claim).map(([role, claim]) => ({ role, text: claim!.text, basis: claim!.basis, evidenceIds: claim!.evidenceIds })),
+    mechanismSteps: research.story!.mechanism!.steps, limitations: research.limitations,
+  };
 }
 const compile = (value: unknown) => compileResearch(input, fixture.evidence, value, fixture.state.binding, fresh);
 async function workspace(t: TestContext) {
@@ -108,7 +122,12 @@ test("fresh production uses its existing single correction and unchanged reserve
     claude: async (purpose: string, _prompt: string, _images: unknown, options: unknown) => { assert.equal(purpose, "research"); assert.deepEqual(options, { policy: "research-v2", reserve }); events.push("initial"); return response; },
     prepareClaude: async (purpose: string, prompt: string, _images: unknown, options: unknown) => {
       assert.equal(purpose, "research"); assert.match(prompt, /workflow_applied_view_proof_required/); assert.deepEqual(options, { policy: "research-v2", reserve });
-      return async () => { events.push("correction"); return google(); };
+      assert.ok(prompt.indexOf("APPLIED VIEW CORRECTION:") > prompt.indexOf("END UNTRUSTED INVALID DRAFT"));
+      assert.match(prompt, /replace the target and mechanism together/);
+      assert.match(prompt, /valueDerivations:\[\{kind:'selected-row-count',sourceAssetId,rowLabel,rowValue,sourceMetricLabel,outputLabel,outputBefore,context\}\]/);
+      assert.match(prompt, /Reinspect ALL original supplied images/);
+      assert.match(prompt, /Only the matching summary may become that row count/);
+      return async () => { events.push("correction"); return flatProposal(google()); };
     },
   } as unknown as Providers;
   const hooks = { state: async () => {}, complete: async () => {}, persist: async (paths: string[]) => { if (paths.includes(RESEARCH_RETRY_PATH)) events.push("retry-checkpoint"); } };
@@ -118,4 +137,33 @@ test("fresh production uses its existing single correction and unchanged reserve
   assert.deepEqual(await researchProduct(input, fixture.evidence, provider, hooks, root), result); assert.equal(events.filter(value => value === "initial").length, 1);
   await assert.rejects(compileResearchWithRetry(response, { input, evidence: fixture.evidence, evidenceSha256: result.evidenceSha256, workspace: root, hooks, providers: provider, ...researchRequest(input, fixture.evidence), singleTarget: true, workflowSelection: true, appliedViewProof: true }), /already consumed/);
   assert.equal(events.filter(value => value === "correction").length, 1);
+});
+
+test("fresh selection guidance makes the flat witness affordance explicit without seeding product facts", () => {
+  const prompt = researchRequest(input, fixture.evidence).prompt;
+  assert.match(prompt, /Check the result evidence BEFORE choosing a filter task/);
+  assert.match(prompt, /emit the flat target field valueDerivations:\[\{/);
+  assert.doesNotMatch(prompt, /declare result\.valueDerivation:\{/);
+  const legacy = researchRequest(input, fixture.evidence, { flatTransport: false }).prompt;
+  assert.match(legacy, /declare result\.valueDerivation:\{/);
+  assert.doesNotMatch(legacy, /APPLIED VIEW FEASIBILITY/);
+  // Generic guidance must not choose values or a product for another source.
+  const clean = researchRequest({ ...input, productUrl: "https://example.com/" }, { text: "A different source", assets: [] }).prompt;
+  for (const sourceSpecific of ["Google", "73.4k", "952k", "Plausible", "Last 91 days"]) assert.ok(!clean.includes(sourceSpecific));
+});
+
+test("actionable missing-result correction still refuses an unsupported repeat or honest refusal exactly once", async t => {
+  const refusal = { transportVersion: "research-flat-v1", sufficientEvidence: false, reason: "No matching row count or observed consequence is available.", product: "", summary: "", documentTargets: [], facts: [], visuals: [], claims: [], mechanismSteps: [], limitations: [] };
+  for (const corrected of [raw(), refusal]) {
+    const root = await workspace(t); let calls = 0;
+    const response = raw(), usage = { modelCalls: 1, inputTokens: 15000, outputTokens: 1200, reservedInputTokens: 0, reservedOutputTokens: 0, audioGenerations: 0, asrSeconds: 0, providerRequests: [], audio: {} };
+    const options = { input, evidence: fixture.evidence, evidenceSha256: fixture.state.binding, workspace: root, hooks: { persist: async () => {} }, ...researchRequest(input, fixture.evidence), ...fresh, providers: { ledger: usage, prepareClaude: async <T>(_purpose: string, prompt: string) => { assert.match(prompt, /APPLIED VIEW CORRECTION:/); return async () => { calls++; usage.modelCalls++; return corrected as T; }; } } };
+    await assert.rejects(compileResearchWithRetry(response, options), error => corrected === refusal ? error instanceof PipelineError && error.code === "insufficient_product_evidence" : rejected()(error));
+    const marker = JSON.parse(await readFile(join(root, RESEARCH_RETRY_PATH), "utf8"));
+    assert.equal(marker.status, "completed"); assert.equal(marker.outcome, "invalid");
+    const rawDigest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    assert.equal(marker.rejectedValueSha256, rawDigest(response)); assert.equal(marker.correctedValueSha256, rawDigest(corrected));
+    await assert.rejects(compileResearchWithRetry(response, options), /already consumed/);
+    assert.equal(calls, 1, "guidance adds no third attempt or hidden provider call");
+  }
 });

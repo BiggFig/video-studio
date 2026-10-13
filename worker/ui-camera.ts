@@ -1,5 +1,5 @@
 import type { UiAction, UiDocument } from "./ui-reconstruction";
-import type { Plan } from "./types";
+import type { Plan, Scene } from "./types";
 import { expectedUiState } from "./ui-state";
 
 export const UI_CAMERA_RETURN_FRAMES = 12;
@@ -18,6 +18,37 @@ export function uiStageViewport(width:number,height:number,compact=false,shotDir
   }
   const portrait=height>width,square=height===width,left=portrait?Math.round(width*.07):64,top=compact?(portrait?330:square?210:180):(portrait?480:square?290:255);
   return{left,top,width:width-2*left,height:height-top-(portrait?100:56)-disclosureReserve};
+}
+
+/** Shared with the directed UI CSS; none of these values measure product UI. */
+export function directedUiCopyMetrics(width:number,height:number){
+  const portrait=height>width,square=height===width;
+  return{top:portrait?130:70,side:portrait?Math.round(width*.07):64,headlineFont:portrait?64:square?48:56,headlineLineHeight:1.06,audienceFont:portrait?32:30,audienceLineHeight:1.25,audienceGap:22,detailFont:portrait?34:square?30:34,detailLineHeight:1.32,detailGap:26,productGap:32};
+}
+
+/** Conservative layout allowance, not a font measurement or a readability pass.
+ * Exact wrapped glyph bounds remain subject to the unchanged browser gates. */
+function copyLineAllowance(text:string,fontSize:number,width:number){
+  let lines=1,used=0;
+  for(const word of text.trim().split(/\s+/)){
+    const advance=Array.from(word).length*fontSize*1.2,space=used?fontSize*.5:0;
+    if(used&&used+space+advance>width){lines++;used=advance;}else used+=space+advance;
+  }
+  return lines;
+}
+
+/** First-UI copy reserves its own band only on the new saved layout contract. */
+export function sceneUiStageViewport(plan:Plan,scene:Scene){
+  const visual=scene.presentation?.visual,document=visual?.kind==="ui-demo"?plan.uiDocuments?.find(value=>value.id===visual.documentId):undefined;
+  const base=uiStageViewport(plan.output.width,plan.output.height,!scene.detail,!!scene.shotDirection,!!document?.previewBinding);
+  if(plan.shotDirector?.uiCopyBandVersion!==1||!scene.shotDirection||scene.direction?.version!==2||visual?.kind!=="ui-demo"||scene.start_frame!==0||!plan.audienceLabel)return base;
+  const metric=directedUiCopyMetrics(plan.output.width,plan.output.height),width=plan.output.width-2*metric.side;
+  const audience=copyLineAllowance(plan.audienceLabel,metric.audienceFont,width)*metric.audienceFont*metric.audienceLineHeight+metric.audienceGap;
+  const headline=copyLineAllowance(scene.headline,metric.headlineFont,width)*metric.headlineFont*metric.headlineLineHeight;
+  const detail=scene.detail?metric.detailGap+copyLineAllowance(scene.detail,metric.detailFont,Math.min(1300,width))*metric.detailFont*metric.detailLineHeight:0;
+  const top=Math.max(base.top,Math.ceil(metric.top+audience+headline+detail+metric.productGap)),height=base.height-(top-base.top);
+  if(height<=0)throw new Error("The directed UI copy leaves no product viewport; shorter authored copy is required");
+  return{...base,top,height};
 }
 export interface UiCameraShot { atFrame:number;moveFrames:number;job:"establish"|"input"|"context"|"commit"|"result";targetIds:string[];contextIds?:string[];maxZoom?:number }
 export interface UiCameraTrack { shots:UiCameraShot[] }
@@ -85,7 +116,7 @@ export function uiCameraContinuation(plan:Plan,index:number):UiCameraContinuatio
   const end=expectedUiState(document,prior.actions,previous.duration_frames-1),start=expectedUiState(document,current.actions,0);
   for(const id of Object.keys(end.elements)){const a=end.elements[id],b=start.elements[id];if(!b||a.text!==b.text||a.textBasis!==b.textBasis||a.visible!==b.visible||a.selected!==b.selected)throw new Error("Shared UI transition would reset product state");}
   if(!match.subjectIds?.length||match.subjectIds.some(id=>!start.elements[id]?.visible))throw new Error("Shared UI transition subject missing");
-  const viewport=uiStageViewport(plan.output.width,plan.output.height,!previous.detail,true,!!document.previewBinding);
+  const viewport=sceneUiStageViewport(plan,previous);
   const camera=applyUiCameraContinuation(document,expectedUiCamera(document,prior.actions,previous.duration_frames-1,viewport,true,previous.shotDirection!.camera),previous.duration_frames-1,viewport,uiCameraContinuation(plan,index-1));
   return{camera,viewport,moveFrames:12};
 }
