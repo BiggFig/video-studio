@@ -2,6 +2,7 @@ import type { InputMode, JobStatus, OutputFormat, StudioLimits, VideoType } from
 import type { ResearchStory } from "./research";
 import type { UiDocument, UiAction } from "./ui-reconstruction";
 import type { UiSource } from "./ui-sources";
+import type { GuideChoice } from "./guide-selection";
 import type { CreativeDirection, ShotDirection } from "./creative-direction";
 import type { ShotDirectorMetadata, ShotSceneDirection } from "./shot-director";
 
@@ -29,7 +30,7 @@ export interface BrandEvidence {
   typography: { family: string; weight: string; role: "heading" | "body" | "label"; selector: string }[];
   logoAssetIds: string[]; limitations: string[];
 }
-export interface Evidence { text: string; assets: Asset[]; brand?: BrandEvidence; uiSources?: UiSource[]; reference?: { aspect: number; description: unknown; measurements: unknown }; capturedUrl?: string }
+export interface Evidence { text: string; assets: Asset[]; brand?: BrandEvidence; uiSources?: UiSource[]; guideProposal?: GuideChoice; reference?: { aspect: number; description: unknown; measurements: unknown }; capturedUrl?: string }
 export interface Presentation {
   template: "hook" | "brand" | "proof" | "features" | "offer" | "cta";
   theme: "light" | "dark";
@@ -66,7 +67,7 @@ export interface Plan {
   assets: Asset[]; scenes: Scene[]; captions: never[];
   audio: { asset_id: string; start_frame: number; duration_frames: number; source_in_seconds: number; playback_rate: 1; gain_db: number; role: "music" | "sfx" }[];
   music_prompt: string; sfx_prompt: string; assumptions: string[];
-  production?: { researchSha256: string; scriptSha256: string; evidenceSha256: string; uiSha256?: string; shotRecipeSha256?: string; shotDirectorVersion?: 1; shotDirectorSha256?: string; workflowCoherence?: { version: 1|2; contextSha256: string; verdictSha256: string; scriptSha256: string; requireLaunchResult?: true; requireOutcomeContinuity?: true } };
+  production?: { researchSha256: string; scriptSha256: string; evidenceSha256: string; uiSha256?: string; shotRecipeSha256?: string; shotDirectorVersion?: 1; shotDirectorSha256?: string; workflowCoherence?: { version: 1|2; contextSha256: string; verdictSha256: string; scriptSha256: string; requireLaunchResult?: true; requireOutcomeContinuity?: true; outcomeObligationVersion?: 1 } };
 }
 export interface Finding { severity: "critical" | "major" | "minor"; sceneId?: string; timeSeconds?: number; message: string; repair?: "shorten_copy" | "simplify_copy" | "change_asset" | "extend_hold" }
 export interface QC { status: "passed" | "needs_review"; passed: boolean; checks: Record<string,{passed:boolean;performed:boolean;evidence:string}>; technical: Record<string, unknown>; visual: unknown; audio: unknown; findings: Finding[]; repairs: string[]; evidence: string[] }

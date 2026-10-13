@@ -137,14 +137,14 @@ export function recordUiLayoutState(report:UiLayoutReport,measurements:UiLayoutM
 }
 
 function documentHtml(document:UiDocument,width:number,height:number,compact:boolean){
-  const viewport=uiStageViewport(width,height,compact);
+  const viewport=uiStageViewport(width,height,compact,false,!!document.previewBinding);
   // Only trusted CSS/font bytes and escaped uiDocumentHtml enter this page. No script tags.
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; script-src 'none'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><style>@font-face{font-family:Studio;src:url('data:font/woff2;base64,${geistFontBase64}') format('woff2');font-weight:100 900;font-style:normal;font-display:block}*{box-sizing:border-box}html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#0b0b0c;font-family:Studio,Arial,sans-serif;--line:#262626;--stage-bg:#0f0f0f;--accent:#7c3aed}${uiCompositionCss}.ui-demo-stage{left:${viewport.left}px;top:${viewport.top}px;width:${viewport.width}px;height:${viewport.height}px;opacity:1;overflow:hidden;border-radius:18px}.ui-document{transform-origin:50% 50%}.ui-pointer{display:none}</style></head><body>${uiDocumentHtml(document,0,viewport)}</body></html>`;
 }
 
 function checkInput(documents:UiDocument[],options:UiLayoutOptions){
   if(!/^[a-zA-Z0-9_-]{1,100}$/.test(options.reportName))throw new Error("Invalid UI layout report name");
-  if(![[1920,1080],[1080,1920],[1080,1080]].some(([width,height])=>width===options.width&&height===options.height))throw new Error("Unsupported UI layout canvas");
+  if(![[1920,1080],[1080,1920],[1080,1350],[1080,1080]].some(([width,height])=>width===options.width&&height===options.height))throw new Error("Unsupported UI layout canvas");
   // Parse at call time: ui-reconstruction may import this inspector for its durable stage.
   const parsed=uiDocumentSchema.array().min(1).max(2).parse(documents);
   if(new Set(parsed.map(document=>document.id)).size!==parsed.length)throw new Error("Duplicate UI layout document");

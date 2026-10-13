@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Providers, qualityAudioEnvelope, qualityDefaultStyle, qualityOriginalSourceLabel, qualityRepairEnvelope, qualityReviewPrompt, qualitySceneVisibility, type AudioRuntime, type QualityRequest } from "./providers";
-import { assessStoryClarity, parseReview, realVisualsPassed, reviewBatch, wholeFilmProofInventory } from "./quality";
+import { assessStoryClarity, parseReview, realVisualsPassed, reviewBatch, wholeFilmProofInventory, qualitySceneGroups, expectedReviewCalls } from "./quality";
 import { PipelineError, type Asset, type Evidence, type Hooks, type Plan, type Transcript, type WorkerInput } from "./types";
 
 const input: WorkerInput = { jobId: "quality-budget", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "auto", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200_000, maxModelOutputTokens: 30_000 } };
@@ -20,6 +20,28 @@ function fixture(sceneCount = 6, source = "Verified product facts.") {
   const plan: Plan = { version: 1, job_id: input.jobId, mode: "create", renderer: "hyperframes", output: { width: 1920, height: 1080, fps: 30, duration_frames: sceneCount * 150 }, product: "Product", summary: "", accent: "#2266aa", background: "light", assets, scenes, captions: [], audio: [], music_prompt: "Original instrumental", sfx_prompt: "A small original sound", assumptions: [] };
   return { plan, evidence, research };
 }
+test("UI isolation preserves every scene within the existing review call envelope",()=>{
+  for(let count=1;count<=8;count++)for(let mask=0;mask<2**count;mask++){
+    const {plan}=fixture(count);
+    plan.scenes.forEach((scene,index)=>{if(mask&(1<<index))scene.presentation!.visual={kind:"ui-demo",documentId:"fixture",actions:[]};});
+    const before=JSON.stringify(plan),groups=qualitySceneGroups(plan);
+    assert.ok(groups.length<=expectedReviewCalls(plan));assert.ok(groups.every(group=>group.length>0&&group.length<=2));
+    assert.deepEqual(groups.flat().map(scene=>scene.id).sort(),plan.scenes.map(scene=>scene.id).sort());
+    assert.equal(JSON.stringify(plan),before);
+  }
+});
+test("odd UI isolation keeps original seam context and every actual sample and source image",()=>{
+  const {plan}=fixture(3);plan.scenes[1].presentation!.visual={kind:"ui-demo",documentId:"fixture",actions:[]};
+  plan.uiDocuments=[{id:"fixture",sourceAssetIds:["old-small"],capabilityFactIds:["fact-1"],viewport:{width:640,height:360},styles:[],elements:[],states:[{id:"before",basis:"observed",sourceAssetId:"old-small",evidenceIds:["fact-1"],visibleElementIds:[],selectedElementIds:[],textValues:[]}]}];
+  assert.deepEqual(qualitySceneGroups(plan).map(group=>group.map(scene=>scene.id)),[["scene-2"],["scene-1","scene-3"]]);
+  const samples=plan.scenes.flatMap(scene=>Array.from({length:4},(_,i)=>({sceneId:scene.id,path:`${scene.id}-${i}.jpg`,label:"ACTUAL RENDER"})));
+  const batches=qualitySceneGroups(plan).map(group=>reviewBatch(plan,samples.filter(sample=>group.some(scene=>scene.id===sample.sceneId))));
+  assert.deepEqual(batches.flatMap(batch=>batch.images.filter(image=>image.label==="ACTUAL RENDER").map(image=>image.path)).sort(),samples.map(sample=>sample.path).sort());
+  assert.equal(batches[1].motion[1].incomingTransition.fromSceneId,"scene-2");
+  assert.ok(batches.every(batch=>batch.images.some(image=>image.path==="old-small.jpg")));
+  const even=fixture(4).plan;even.scenes[1].presentation!.visual=plan.scenes[1].presentation!.visual;
+  assert.deepEqual(qualitySceneGroups(even).map(group=>group.map(scene=>scene.id)),[["scene-1","scene-2"],["scene-3","scene-4"]]);
+});
 async function workspace(t: TestContext) {
   const root = await realpath(tmpdir()), path = await mkdtemp(join(root, "studio-quality-reserve-"));
   await mkdir(join(path, "analysis"));
@@ -148,6 +170,20 @@ test("compact actual QC prompt retains visible cards, source identity and full s
   assert.equal(prompt.split("Exact quote").length - 1, 1);
   assert.ok(prompt.includes("https://example.com/old-small.jpg")); assert.ok(prompt.includes('"start_frame":0'));
   assert.ok(prompt.includes('"template":"features"')); assert.ok(prompt.includes('"evidenceId":"fact-1"'));
+});
+
+test("repair maximum reserves distinct long quotes in every scene even when its synthetic maximum repeats one quote",()=>{
+  const value=fixture(2),small=structuredClone(value.research),large=structuredClone(value.research);
+  small.facts[0].quote="A".repeat(300);large.facts[0].quote="A".repeat(900);
+  large.facts.push({...large.facts[0],quote:"B".repeat(900)});
+  const smallEnvelope=qualityRepairEnvelope(value.plan,value.evidence,small),largeEnvelope=qualityRepairEnvelope(value.plan,value.evidence,large);
+  // Two scenes each retain one complete claim quote and three card quotes.
+  // Equal length is not equal content: all eight slots need the upper bound.
+  assert.equal(largeEnvelope.batches[0].variableBytes-smallEnvelope.batches[0].variableBytes,8*600);
+  const request=context(value);request.plan.scenes.forEach((scene,index)=>{scene.evidence=large.facts[index].quote;});
+  const prompt=qualityReviewPrompt(request);
+  assert.ok(prompt.includes("A".repeat(900)));assert.ok(prompt.includes("B".repeat(900)));
+  assert.ok(!prompt.includes('"evidenceQuoteIndex"'));
 });
 
 test("trusted visibility separates exact rendered copy from full grounding evidence and rejects false media flags", () => {

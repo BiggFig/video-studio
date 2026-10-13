@@ -23,6 +23,34 @@ export function directedShot(plan:Plan,scene:Scene,index:number):DirectedShot|un
   return{version,concept,job,motion:scene.direction.motion,from,to,travelFrames,continues};
 }
 
+// These finite descriptions track the renderer branches below. They describe
+// intentional stage paint, never certify the sampled pixels or product UI.
+const stageDescriptions={
+ workbench:"Workbench stage: horizontal and vertical 1px grid lines repeat every 100px at 0.14 opacity; a 1px bottom axis and three overlapping rounded material panels with 1px outlines sit behind the content.",
+ editorial:"Editorial stage: a faint diagonal ground wash, a 1px bottom axis and two offset flat rectangular material shapes sit behind the content.",
+ relationships:"Relationships stage: a faint diagonal ground wash, a 1px bottom axis and three concentric elliptical material shapes with 2px outlines and an accent center sit behind the content.",
+ legacy:"Material stage: faint gradient wash and deterministic grain, shaded volume, thin rim/orbit outlines and a horizontal floor line sit behind the content.",
+ legacyConnect:"Material connect stage: faint gradient wash and deterministic grain, blurred volume, thin rim/orbit outlines, a curved connecting thread and a horizontal floor line sit behind the content.",
+ legacyConsolidate:"Material consolidate stage: faint gradient wash and deterministic grain, stacked rectangular volume, thin rectangular rim/orbit outlines and a horizontal floor line sit behind the content.",
+ paper:"Paper stage: a faint diagonal wash, 1px top axis, three overlapping sheets with thin outlines and a small accent corner sit behind the content.",
+ paperContext:"Paper context stage: a faint diagonal wash, three large outlined transparent sheets and a small accent corner sit behind the content; the axis is hidden.",
+ paperAction:"Paper action/result stage: a faint diagonal wash and 1px bottom axis sit behind the content; material sheets and accent corner are hidden.",
+ paperPayoff:"Paper payoff stage: a faint diagonal wash, 1px top axis, one translucent accent sheet and a small accent corner sit behind the content.",
+ paperCta:"Paper CTA stage: a faint diagonal wash, 1px bottom axis, two overlapping accent/background cutout sheets and a small accent corner sit behind the content.",
+} as const;
+const stageOpacity={quiet:" Material group opacity is 0.08 for this action/result scene.",normal:" Material group opacity is 0.32 for this scene."} as const;
+const causalInkDescription=" Editorial accent underlines draw beneath the bound input during its edit, then beneath the changed result at completion; they settle before the reading hold. These are editorial marks, not product controls or selection states.";
+function describeDesignedStage(shot:DirectedShot):string {
+ if(shot.system)return stageDescriptions[shot.system]+stageOpacity[shot.version===2&&["action","result"].includes(shot.job)?"quiet":"normal"];
+ if(shot.version===1)return stageDescriptions[shot.concept==="connect"?"legacyConnect":shot.concept==="consolidate"?"legacyConsolidate":"legacy"];
+ return stageDescriptions[shot.job==="context"?"paperContext":["action","result"].includes(shot.job)?"paperAction":shot.job==="payoff"?"paperPayoff":shot.job==="cta"?"paperCta":"paper"];
+}
+export function designedStageForScene(plan:Plan,scene:Scene,index:number):string|undefined {
+ const shot=directedShot(plan,scene,index);return shot?describeDesignedStage(shot)+(scene.presentation?.visual?.kind==="ui-demo"&&scene.shotDirection?.causalEmphasis?causalInkDescription:""):undefined;
+}
+/** Exact maximum of the finite legal descriptors, including JSON escaping. */
+export const maximumDesignedStageDescription=[...Object.values(stageDescriptions),...(["workbench","editorial","relationships"] as const).flatMap(family=>Object.values(stageOpacity).flatMap(opacity=>[stageDescriptions[family]+opacity,stageDescriptions[family]+opacity+causalInkDescription]))].reduce((a,b)=>JSON.stringify(a).length>=JSON.stringify(b).length?a:b,"");
+
 /** Frame-only material clock. Identical seeks cannot accumulate transforms or noise. */
 export function expectedDirectionFrame(shot:DirectedShot,frame:number):DirectionFrame {
   if(!Number.isInteger(frame)||frame<0||shot.travelFrames<1)throw new Error("Invalid directed frame");

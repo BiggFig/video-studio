@@ -5,6 +5,7 @@ import { stageDigest, stageFailure } from "./research";
 import { expectedUiState } from "./ui-state";
 import { validateUiActions, type UiDocument } from "./ui-reconstruction";
 import type { UiCameraTrack } from "./ui-camera";
+import { compileUiCausalEmphasis, type UiCausalEmphasisTrack } from "./ui-causal-emphasis";
 import type { Evidence, Hooks, Plan, Scene } from "./types";
 
 export const SHOT_DIRECTOR_PATH = "analysis/shot-director.json";
@@ -16,11 +17,18 @@ export interface ShotSceneDirection {
   camera: UiCameraTrack;
   actionWindow: Window | null;
   resultHold: Window | null;
+  causalEmphasis?: UiCausalEmphasisTrack;
   layers: { copy: Window & { enterFrames: number }; cursor: Window & { enterFrames: number }; product: Window & { enterFrames: number }; material: Window & { enterFrames: number } };
   exit: { kind: "cut" | "object-match"; documentId?: string; subjectIds?: string[]; nextSceneId?: string; stateSha256?: string };
 }
 export interface ShotDirectorMetadata {
   version: 1;
+  /** Absent on retained directors: their original isolated input/result framing stays unchanged. */
+  literalContextVersion?: 1;
+  /** Absent on retained directors: no new editorial ink is added on restore. */
+  literalEmphasisVersion?: 1;
+  /** First-scene UI reserves the audience/headline band; absent on saved layouts. */
+  uiCopyBandVersion?: 1;
   source: { researchSha256: string; evidenceSha256: string; scriptSha256: string; uiSha256: string };
   output: Plan["output"];
   brief: {
@@ -48,7 +56,7 @@ const endOf = (scene: Scene) => scene.presentation?.visual?.kind === "ui-demo" ?
 /** New plans reserve an actual result move plus a quiet 1.5s hold. Old plans never call this. */
 export const requiredDirectorFrames = (presentation: Scene["presentation"], finalScene = false) => presentation?.visual?.kind === "ui-demo" ? Math.max(...presentation.visual.actions.map(action => action.atFrame + action.durationFrames)) + 57 + (!finalScene && presentation.transition !== "cut" ? 12 : 0) : 0;
 
-function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false): ShotSceneDirection {
+function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false, literalContextVersion = 0, literalEmphasisVersion = 0): ShotSceneDirection {
   const duration = scene.duration_frames, visual = scene.presentation?.visual;
   const base: ShotSceneDirection = {
     version: 1, subjectIds: [`asset:${scene.asset_id}`], copyRole: scene.direction?.job === "action" ? "support" : "headline",
@@ -62,6 +70,19 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false)
   const last = endOf(scene);
   const exitFrames = !finalScene && scene.presentation!.transition !== "cut" ? Math.min(12, Math.floor(duration / 5)) : 0;
   if (last + 57 > duration - exitFrames) throw stageFailure("The directed UI result requires a complete camera move and at least 45 readable frames after actions finish and before the outgoing transition.");
+  const preview = literalContextVersion === 1 && document.terminalResult?.version === 2 ? document.previewBinding : undefined;
+  const causalIds = preview ? unique([preview.codeElementId, preview.templateElementId, preview.resultElementId, ...preview.contextElementIds]) : [];
+  // The literal compiler limits text to this exact witnessed relation. Keep its
+  // containing structural panels too, so no partial pane edge appears to be a
+  // different layout. No unrelated source screenshot/chrome becomes a subject.
+  const structuralIds = preview ? document.elements.filter(element => element.type === "panel" && !element.text && causalIds.some(id => {
+    const child = document.elements.find(value => value.id === id)!;
+    return child && element.rect.x <= child.rect.x && element.rect.y <= child.rect.y && element.rect.x + element.rect.width >= child.rect.x + child.rect.width && element.rect.y + element.rect.height >= child.rect.y + child.rect.height;
+  })).map(element => element.id) : [];
+  const contextAt = (frame: number, targets: string[]) => {
+    const state = expectedUiState(document, visual.actions, frame);
+    return unique([...causalIds, ...structuralIds]).filter(id => state.elements[id]?.visible && !targets.includes(id));
+  };
   const shots: UiCameraTrack["shots"] = [{ atFrame: 0, moveFrames: 0, job: "establish", targetIds: [] }];
   const targeted = visual.actions.filter(action => action.targetId);
   for (const [index, action] of targeted.entries()) {
@@ -70,12 +91,12 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false)
     // without adding/reordering any product operations or exposing future state.
     const actionIndex = visual.actions.indexOf(action), priorAction = visual.actions[actionIndex - 1];
     const atFrame = Math.max(0, action.atFrame - 12, priorAction ? priorAction.atFrame + priorAction.durationFrames : 0);
-    shots.push({ atFrame, moveFrames: Math.max(0, Math.min(12, action.atFrame - atFrame)), job, targetIds: [action.targetId!], contextIds: [] });
+    shots.push({ atFrame, moveFrames: Math.max(0, Math.min(12, action.atFrame - atFrame)), job, targetIds: [action.targetId!], contextIds: contextAt(atFrame, [action.targetId!]) });
     const next = targeted[index + 1];
     if (action.kind === "type" && next && next.atFrame - (action.atFrame + action.durationFrames) >= 36 && !visual.actions.some(between => between.kind === "state" && between.atFrame >= action.atFrame + action.durationFrames && between.atFrame < next.atFrame)) {
       const after = action.atFrame + action.durationFrames;
       const state = expectedUiState(document, visual.actions, after);
-      shots.push({ atFrame: after, moveFrames: 12, job: "context", targetIds: [action.targetId!], contextIds: state.elements[next.targetId!]?.visible ? [next.targetId!] : [] });
+      shots.push({ atFrame: after, moveFrames: 12, job: "context", targetIds: [action.targetId!], contextIds: unique([...(state.elements[next.targetId!]?.visible ? [next.targetId!] : []), ...contextAt(after, [action.targetId!])]) });
     }
   }
   for (const action of visual.actions.filter(action => action.kind === "state")) {
@@ -83,7 +104,7 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false)
     const snapshot = document.states.find(candidate => candidate.id === action.stateId)!;
     const changedIds = snapshot.textValues.map(value => value.elementId).filter(id => state.elements[id]?.visible);
     const targetIds = changedIds.length ? changedIds : document.elements.filter(element => state.elements[element.id].visible).map(element => element.id);
-    if (targetIds.length) shots.push({ atFrame, moveFrames: 12, job: "context", targetIds, contextIds: [] });
+    if (targetIds.length) shots.push({ atFrame, moveFrames: 12, job: "context", targetIds, contextIds: contextAt(atFrame, targetIds) });
   }
   const final = expectedUiState(document, visual.actions, last);
   const declaredResult = document.terminalResult && final.stateId === document.terminalResult.afterStateId ? document.terminalResult.resultElementIds : [];
@@ -94,6 +115,7 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false)
   const identified = unique((declaredResult.length ? declaredResult : changed).filter(id => final.elements[id]?.visible));
   const resultIds = identified.length ? identified : document.elements.filter(element => final.elements[element.id].visible).map(element => element.id);
   if (!resultIds.length) throw stageFailure("The directed result contains no visible source-bound object.");
+  const contextIds = contextAt(last, resultIds);
   const beforeResult = expectedUiState(document, visual.actions, Math.max(0, last - 1));
   const previousShot = [...shots].filter(shot => shot.atFrame < last).sort((a, b) => a.atFrame - b.atFrame).at(-1);
   const previousSubjects = previousShot ? [...previousShot.targetIds, ...(previousShot.contextIds || [])] : [];
@@ -103,14 +125,18 @@ function sceneDirection(scene: Scene, document?: UiDocument, finalScene = false)
   const replacesSubject = resultIds.every(id => !beforeResult.elements[id]?.visible) && previousSubjects.length > 0 && previousSubjects.every(id => !final.elements[id]?.visible);
   // A whole source screen is an honest fallback when no visible semantic result
   // can be isolated. It must not become a fabricated success badge.
-  shots.push({ atFrame: last, moveFrames: replacesSubject ? 0 : 12, job: "result", targetIds: resultIds, contextIds: [] });
+  shots.push({ atFrame: last, moveFrames: replacesSubject ? 0 : 12, job: "result", targetIds: resultIds, contextIds });
   // A state end may equal the next operation's start or the final result.
   // One shot owns each frame; prefer the next active control, then the result.
   const ordered = shots.sort((a, b) => a.atFrame - b.atFrame || ({ establish: 0, context: 1, input: 2, commit: 3, result: 4 }[a.job] - { establish: 0, context: 1, input: 2, commit: 3, result: 4 }[b.job]));
   base.camera = { shots: ordered.filter((shot, index) => ordered[index + 1]?.atFrame !== shot.atFrame) };
-  base.subjectIds = unique([...targeted.map(action => action.targetId!), ...resultIds]);
+  base.subjectIds = unique([...targeted.map(action => action.targetId!), ...resultIds, ...contextIds]);
   base.actionWindow = { startFrame: visual.actions[0].atFrame, endFrame: last };
   base.resultHold = { startFrame: last + 12, endFrame: duration - exitFrames };
+  if (literalContextVersion === 1 && literalEmphasisVersion === 1) {
+    const emphasis = compileUiCausalEmphasis(document, visual.actions, base.resultHold);
+    if (emphasis) base.causalEmphasis = emphasis;
+  }
   base.layers.cursor = { startFrame: targeted[0]?.atFrame ?? 0, endFrame: last, enterFrames: 0 };
   base.layers.product = { startFrame: 0, endFrame: duration, enterFrames: 12 };
   base.copyRole = "quiet";
@@ -125,11 +151,18 @@ function visibleObject(document: UiDocument, scene: Scene, frame: number, ids: s
 }
 
 /** Deterministic direction, compiled only after script/source/workflow validation. No model call or code generation. */
-export function buildDirectorPlan(plan: Plan, evidence?: Evidence): { metadata: ShotDirectorMetadata; scenes: ShotSceneDirection[] } {
+export interface ShotDirectorOptions { literalContextVersion: 0 | 1; literalEmphasisVersion?: 0 | 1; uiCopyBandVersion?: 0 | 1 }
+export function buildDirectorPlan(plan: Plan, evidence?: Evidence, options?: ShotDirectorOptions): { metadata: ShotDirectorMetadata; scenes: ShotSceneDirection[] } {
   const binding = plan.production, story = plan.story;
+  const literalContextVersion = options?.literalContextVersion ?? (plan.shotDirector ? plan.shotDirector.literalContextVersion ?? 0 : 1);
+  const literalEmphasisVersion = options ? options.literalEmphasisVersion ?? 0 : plan.shotDirector ? plan.shotDirector.literalEmphasisVersion ?? 0 : 1;
+  const uiCopyBandVersion = options ? options.uiCopyBandVersion ?? 0 : plan.shotDirector ? plan.shotDirector.uiCopyBandVersion ?? 0 : 1;
+  if (literalContextVersion !== 0 && literalContextVersion !== 1) throw stageFailure("The saved result framing version is unsupported.");
+  if (literalEmphasisVersion !== 0 && literalEmphasisVersion !== 1) throw stageFailure("The saved editorial emphasis version is unsupported.");
+  if (uiCopyBandVersion !== 0 && uiCopyBandVersion !== 1) throw stageFailure("The saved directed copy layout version is unsupported.");
   if (!binding?.uiSha256 || !plan.creativeDirection || !story?.primaryAudience || !story.mechanism || !story.outcome) throw stageFailure("The shot director requires a verified current script, audience, action, result and immutable UI binding.");
   if (binding.uiSha256 !== stageDigest({ version: 1, jobId: plan.job_id, evidenceSha256: binding.evidenceSha256, researchSha256: binding.researchSha256, documents: plan.uiDocuments })) throw stageFailure("The shot director UI no longer matches its immutable source binding.");
-  const scenes = plan.scenes.map((scene, index) => { const visual = scene.presentation?.visual; return sceneDirection(scene, visual?.kind === "ui-demo" ? plan.uiDocuments?.find(document => document.id === visual.documentId) : undefined, index === plan.scenes.length - 1); });
+  const scenes = plan.scenes.map((scene, index) => { const visual = scene.presentation?.visual; return sceneDirection(scene, visual?.kind === "ui-demo" ? plan.uiDocuments?.find(document => document.id === visual.documentId) : undefined, index === plan.scenes.length - 1, literalContextVersion, literalEmphasisVersion); });
   for (let index = 0; index < scenes.length - 1; index++) {
     const current = plan.scenes[index], next = plan.scenes[index + 1], from = current.presentation?.visual, to = next.presentation?.visual;
     if (from?.kind !== "ui-demo" || to?.kind !== "ui-demo" || from.documentId !== to.documentId) continue;
@@ -155,7 +188,7 @@ export function buildDirectorPlan(plan: Plan, evidence?: Evidence): { metadata: 
   const uiAssets = new Set((plan.uiDocuments || []).flatMap(document => document.sourceAssetIds));
   const media = plan.assets.filter(asset => asset.usage === "output" && asset.kind !== "audio").map(asset => ({ assetId: asset.id, kind: asset.kind, source: asset.source || asset.provenance?.assetUrl || asset.provenance?.pageUrl || null, rights: asset.rights, role: (uiAssets.has(asset.id) ? "product-ui" : asset.provenance?.role === "brand-logo" ? "brand-logo" : "source-media") as ShotDirectorMetadata["media"][number]["role"] }));
   return { metadata: {
-    version: 1, source: { researchSha256: binding.researchSha256, evidenceSha256: binding.evidenceSha256, scriptSha256: binding.scriptSha256, uiSha256: binding.uiSha256 }, output: { ...plan.output },
+    version: 1, ...(literalContextVersion === 1 ? { literalContextVersion: 1 as const } : {}), ...(literalEmphasisVersion === 1 ? { literalEmphasisVersion: 1 as const } : {}), ...(uiCopyBandVersion === 1 ? { uiCopyBandVersion: 1 as const } : {}), source: { researchSha256: binding.researchSha256, evidenceSha256: binding.evidenceSha256, scriptSha256: binding.scriptSha256, uiSha256: binding.uiSha256 }, output: { ...plan.output },
     brief: { audienceMoment: { text: story.problem?.text || story.primaryAudience.text, evidenceIds: unique([...story.primaryAudience.evidenceIds, ...(story.problem?.evidenceIds || [])]) }, visualArgument: { action: story.mechanism.text, result: story.outcome.text, evidenceIds: unique([...story.mechanism.evidenceIds, ...story.outcome.evidenceIds]) }, recurringSubjects: unique(plan.scenes.flatMap((scene, i) => scenes[i].subjectIds.map(id => scene.presentation?.visual?.kind === "ui-demo" ? `ui:${scene.presentation.visual.documentId}:${id}` : id))), contrast: ["scale", "density", "motion-rest"] },
     visualSystem: { family, material: plan.background === "dark" ? "ink" : corners === "rounded" ? "glass" : "paper", depth: family === "editorial" ? "flat" : "layered", corners, palette: { background: brand?.background || (plan.background === "dark" ? "#111111" : "#ffffff"), foreground: brand?.foreground || (plan.background === "dark" ? "#ffffff" : "#111111"), accent: plan.accent }, paletteSource: brand?.sourceUrl || null, typography: (evidence?.brand?.typography || plan.shotDirector?.visualSystem.typography || []).map(value => ({ ...value })) },
     media, unavailableTreatments: ["Human-plus-product requires verified permissioned human footage; generic source media is not assumed to contain a customer.", "Photographic stages and dimensional assets require separately classified, source-bound media; this version uses only documented product surfaces."],
@@ -163,8 +196,8 @@ export function buildDirectorPlan(plan: Plan, evidence?: Evidence): { metadata: 
 }
 
 const record = (plan: Plan) => ({ ...plan.shotDirector, scenes: plan.scenes.map(scene => ({ sceneId: scene.id, direction: scene.shotDirection })) });
-export function applyShotDirector(plan: Plan, evidence?: Evidence): Plan {
-  const directed = buildDirectorPlan(plan, evidence);
+export function applyShotDirector(plan: Plan, evidence?: Evidence, options?: ShotDirectorOptions): Plan {
+  const directed = buildDirectorPlan(plan, evidence, options);
   plan.shotDirector = directed.metadata;
   plan.scenes.forEach((scene, index) => { scene.shotDirection = directed.scenes[index]; });
   plan.production!.shotDirectorVersion = 1;

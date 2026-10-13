@@ -301,7 +301,7 @@
       "number": 8,
       "title": "Connect URL generation",
       "status": "in-progress",
-      "detail": "Provider access is restored. All three URL tests reached UI reconstruction, where source and behavior checks stopped invalid demonstrations before audio or rendering."
+      "detail": "Guide capture, source-bound UI reconstruction and explicit action/outcome review are implemented. Research syntax, source context and final quality checks remain under fresh automatic testing. No automatic video has passed."
     },
     {
       "number": 9,
@@ -319,7 +319,7 @@
       "number": 11,
       "title": "Prove it generalizes",
       "status": "in-progress",
-      "detail": "Plausible, Resend and Baserow completed research but failed UI fidelity checks. No automatic video passed; workflow selection and reconstruction still need improvement."
+      "detail": "Zero automatic passes. Baserow and Resend have produced retained drafts, but final quality checks rejected them. Camera framing and early action are being corrected. The six approved authored Tally exports remain available and do not count as automatic URL passes."
     },
     {
       "number": 12,
@@ -361,18 +361,18 @@
   "generalization": [
     {
       "title": "Plausible",
-      "status": "Needs UI review",
-      "detail": "Research now completes within its existing allowance. UI reconstruction failed source-text provenance checks; no automatic video was produced."
+      "status": "Needs reconstruction review",
+      "detail": "Fresh research selected a supported row-count demonstration without the earlier timing claim. UI generation merged the source label/count and retained unrelated rows, so validation stopped before scripting or video generation."
     },
     {
       "title": "Resend",
-      "status": "Needs UI review",
-      "detail": "Research completed, but the proposed interaction used static code as a confirmation control. Source and behavior validation stopped the demonstration."
+      "status": "Automatic reconstruction under test",
+      "detail": "The earlier 14.4-second draft passed layout, motion and its product-demonstration review; its remaining review exceeded the reservation budget. The latest fresh run stopped on an out-of-range UI color before rendering. No complete automatic pass yet."
     },
     {
       "title": "Baserow",
-      "status": "Needs UI review",
-      "detail": "Research completed, but the reconstruction invented a Live success state and invalid graph connections. Validation stopped the demonstration."
+      "status": "Needs workflow correction",
+      "detail": "The latest test captured dashboard documentation and screenshots, then returned no usable research text within its output allowance. No new UI or video was generated. The earlier rendered draft remains unapproved."
     }
   ]
 }

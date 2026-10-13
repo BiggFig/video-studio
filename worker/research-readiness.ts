@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { writeJson } from "./media";
 import { PipelineError, type Asset, type Evidence, type Hooks, type WorkerInput } from "./types";
 import type { Research } from "./research";
+import { researchWorkflowIssues } from "./research-workflow";
 
 export const SOURCE_READINESS_PATH = "analysis/research-readiness.json";
 export const TARGET_READINESS_PATH = "analysis/ui-source-readiness.json";
@@ -40,10 +41,13 @@ export function researchReadiness(input: WorkerInput, evidence: Evidence, eviden
       const source = sources.find(source => source.assetId === assetId);
       if (!source || source.exclusion || source.classification !== "research_confirmed_ui") issues.push({ code: source?.exclusion || "unconfirmed_target_source", assetId, targetId: target.id, action: "Provide a legible still screenshot of this exact workflow; preserve its selected capability facts and source identity." });
     }
-    return { id: target.id, sourceAssetIds: [...target.sourceAssetIds], capabilityFactIds: [...target.capabilityFactIds], goal: target.goal };
+    for (const issue of researchWorkflowIssues(target, evidence, research!.visuals, research!.workflowSelectionVersion === 1, input.videoType === "launch", research!.appliedViewProofVersion === 1)) issues.push({ code: issue.code, targetId: target.id, action: "Supply the actual starting UI, actionable control and resulting content for this one workflow. A static result, decorative code or an already-applied state cannot establish a new operation." });
+    return { id: target.id, sourceAssetIds: [...target.sourceAssetIds], capabilityFactIds: [...target.capabilityFactIds], goal: target.goal, ...(target.workflow ? { workflow: target.workflow } : {}) };
   });
   return {
     version: 1 as const, jobId: input.jobId, evidenceSha256, ...(researchSha256 ? { researchSha256 } : {}),
+    ...(research?.workflowSelectionVersion ? { workflowSelectionVersion: research.workflowSelectionVersion } : {}),
+    ...(research?.appliedViewProofVersion ? { appliedViewProofVersion: research.appliedViewProofVersion } : {}),
     phase: research ? "before_ui_documentation" : "before_research",
     status: issues.length ? "needs_input" : research ? "ready_for_documentation" : "ready_for_research",
     meaning: "Structural source readiness only. Candidate pixels and public DOM do not establish product capabilities; canonical research bindings and independent visual quality checks remain required.",

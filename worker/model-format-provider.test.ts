@@ -5,7 +5,7 @@ import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Providers } from "./providers";
-import { SCRIPT_OUTPUT_SCHEMA, constrainedScriptSchema, constrainedUiSchema, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
+import { SCRIPT_OUTPUT_SCHEMA, constrainedScriptSchema, constrainedUiSchema, guideSelectionOutputSchema, type ScriptConstraints, type UiDesignConstraints } from "./model-format";
 import type { Hooks, WorkerInput } from "./types";
 
 const input: WorkerInput = { jobId: "format-test", ownerId: "fixture", mode: "url", productUrl: "https://example.com", videoType: "launch", format: "auto", files: [], budgets: { maxModelCalls: 10, maxModelInputTokens: 200000, maxModelOutputTokens: 30000 } };
@@ -54,9 +54,9 @@ for (const constrained of [false, true, "ui"] as const) for (const counterAvaila
   assert.equal(providers.ledger.inputTokens, 1000); assert.equal(providers.ledger.reservedInputTokens, 0);
 });
 
-for (const maxOutputTokens of [3000, 6000]) for (const counterAvailable of [true, false]) test(`target-scoped UI grammar is included in exact request and unchanged budget; cap ${maxOutputTokens}, counter ${counterAvailable ? "available" : "fallback"}`, async t => {
+for (const seeded of [false, true]) for (const maxOutputTokens of [3000, 6000]) for (const counterAvailable of [true, false]) test(`${seeded ? "seed-review" : "target-scoped UI"} grammar is included in exact request and unchanged budget; cap ${maxOutputTokens}, counter ${counterAvailable ? "available" : "fallback"}`, async t => {
   const { workspace, providers } = await fixture(t), prompt = "Reconstruct only the observed graph panel";
-  const uiConstraints: UiDesignConstraints = { targets: [{ id: "graph-view", sourceAssetIds: ["panel-1"], capabilityFactIds: ["fact-16"] }] };
+  const uiConstraints: UiDesignConstraints = { targets: [{ id: "graph-view", sourceAssetIds: ["panel-1"], capabilityFactIds: ["fact-16"], ...(seeded ? { literalPreview: true as const } : {}) }], ...(seeded ? { seedReview: { seedSha256: "a".repeat(64), slotIds: ["seed-style-0-fill"] } } : {}) };
   const reserve = { calls: 5, inputTokens: 0, outputTokens: 17000 };
   let counted = "", requests = 0;
   t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL, options?: RequestInit) => {
@@ -88,4 +88,28 @@ test("internal output allocations cannot raise policy limits or send invalid bud
   for (const maxOutputTokens of [0, -1, 1.5, NaN, Infinity, 6001]) await assert.rejects(providers.prepareClaude("ui-design", "Bounded UI", [], { policy: "ui-design-v1", maxOutputTokens }), /Invalid stage output allocation/);
   await assert.rejects(providers.prepareClaude("script", "Bounded script", [], { policy: "script-v1", maxOutputTokens: 5001 }), /Invalid stage output allocation/);
   assert.equal(requests, 0); assert.equal(providers.ledger.modelCalls, 0); assert.equal(providers.ledger.reservedOutputTokens, 0);
+});
+
+test("guide choice uses a 768-token scoped request and reserves the complete downstream pipeline", async t => {
+  const { workspace, providers } = await fixture(t);
+  const guideConstraints = { guideIds: ["guide-1"], sourceAssetIds: ["product-image-0"] };
+  const reserve = { calls: 7, inputTokens: 49100, outputTokens: 25548 };
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL, options?: RequestInit) => {
+    requests++;
+    if (String(url).endsWith("/count_tokens")) return new Response(JSON.stringify({ input_tokens: 1000 }));
+    const body = JSON.parse(String(options?.body));
+    assert.equal(body.max_tokens, 768);
+    assert.deepEqual(body.output_config.format.schema, guideSelectionOutputSchema(guideConstraints));
+    const audit = JSON.parse(await readFile(join(workspace, "analysis/model-1-guide-selection-budget.json"), "utf8"));
+    assert.deepEqual(audit.followupQualityReserve, reserve);
+    assert.deepEqual(audit.limits, { inputTokens: 200000, outputTokens: 30000 });
+    return new Response(JSON.stringify({ model: body.model, content: [{ type: "text", text: "{}" }], usage: { input_tokens: 1000, output_tokens: 50 } }));
+  });
+  await providers.claude("guide-selection", "Choose only an observed guide ID.", [], { policy: "guide-selection-v1", guideConstraints, reserve });
+  assert.equal(requests, 2); assert.equal(providers.ledger.modelCalls, 1);
+  await assert.rejects(providers.prepareClaude("guide-selection", "Choose.", [], { policy: "guide-selection-v1", guideConstraints, maxOutputTokens: 769 }), /Invalid stage output allocation/);
+  providers.ledger.modelCalls = 3;
+  await assert.rejects(providers.prepareClaude("guide-selection", "Choose.", [], { policy: "guide-selection-v1", guideConstraints, reserve }), /remaining model allowance/);
+  assert.equal(requests, 2, "No model or token-count request occurs when mandatory calls cannot fit");
 });

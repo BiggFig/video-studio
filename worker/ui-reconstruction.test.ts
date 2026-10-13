@@ -1,4 +1,4 @@
-import { buildWorkflowContext, workflowTaskEvidence } from "./workflow-coherence";
+import { buildWorkflowContext, workflowPromiseEvidence } from "./workflow-coherence";
 import { workflowInputReserve } from "./workflow-coherence";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -388,7 +388,7 @@ test("the complete mocked v3 sequence binds its workflow review and forbids an u
     ...base.scenes.map((scene, index) => ({ ...scene, ...(index === 1 ? { presentation: { ...scene.presentation, visual: { kind: "showcase" } } } : {}), direction: [{ job: "action", motion: "focus" }, { job: "result", motion: "hold" }, { job: "cta", motion: "hold" }][index] })),
   ] };
   let recipeResponse: unknown;
-  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { calls.push(purpose); return { taskEntitlementVersion: 1, tasks: workflowTaskEvidence(buildWorkflowContext(compileScript(recipeResponse, input, evidence, research, undefined, ui), ui)).map(scene => ({ sceneId: scene.sceneId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })), contextSha256: options.workflowConstraints.contextSha256, assessments: buildWorkflowContext(compileScript(recipeResponse, input, evidence, research, undefined, ui), ui).obligations!.map(obligation => ({ obligationId: obligation.id, status: "supported", reason: "The fixture edit supports its visible note task and surrounding context." })) }; }; } } as unknown as Providers;
+  const providers = { ledger: { modelCalls: 0, outputTokens: 0, reservedOutputTokens: 0 }, claude: async (purpose: string) => { calls.push(purpose); return purpose === "research" ? researchRaw() : purpose === "ui-design" ? { transportVersion: UI_TRANSPORT_VERSION, coordinateSpace: "normalized", sufficientEvidence: true, reason: "Actual UI", documentsById: { notes: document() } } : recipeResponse; }, prepareClaude: async (purpose: string, _prompt: string, _images: unknown, options: any) => { assert.equal(purpose, "workflow-coherence"); return async () => { calls.push(purpose); return { taskEntitlementVersion: 2, tasks: workflowPromiseEvidence(buildWorkflowContext(compileScript(recipeResponse, input, evidence, research, undefined, ui), ui, 2, 1)).map(scene => ({ obligationId: scene.obligationId, promiseExcerpt: scene.promiseCopy[0], requiredResult: "query", resultAnswer: "visible-result", postconditionIds: [] })), contextSha256: options.workflowConstraints.contextSha256, assessments: buildWorkflowContext(compileScript(recipeResponse, input, evidence, research, undefined, ui), ui, 2, 1).obligations!.map(obligation => ({ obligationId: obligation.id, status: "supported", reason: "The fixture edit supports its visible note task and surrounding context." })) }; }; } } as unknown as Providers;
   const research = await researchProduct(input, evidence, providers, hooks, root), ui = await buildUiDocuments(input, evidence, research, providers, hooks, root);
   const catalog = buildShotRecipeCatalog(research, evidence, ui!);
   recipeResponse = { ...currentScript, transportVersion: RECIPE_SCRIPT_TRANSPORT_VERSION, scenes: currentScript.scenes.map(scene => {
@@ -572,7 +572,7 @@ test("selected source styles are optional, preserved exactly and must resolve in
   const grammar = constrainedUiSchema({ targets: [uiDesignConstraints(research).targets[0]] }) as any;
   const element = grammar.properties.documentsById.properties.notes.properties.elements.items;
   assert.equal(element.properties.selectedStyleId.type, "string");
-  assert.equal(element.required.includes("selectedStyleId"), false); assert.equal(element.additionalProperties, false);
+  assert.equal(element.required.includes("selectedStyleId"), true); assert.equal(element.properties.selectedStyleId.minLength, undefined); assert.equal(element.additionalProperties, false);
 });
 
 test("typing requires the documented editable control to be visible before selection, including a supported preselection state", () => {
@@ -763,6 +763,29 @@ test("pixel transport rejects missing or mixed units, overflow and pixel sourceR
     assert.throws(() => compileUiDocuments(raw, input, evidence, research), error => error instanceof PipelineError && error.code === "invalid_ui_document");
     assert.equal(JSON.stringify(raw), before);
   }
+});
+
+test("retained UI diagnostics report zero-size pixel geometry after exact absence-sentinel decoding", async t => {
+  // Faithful compact reproduction of the Baserow v11 transport failure: enough
+  // valid empty sentinels to obscure the seventh element's 0x0 rect when parsed
+  // without the production decoder. No retained response is resized or repaired.
+  const root = await workspace(t), { research } = fixture(), raw = pixelDraft();
+  const doc = raw.documentsById.notes;
+  while (doc.elements.length < 7) doc.elements.push({ ...structuredClone(doc.elements[0]), id: `duplicate-${doc.elements.length}` });
+  for (const element of doc.elements) Object.assign(element, { fromId: "", toId: "", selectedStyleId: "" });
+  Object.assign(doc.elements[6].rect, { x: 842, y: 12, width: 0, height: 0 });
+  const before = JSON.stringify(raw); let calls = 0, inspections = 0;
+  const providers = { ledger: { outputTokens: 0, reservedOutputTokens: 0 }, claude: async () => { calls++; return raw; }, prepareClaude: async () => { throw Error("Schema failures cannot request a layout correction"); } } as unknown as Providers;
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root, { inspectLayout: async () => { inspections++; throw Error("Invalid geometry cannot reach layout inspection"); } }), error => error instanceof PipelineError && error.code === "invalid_ui_document");
+  const report = JSON.parse(await readFile(join(root, UI_READINESS_PATH), "utf8"));
+  assert.deepEqual(report.targets[0].validation.issues, [
+    { code: "too_small", path: "documentsById.notes.elements.6.rect.width" },
+    { code: "too_small", path: "documentsById.notes.elements.6.rect.height" },
+  ]);
+  assert.equal(report.targets[0].status, "failed"); assert.equal(inspections, 0); assert.equal(JSON.stringify(raw), before);
+  await assert.rejects(readFile(join(root, UI_LAYOUT_RETRY_PATH)), { code: "ENOENT" });
+  await assert.rejects(readFile(join(root, "analysis/ui.json")), { code: "ENOENT" });
+  await assert.rejects(buildUiDocuments(input, evidence, research, providers, hooks, root), blocked); assert.equal(calls, 1);
 });
 
 test("fresh research corrects two targets once without dropping facts, while canonical retained two-target research stays valid", async t => {

@@ -14,12 +14,18 @@ export interface TerminalResult {
   resultElementIds: string[];
   evidenceIds: string[];
 }
-export interface LaunchResultInspection { ready: boolean; issues: string[]; result?: TerminalResult }
-export interface LaunchDepthEvidence { sceneId: string; documentId: string; confirmationActionId: string; resultActionId: string; result: TerminalResult }
+export interface ReactiveTerminalResult {
+  version: 2; beforeStateId: string; afterStateId: string;
+  trigger: { kind: "code-edit-complete"; elementId: string; text: string; evidenceId: string };
+  confirmationElementId?: never; resultElementIds: string[]; evidenceIds: string[];
+}
+export type ResultDeclaration = TerminalResult | ReactiveTerminalResult;
+export interface LaunchResultInspection { ready: boolean; issues: string[]; result?: ResultDeclaration }
+export interface LaunchDepthEvidence { sceneId: string; documentId: string; confirmationActionId: string; resultActionId: string; result: ResultDeclaration }
 export interface LaunchSequenceIssue {
   sceneId: string | null;
   documentId: string;
-  declaration: TerminalResult;
+  declaration: ResultDeclaration;
   code: "document_not_demonstrated" | "terminal_state_action_missing" | "result_evidence_mismatch" | "confirmation_action_missing" | "confirmation_evidence_mismatch" | "confirmation_not_visible" | "before_state_mismatch" | "result_has_no_material_change" | "terminal_result_not_persistent";
   resultActionId?: string;
   confirmationActionId?: string;
@@ -27,7 +33,7 @@ export interface LaunchSequenceIssue {
   mismatchedElementIds?: string[];
   permittedMissingStep?: { kind: "state"; stateId: string; evidenceId: string; insertBeforeActionId: string; reason: "documented_visible_state_change" };
 }
-type DocumentWithResult = UiDocument & { terminalResult?: TerminalResult };
+type DocumentWithResult = UiDocument;
 const content = (text: string) => text.normalize("NFKC").toLocaleLowerCase("en-US").replace(/[^\p{L}\p{N}]+/gu, "");
 const confirmationTypes = new Set(["button", "list-item", "tab", "node"]);
 const choices = new Set(["list-item", "tab", "node", "input", "textarea"]);
@@ -44,10 +50,13 @@ export function inspectLaunchResult(document: DocumentWithResult): LaunchResultI
   if (!result) return { ready: false, issues: ["terminal_result_declaration_required"] };
   const before = document.states.find(state => state.id === result.beforeStateId), after = document.states.find(state => state.id === result.afterStateId);
   const unique = (ids: string[]) => ids.length >= 1 && ids.length <= 4 && new Set(ids).size === ids.length;
-  if (result.version !== 1 || !before || !after || before.id === after.id || !unique(result.resultElementIds) || !unique(result.evidenceIds)) return { ready: false, issues: ["invalid_terminal_result_declaration"] };
+  if (![1, 2].includes(result.version) || !before || !after || before.id === after.id || !unique(result.resultElementIds) || !unique(result.evidenceIds)) return { ready: false, issues: ["invalid_terminal_result_declaration"] };
   if (!result.evidenceIds.every(id => document.capabilityFactIds.includes(id) && after.evidenceIds.includes(id))) issues.push("terminal_result_capability_binding");
-  const control = document.elements.find(element => element.id === result.confirmationElementId);
-  if (!control || !confirmationTypes.has(control.type) || !before.visibleElementIds.includes(control.id) || !document.sourceAssetIds.includes(control.sourceAssetId)) issues.push("visible_supported_confirmation_required");
+  const triggerId = result.version === 1 ? result.confirmationElementId : result.trigger.elementId;
+  const control = document.elements.find(element => element.id === triggerId);
+  if (result.version === 1) {
+    if (!control || !confirmationTypes.has(control.type) || !before.visibleElementIds.includes(control.id) || !document.sourceAssetIds.includes(control.sourceAssetId)) issues.push("visible_supported_confirmation_required");
+  } else if (!control || control.type !== "text" || document.previewBinding?.codeElementId !== control.id || document.previewBinding.resultElementId !== result.resultElementIds[0] || result.resultElementIds.length !== 1 || !before.visibleElementIds.includes(control.id) || !result.evidenceIds.includes(result.trigger.evidenceId) || after.basis !== "illustrative" || !after.textValues.some(value => value.elementId === control.id && value.text === result.trigger.text && value.textBasis === "example-content")) issues.push("bound_illustrative_code_edit_required");
   const prior = snapshot(document, before.id), next = snapshot(document, after.id), initial = expectedUiState(document, [], 0);
   for (const id of result.resultElementIds) {
     const element = document.elements.find(element => element.id === id), value = next.elements[id], old = prior.elements[id];
@@ -93,10 +102,17 @@ function permittedBeforeStep(document: UiDocument, actions: UiAction[], confirma
 }
 
 /** Compact trusted sequence IDs; never model instructions or invented UI actions. */
+type LaunchSequence = ResultDeclaration & { documentId: string; initialStateId: string; initialContextAllowsDirectClick: boolean; directStartActions?: Omit<UiAction,"atFrame"|"durationFrames">[]; reactiveStartActions?: Omit<UiAction,"atFrame"|"durationFrames">[] };
 export function launchSequenceInventory(documents: UiDocument[]) {
-  return documents.flatMap(document => {
+  return documents.flatMap<LaunchSequence>(document => {
     const inspection = inspectLaunchResult(document); if (!inspection.result) return [];
     const result = inspection.result, initial = expectedUiState(document, [], 0), declared = snapshot(document, result.beforeStateId);
+    if (result.version === 2) {
+      const candidate: UiAction[] = [{ kind: "type", atFrame: 30, durationFrames: 30, targetId: result.trigger.elementId, text: result.trigger.text, evidenceId: result.trigger.evidenceId }, { kind: "state", atFrame: 60, durationFrames: 1, stateId: result.afterStateId, evidenceId: result.evidenceIds[0] }];
+      let reactiveStartActions: Omit<UiAction, "atFrame" | "durationFrames">[] | undefined;
+      try { validateUiActions(document, candidate); if (sameEffectiveUiState(document, initial, declared, { includeTextBasis: true }) && !uiActionBehaviorIssues(document, candidate, { rejectImplicitTypedReset: true, rejectUnsupportedGraphicCreation: true }).length) reactiveStartActions = candidate.map(({ atFrame: _at, durationFrames: _duration, ...action }) => action); } catch { /* Invalid authoring never acquires an invented confirmation. */ }
+      return [{ documentId: document.id, ...result, initialStateId: initial.stateId, initialContextAllowsDirectClick: false, ...(reactiveStartActions ? { reactiveStartActions } : {}) }];
+    }
     const initialContextAllowsDirectClick = initial.stateId === result.beforeStateId || sameUiClickConfirmationContext(document, initial, declared, result.confirmationElementId);
     // This inventory offers source-bound actions, not automatic edits to a draft.
     // Validate a legal timing example before exposing timing-free instructions.
@@ -112,7 +128,7 @@ export function launchSequenceInventory(documents: UiDocument[]) {
   });
 }
 
-export const launchDepthInstruction = "Demonstrate at least one declared terminalResult in one continuous ui-demo scene. When initialContextAllowsDirectClick is true, the initial context already satisfies the before-context: directly click confirmationElementId, then apply afterStateId using its evidenceIds. No visit to beforeStateId is required. Prefer the trusted directStartActions when supplied; author their legal timing without adding a cosmetic or no-op state visit. Otherwise reach the documented before-context through a genuinely visible supported change before confirming. Preserve the exact afterStateId and resultElementIds through the final reading hold. Pointer-only, query entry, option highlighting or clearing alone cannot satisfy this minimum launch requirement. Never invent a selected style or change documents. If no supported complete sequence exists, return sufficientEvidence:false.";
+export const launchDepthInstruction = "Demonstrate at least one declared terminalResult in one continuous ui-demo scene. For version2 reactive code previews use reactiveStartActions: actually type the exact trigger.text into its bound illustrative code element, then apply afterStateId. The edit is the trigger; never add a click, Apply, or email-preview link as confirmation. For version1, when initialContextAllowsDirectClick is true, the initial context already satisfies the before-context: directly click confirmationElementId, then apply afterStateId using its evidenceIds. No visit to beforeStateId is required. Prefer the trusted directStartActions when supplied; author their legal timing without adding a cosmetic or no-op state visit. Otherwise reach the documented before-context through a genuinely visible supported change before confirming. Preserve the exact afterStateId and resultElementIds through the final reading hold. Pointer-only, query entry, option highlighting or clearing alone cannot satisfy this minimum launch requirement. Never invent a selected style or change documents. If no supported complete sequence exists, return sufficientEvidence:false.";
 
 export function launchSequenceRequest(documents: UiDocument[]): string {
   return `MANDATORY LAUNCH SEQUENCE: ${launchDepthInstruction} These are immutable document IDs, not new states. The direct-click exception permits only the named clicked control's optional selected colors; all surrounding text, visibility and styling must match the documented context. Preserve a separate required outcome/result-or-payoff beat and the final CTA; fixing UI choreography is not a reason to delete story roles. Respect all action, copy, reading and frame limits. SOURCE-BOUND SEQUENCES: ${JSON.stringify(launchSequenceInventory(documents))}\n`;
@@ -141,7 +157,9 @@ export function assertLaunchWorkflowDepth(script: Pick<Script, "scenes" | "uiDoc
       let confirmation = index - 1;
       while (confirmation >= 0 && actions[confirmation].kind === "pointer") confirmation--;
       const confirm = actions[confirmation];
-      if (!confirm || !["click", "select"].includes(confirm.kind) || confirm.targetId !== result.confirmationElementId) { issue("confirmation_action_missing", { resultActionId }); continue; }
+      const triggerId = result.version === 1 ? result.confirmationElementId : result.trigger.elementId;
+      const matchesTrigger = confirm && (result.version === 1 ? ["click", "select"].includes(confirm.kind) : confirm.kind === "type" && confirm.text === result.trigger.text && confirm.evidenceId === result.trigger.evidenceId) && confirm.targetId === triggerId;
+      if (!matchesTrigger) { issue("confirmation_action_missing", { resultActionId }); continue; }
       const confirmationActionId = `action-${confirmation + 1}`;
       const before = confirmation ? frames[confirmation - 1] : expectedUiState(document, [], 0), after = frames[index];
       const context = { resultActionId, confirmationActionId, actualPreconfirmationStateId: before.stateId };
@@ -149,12 +167,12 @@ export function assertLaunchWorkflowDepth(script: Pick<Script, "scenes" | "uiDoc
       // A documented hover/selection snapshot may have a different ID yet paint
       // exactly like the current state. Requiring that no-op action would conflict
       // with the behavior gate. Same-ID authored typing retains its existing rule.
-      if (!before.elements[result.confirmationElementId]?.visible) { issue("confirmation_not_visible", context); continue; }
+      if (!before.elements[triggerId]?.visible) { issue("confirmation_not_visible", context); continue; }
       const declared = snapshot(document, result.beforeStateId);
-      const equivalentBefore = confirm.kind === "click" ? sameUiClickConfirmationContext(document, before, declared, result.confirmationElementId) : sameEffectiveUiState(document, before, declared, { includeTextBasis: true });
-      if (before.stateId !== result.beforeStateId && !equivalentBefore) {
+      const equivalentBefore = confirm.kind === "click" ? sameUiClickConfirmationContext(document, before, declared, triggerId) : sameEffectiveUiState(document, before, declared, { includeTextBasis: true });
+      if ((result.version === 2 || before.stateId !== result.beforeStateId) && !equivalentBefore) {
         const mismatchedElementIds = document.elements.filter(element => !sameEffectiveUiState({ ...document, elements: [element] }, before, declared, { includeTextBasis: true })).map(element => element.id);
-        const permittedMissingStep = permittedBeforeStep(document, actions, confirmation, result);
+        const permittedMissingStep = result.version === 1 ? permittedBeforeStep(document, actions, confirmation, result) : undefined;
         issue("before_state_mismatch", { ...context, mismatchedElementIds, ...(permittedMissingStep ? { permittedMissingStep } : {}) }); continue;
       }
       const actualChange = result.resultElementIds.every(id => after.elements[id]?.visible && content(after.elements[id].text) && (!before.elements[id]?.visible || content(before.elements[id].text) !== content(after.elements[id].text)) && outsideChoices(document, id, after));

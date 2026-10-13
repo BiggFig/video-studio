@@ -14,7 +14,7 @@ import { motionBrowserArgs,motionBrowserPath } from "./motion-browser";
 import { motionAssetIds,motionUsage } from "./motion-assets";
 import { logoGeometryMatches } from "./motion-primitives";
 import { expectedUiState,uiActionSampleFrames } from "./ui-state";
-import { expectedUiCamera,uiStageViewport,uiCameraSampleFrames,uiCameraContinuation,applyUiCameraContinuation } from "./ui-camera";
+import { expectedUiCamera,sceneUiStageViewport,uiCameraSampleFrames,uiCameraContinuation,applyUiCameraContinuation } from "./ui-camera";
 import { assessUiTextCollisions,browserUiLayoutMeasurement } from "./ui-document-layout";
 import { PipelineError,type Hooks,type Plan } from "./types";
 
@@ -89,7 +89,7 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
       if(visual?.kind==="ui-demo"){
         const document=plan.uiDocuments!.find(document=>document.id===visual.documentId)!;
         for(const frame of [...new Set([scene.start_frame,scene.start_frame+Math.min(29,scene.duration_frames-1),...uiActionSampleFrames(scene),...directedUiSamples(scene),hold])]){
-          await seek(frame);const local=frame-scene.start_frame,stage=uiStageViewport(plan.output.width,plan.output.height,!scene.detail,!!scene.shotDirection),expected=expectedUiState(document,visual.actions,local),camera=applyUiCameraContinuation(document,expectedUiCamera(document,visual.actions,local,stage,!!(plan.creativeDirection&&scene.direction&&!scene.preserve_audio),scene.shotDirection?.camera),local,stage,uiCameraContinuation(plan,index));
+          await seek(frame);const local=frame-scene.start_frame,stage=sceneUiStageViewport(plan,scene),expected=expectedUiState(document,visual.actions,local),camera=applyUiCameraContinuation(document,expectedUiCamera(document,visual.actions,local,stage,!!(plan.creativeDirection&&scene.direction&&!scene.preserve_audio),scene.shotDirection?.camera),local,stage,uiCameraContinuation(plan,index));
           const actual=await page.locator(`#ui-document-${index}`).evaluate(container=>{const v=container.parentElement!.getBoundingClientRect(),matrix=(container as unknown as {computedStyleMap():{get(name:string):{toMatrix():DOMMatrix}}}).computedStyleMap().get("transform").toMatrix();const pointer=container.querySelector(".ui-pointer") as HTMLElement,ring=pointer.querySelector("i")!,pointerBounds=pointer.getBoundingClientRect(),ringBounds=ring.getBoundingClientRect();return{pointer:{visible:pointer.style.visibility==="visible",width:pointerBounds.width,height:pointerBounds.height,ringWidth:ringBounds.width,ringHeight:ringBounds.height},stateId:(container as HTMLElement).dataset.uiState,basis:(container as HTMLElement).dataset.uiBasis,camera:{x:matrix.e,y:matrix.f,scale:matrix.a},viewport:{left:v.left,top:v.top,right:v.right,bottom:v.bottom},elements:[...container.querySelectorAll('[data-ui-element]')].map(element=>{const node=element as HTMLElement,text=node.querySelector('[data-ui-text]'),bounds=node.getBoundingClientRect();return{id:node.dataset.uiElement!,text:text?.textContent||"",textBasis:node.dataset.textBasis,visible:node.style.visibility==="visible",selected:node.dataset.selected==="true",typing:node.dataset.typing==="true",overflow:!!text&&(node.scrollWidth>node.clientWidth+2||node.scrollHeight>node.clientHeight+2),font:Number.parseFloat(getComputedStyle(node).fontSize),left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom};})};});
           const matches=actual.stateId===expected.stateId&&actual.basis===expected.basis&&actual.elements.length===document.elements.length&&actual.elements.every(value=>{const state=expected.elements[value.id];return !!state&&state.text===value.text&&state.textBasis===value.textBasis&&state.visible===value.visible&&state.selected===value.selected&&state.typing===value.typing;});
           const activeTargets=visual.actions.filter(action=>action.targetId&&local>=action.atFrame&&local<action.atFrame+action.durationFrames).map(action=>action.targetId!);
@@ -108,10 +108,16 @@ export async function inspectMotionProject(plan:Plan,workspace:string,project:Aw
       }
     }
     // Seek away and back: identical pixels prove the same clock can be replayed.
-    const frame=Math.min(45,plan.output.duration_frames-1);await seek(frame);const first=await page.screenshot();await seek(plan.output.duration_frames-1);await seek(frame);const again=await page.screenshot();
+    const frame=Math.min(45,plan.output.duration_frames-1);await seek(frame);const first=await page.screenshot();
+    const firstState=await page.locator("#root").evaluate(root=>({html:root.innerHTML,elements:[root,...root.querySelectorAll("*")].map(element=>({rect:element.getBoundingClientRect().toJSON(),style:["transform","opacity","visibility","clip-path","color","background-color","font-size"].map(property=>[property,getComputedStyle(element).getPropertyValue(property)])}))}));
+    await seek(plan.output.duration_frames-1);await seek(frame);const again=await page.screenshot();
     const digest=(bytes:Buffer)=>createHash("sha256").update(bytes).digest("hex"),deterministic=digest(first)===digest(again);
     await writeJson(join(workspace,`${project.directory}/seek-check.json`),{frame,first:digest(first),repeated:digest(again),deterministic});
-    if(!deterministic)throw new PipelineError("nondeterministic_motion","Repeated frame seeking produced different pixels.","The motion composition requires an internal renderer repair.","needs_review");
+    if(!deterministic){
+      const repeatedState=await page.locator("#root").evaluate(root=>({html:root.innerHTML,elements:[root,...root.querySelectorAll("*")].map(element=>({rect:element.getBoundingClientRect().toJSON(),style:["transform","opacity","visibility","clip-path","color","background-color","font-size"].map(property=>[property,getComputedStyle(element).getPropertyValue(property)])}))}));
+      await Promise.all([writeFile(join(project.root,"seek-first.png"),first),writeFile(join(project.root,"seek-repeated.png"),again),writeJson(join(project.root,"seek-state.json"),{frame,first:firstState,repeated:repeatedState,identical:JSON.stringify(firstState)===JSON.stringify(repeatedState)})]);
+      throw new PipelineError("nondeterministic_motion","Repeated frame seeking produced different pixels.","The motion composition requires an internal renderer repair; retained seek pixels and state identify the differing region.","needs_review");
+    }
     return [...screenshots,`${project.directory}/seek-check.json`];
   }finally{try{await browser?.close();}finally{await server.close();}}
 }

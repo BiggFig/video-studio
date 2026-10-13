@@ -1,0 +1,963 @@
+{
+  "script": {
+    "sufficientEvidence": true,
+    "reason": "product-image-0 shows Automation Builder canvas with open 'Choose event' dropdown listing 'Send an email'; fact-6 and fact-45 confirm email action and branching support; directStartActions provide a legal v1 click+state sequence; editorial outcome recipes are available post-completion.",
+    "product": "Baserow",
+    "summary": "Four-beat film for operations teams: a concise hook naming the row-trigger problem, an early product context beat on the Automation Builder canvas, one continuous ui-demo selecting 'Send an email' from the open dropdown and holding the committed node result, then a final CTA. Concept is focus — attention moves from the open dropdown control to the confirmed email node label. Target 20–24 seconds; compiler determines final safe timeline.",
+    "accent": "#5190ef",
+    "background": "light",
+    "musicPrompt": "Opening with a clean single piano accent that establishes calm confidence, building into a light purposeful pulse of soft synth and subtle percussion as the product canvas appears, then pulling back to near-silence during the UI interaction so the result lands clearly, closing with a brief resolved chord under the CTA hold. No vocals. Arc: sparse intro → gentle build → quiet focus → resolved close.",
+    "sfxPrompt": "One soft UI confirmation chime timed to the email node appearing on canvas after selection; restrained, single use, no looping.",
+    "assumptions": [
+      "Email node result visual (el-email-node-label) is illustrative per research limitations; labelled as such in purpose notes.",
+      "Outcome beat uses shot-c28b3959e5335c68637bff1d (features/none) as an editorial typography outcome — no raw screenshot of automation-email-node is reused after the ui-demo completes.",
+      "Primary audience label 'For Operations teams automating row-triggered tasks' is auto-rendered by the v3 compiler on scene 1; headline is a distinct problem phrase.",
+      "Word count: Hook headline 5 + mechanism headline 5 + detail 0 + outcome headline 6 + CTA headline 4 = 20 generated visible words, within 24–34 target.",
+      "directStartActions timing: click el-li-email at frame 30 (duration 6), state state-after-select at frame 40 (duration 1); result hold begins frame 41, scene ends at least 57 frames after last action to satisfy reading gate."
+    ],
+    "creativeDirection": {
+      "version": 1,
+      "product": "Baserow",
+      "researchSha256": "2366524fb7d2ae6c64c0c43ab0608e1fd37a507718c851963b1c00e7d4ba3e92",
+      "evidenceSha256": "7d6d9c6708b6f58cfb78a966648f573aa1406c6453d507313edc8361230c4f6d",
+      "audience": {
+        "text": "Operations teams automating row-triggered tasks",
+        "basis": "inferred",
+        "evidenceIds": [
+          "fact-6",
+          "fact-45"
+        ]
+      },
+      "mechanism": {
+        "text": "Open Automation Builder, row trigger fires, add branch, select email action node",
+        "basis": "explicit",
+        "evidenceIds": [
+          "fact-44",
+          "fact-45",
+          "fact-6"
+        ]
+      },
+      "outcome": {
+        "text": "Email action node commits to canvas; automation fires on every new row",
+        "basis": "inferred",
+        "evidenceIds": [
+          "fact-45",
+          "fact-6"
+        ]
+      },
+      "cta": {
+        "text": "Get started. It's free!",
+        "basis": "explicit",
+        "evidenceIds": [
+          "fact-1"
+        ]
+      },
+      "workflow": [
+        {
+          "action": "View canvas with row-created trigger and two branches",
+          "evidenceId": "fact-44",
+          "assetId": "product-image-0"
+        },
+        {
+          "action": "Open 'Choose event' dropdown on empty third branch",
+          "evidenceId": "fact-45",
+          "assetId": "product-image-0"
+        },
+        {
+          "action": "Select 'Send an email' from dropdown",
+          "evidenceId": "fact-6",
+          "assetId": "product-image-0"
+        }
+      ],
+      "brand": {
+        "sourceUrl": "https://baserow.io/",
+        "colors": [
+          {
+            "value": "rgb(7, 8, 16)",
+            "role": "text"
+          },
+          {
+            "value": "rgb(255, 255, 255)",
+            "role": "background"
+          },
+          {
+            "value": "rgb(255, 255, 255)",
+            "role": "accent"
+          },
+          {
+            "value": "rgb(81, 144, 239)",
+            "role": "accent"
+          }
+        ],
+        "logoAssetIds": [
+          "brand-logo-0",
+          "brand-logo-1"
+        ]
+      },
+      "briefSha256": "104e82511bfb1338b2e27f15e8937f2e9b8f144ed33c05ef4fed4d014189b0d7",
+      "concept": "focus",
+      "evidenceId": "fact-6",
+      "evidence": "Tell Baserow what you need —  it builds it for you\nMeet Kuma, your AI assistant. Describe which data you need to manage and let Kuma build it for you.\nLearn about Kuma\nBuild custom applications for your specific use case\nCompose pages, dashboards and workflows on top of your data— without writing code.\nApplications\nRisk Mangement\nTask Mangement\nESG\nMarketing\nCRM\nPurchasing\nManufacturing\nAutomate workflows to eliminate  manual work and errors\nStreamline tasks with no-code workflows, customizable for your needs.\nVisual logic\nWith triggers, branches, conditions and loops\nSeamless integrations\nNative actions (HTTP, email, webhooks) and third-party connectors\nAudit-ready logs\nMeet compliance requirements\nVisualize your data with dashboards\nCreate charts to track progress and communicate to your management.\nSolutions templates ready to use\nTransform spreadsheets into custom tools.\nTask Managem"
+    },
+    "scenes": [
+      {
+        "recipeId": "shot-997e052f8117bc06101c95ad",
+        "assetId": "product-image-0",
+        "headline": "Row events still need manual follow-up",
+        "detail": "",
+        "evidenceId": "fact-6",
+        "durationSeconds": 3.5,
+        "sourceInSeconds": 0,
+        "preserveAudio": false,
+        "purpose": "Hook: names the concrete audience problem — row events in shared databases require manual follow-up across tools. Sparse editorial typography on abstract plane. No product UI yet.",
+        "referenceTechnique": "Large editorial headline centered on a light plane; no cards, no product screenshot. Brisk hold — compiler enforces minimum reading time.",
+        "presentation": {
+          "template": "hook",
+          "theme": "light",
+          "transition": "cut"
+        },
+        "storyRole": "problem",
+        "direction": {
+          "job": "hook",
+          "motion": "reveal",
+          "version": 2
+        }
+      },
+      {
+        "recipeId": "shot-f91b8fa11494fa8a0ce362a8",
+        "assetId": "product-image-0",
+        "headline": "Baserow Automation Builder",
+        "detail": "",
+        "evidenceId": "fact-44",
+        "durationSeconds": 4,
+        "sourceInSeconds": 0,
+        "preserveAudio": false,
+        "purpose": "Context: introduces Baserow by name with the actual Automation Builder canvas as proof. Showcase treatment gives depth to the product-image-0 canvas showing row-created trigger and two completed branches. Establishes the workflow setting before the interaction.",
+        "referenceTechnique": "Showcase of product-image-0; sparse headline names the product and module. No cards. Cut to ui-demo.",
+        "presentation": {
+          "template": "proof",
+          "theme": "light",
+          "transition": "cut",
+          "visual": {
+            "kind": "showcase"
+          }
+        },
+        "storyRole": "product",
+        "direction": {
+          "job": "context",
+          "motion": "reveal",
+          "version": 2,
+          "continuityKey": "asset:product-image-0"
+        }
+      },
+      {
+        "recipeId": "shot-ec6517385f63e4a7b29c0ed5",
+        "assetId": "product-image-0",
+        "headline": "Add an email action in one click",
+        "detail": "",
+        "evidenceId": "fact-6",
+        "durationSeconds": 7.5,
+        "sourceInSeconds": 0,
+        "preserveAudio": false,
+        "purpose": "Mechanism: continuous ui-demo on automation-email-node. directStartActions: click el-li-email at frame 30 (duration 6 frames), then apply state-after-select at frame 40 (duration 1 frame). Result elements el-email-node-result and el-email-node-label become visible. Hold the committed 'Send an email' node label for the required reading window before the outgoing cut. This is the focus concept execution — attention moves from the open dropdown list item to the confirmed node label on canvas.",
+        "referenceTechnique": "ui-demo on automation-email-node; focus concept. Click el-li-email then state state-after-select. Hold result through el-email-node-label reading gate. Illustrative demonstration of documented capability; not a recorded authenticated session.",
+        "presentation": {
+          "template": "proof",
+          "theme": "light",
+          "transition": "cut",
+          "visual": {
+            "kind": "ui-demo",
+            "documentId": "automation-email-node",
+            "actions": [
+              {
+                "kind": "click",
+                "atFrame": 30,
+                "durationFrames": 6,
+                "targetId": "el-li-email",
+                "evidenceId": "fact-6"
+              },
+              {
+                "kind": "state",
+                "atFrame": 40,
+                "durationFrames": 1,
+                "stateId": "state-after-select",
+                "evidenceId": "fact-6"
+              }
+            ]
+          }
+        },
+        "storyRole": "mechanism",
+        "direction": {
+          "job": "action",
+          "motion": "focus",
+          "version": 2,
+          "continuityKey": "ui:automation-email-node"
+        }
+      },
+      {
+        "recipeId": "shot-c28b3959e5335c68637bff1d",
+        "assetId": "product-image-0",
+        "headline": "Automation fires on every new row",
+        "detail": "",
+        "evidenceId": "fact-6",
+        "durationSeconds": 4.5,
+        "sourceInSeconds": 0,
+        "preserveAudio": false,
+        "purpose": "Outcome: editorial typography beat stating the concrete result — the email action is committed and the automation runs on every new row. Uses shot-c28b3959e5335c68637bff1d (features/none) so no raw screenshot of the completed ui-demo document is reused. Bound to fact-6 (email native action confirmed) and fact-45 (if-this-then-that workflows automate repetitive tasks).",
+        "referenceTechnique": "Editorial typography only (features/none); concise outcome headline. No product screenshot reuse. Compiler enforces reading hold.",
+        "presentation": {
+          "template": "features",
+          "theme": "light",
+          "transition": "cut"
+        },
+        "storyRole": "outcome",
+        "direction": {
+          "job": "result",
+          "motion": "hold",
+          "version": 2
+        }
+      },
+      {
+        "recipeId": "shot-0522cae16ea7b21c0b960110",
+        "assetId": "brand-logo-0",
+        "headline": "Get started free",
+        "detail": "",
+        "evidenceId": "fact-1",
+        "durationSeconds": 4,
+        "sourceInSeconds": 0,
+        "preserveAudio": false,
+        "purpose": "CTA: auto-renders Baserow product name; headline adds the supported action phrase from fact-1 ('Get started. It's free!') without repeating the product name. Stable hold. Cut transition on final scene.",
+        "referenceTechnique": "CTA template auto-displays product name and logo; headline is a distinct action phrase. Stable hold, cut outgoing.",
+        "presentation": {
+          "template": "cta",
+          "theme": "light",
+          "transition": "cut"
+        },
+        "storyRole": "cta",
+        "direction": {
+          "job": "cta",
+          "motion": "hold",
+          "version": 2
+        }
+      }
+    ],
+    "shotDirectorVersion": 1,
+    "shotRecipeSha256": "dbe3f8437150cc8c62893162448906a21216caece2f937dbbcf5f9a69df9b442",
+    "version": 3,
+    "jobId": "local-acceptance-url",
+    "researchSha256": "2366524fb7d2ae6c64c0c43ab0608e1fd37a507718c851963b1c00e7d4ba3e92",
+    "evidenceSha256": "7d6d9c6708b6f58cfb78a966648f573aa1406c6453d507313edc8361230c4f6d",
+    "story": {
+      "primaryAudience": {
+        "text": "Operations teams automating row-triggered tasks",
+        "basis": "inferred",
+        "evidenceIds": [
+          "fact-6",
+          "fact-45"
+        ]
+      },
+      "problem": {
+        "text": "Row events in shared databases require manual follow-up across tools",
+        "basis": "inferred",
+        "evidenceIds": [
+          "fact-6",
+          "fact-45"
+        ]
+      },
+      "mechanism": {
+        "text": "Open Automation Builder, row trigger fires, add branch, select email action node",
+        "basis": "explicit",
+        "evidenceIds": [
+          "fact-44",
+          "fact-45",
+          "fact-6"
+        ],
+        "steps": [
+          {
+            "action": "View canvas with row-created trigger and two branches",
+            "evidenceId": "fact-44",
+            "assetId": "product-image-0"
+          },
+          {
+            "action": "Open 'Choose event' dropdown on empty third branch",
+            "evidenceId": "fact-45",
+            "assetId": "product-image-0"
+          },
+          {
+            "action": "Select 'Send an email' from dropdown",
+            "evidenceId": "fact-6",
+            "assetId": "product-image-0"
+          }
+        ]
+      },
+      "outcome": {
+        "text": "Email action node commits to canvas; automation fires on every new row",
+        "basis": "inferred",
+        "evidenceIds": [
+          "fact-45",
+          "fact-6"
+        ]
+      },
+      "differentiator": {
+        "text": "Open-source, self-hostable, GDPR/HIPAA/SOC2 compliant no-code automation",
+        "basis": "explicit",
+        "evidenceIds": [
+          "fact-8",
+          "fact-2"
+        ]
+      },
+      "cta": {
+        "text": "Get started. It's free!",
+        "basis": "explicit",
+        "evidenceIds": [
+          "fact-1"
+        ]
+      }
+    },
+    "uiDocuments": [
+      {
+        "id": "automation-email-node",
+        "sourceAssetIds": [
+          "product-image-0"
+        ],
+        "capabilityFactIds": [
+          "fact-44",
+          "fact-45",
+          "fact-6",
+          "fact-2"
+        ],
+        "terminalResult": {
+          "version": 1,
+          "beforeStateId": "state-observed",
+          "afterStateId": "state-after-select",
+          "confirmationElementId": "el-li-email",
+          "resultElementIds": [
+            "el-email-node-label"
+          ],
+          "evidenceIds": [
+            "fact-6",
+            "fact-45"
+          ]
+        },
+        "viewport": {
+          "width": 760,
+          "height": 560
+        },
+        "styles": [
+          {
+            "id": "s-canvas",
+            "fill": "#f5f5f5",
+            "color": "#333333",
+            "borderColor": "#e0e0e0",
+            "fontSize": 13,
+            "fontWeight": 400,
+            "radius": 8
+          },
+          {
+            "id": "s-node",
+            "fill": "#ffffff",
+            "color": "#222222",
+            "borderColor": "#d0d0d0",
+            "fontSize": 14,
+            "fontWeight": 400,
+            "radius": 8
+          },
+          {
+            "id": "s-node-active",
+            "fill": "#eef2ff",
+            "color": "#222222",
+            "borderColor": "#4a6cf7",
+            "fontSize": 14,
+            "fontWeight": 400,
+            "radius": 8
+          },
+          {
+            "id": "s-dropdown",
+            "fill": "#ffffff",
+            "color": "#222222",
+            "borderColor": "#d0d0d0",
+            "fontSize": 14,
+            "fontWeight": 400,
+            "radius": 8
+          },
+          {
+            "id": "s-listitem",
+            "fill": "#ffffff",
+            "color": "#222222",
+            "borderColor": "transparent",
+            "fontSize": 14,
+            "fontWeight": 400,
+            "radius": 4
+          },
+          {
+            "id": "s-listitem-hover",
+            "fill": "#f0f4ff",
+            "color": "#222222",
+            "borderColor": "transparent",
+            "fontSize": 14,
+            "fontWeight": 400,
+            "radius": 4
+          },
+          {
+            "id": "s-label",
+            "fill": "transparent",
+            "color": "#888888",
+            "borderColor": "transparent",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "radius": 0
+          },
+          {
+            "id": "s-addbutton",
+            "fill": "#ffffff",
+            "color": "#555555",
+            "borderColor": "#cccccc",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "radius": 20
+          }
+        ],
+        "elements": [
+          {
+            "id": "el-trigger-node",
+            "type": "node",
+            "rect": {
+              "x": 0.2894736842105263,
+              "y": 0.05,
+              "width": 0.42105263157894735,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "Row is created in Projects",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.27,
+              "y": 0.04,
+              "width": 0.46,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-starts-when-label",
+            "type": "text",
+            "rect": {
+              "x": 0.39473684210526316,
+              "y": 0.017857142857142856,
+              "width": 0.21052631578947367,
+              "height": 0.03214285714285714
+            },
+            "styleId": "s-label",
+            "text": "Starts when",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.3,
+              "y": 0,
+              "width": 0.2,
+              "height": 0.05
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-add-branch-node",
+            "type": "node",
+            "rect": {
+              "x": 0.39473684210526316,
+              "y": 0.21071428571428572,
+              "width": 0.21052631578947367,
+              "height": 0.06428571428571428
+            },
+            "styleId": "s-addbutton",
+            "text": "+ Add branch",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.38,
+              "y": 0.24,
+              "width": 0.24,
+              "height": 0.1
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-branch1-label",
+            "type": "text",
+            "rect": {
+              "x": 0.02631578947368421,
+              "y": 0.3357142857142857,
+              "width": 0.06578947368421052,
+              "height": 0.03214285714285714
+            },
+            "styleId": "s-label",
+            "text": "Then",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0,
+              "y": 0.38,
+              "width": 0.07,
+              "height": 0.05
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-conditions-node",
+            "type": "node",
+            "rect": {
+              "x": 0.02631578947368421,
+              "y": 0.37142857142857144,
+              "width": 0.2894736842105263,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "3 conditions",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0,
+              "y": 0.42,
+              "width": 0.28,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-createrow-node",
+            "type": "node",
+            "rect": {
+              "x": 0.02631578947368421,
+              "y": 0.5714285714285714,
+              "width": 0.2894736842105263,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "Create row in Projects",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0,
+              "y": 0.62,
+              "width": 0.28,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-branch2-label",
+            "type": "text",
+            "rect": {
+              "x": 0.3815789473684211,
+              "y": 0.3357142857142857,
+              "width": 0.06578947368421052,
+              "height": 0.03214285714285714
+            },
+            "styleId": "s-label",
+            "text": "Then",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.33,
+              "y": 0.38,
+              "width": 0.07,
+              "height": 0.05
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-updaterow-node",
+            "type": "node",
+            "rect": {
+              "x": 0.35526315789473684,
+              "y": 0.37142857142857144,
+              "width": 0.2894736842105263,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "Update row in Customers",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.33,
+              "y": 0.42,
+              "width": 0.28,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-slack-node",
+            "type": "node",
+            "rect": {
+              "x": 0.35526315789473684,
+              "y": 0.5714285714285714,
+              "width": 0.2894736842105263,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "Send Slack message",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.33,
+              "y": 0.62,
+              "width": 0.28,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-branch3-label",
+            "type": "text",
+            "rect": {
+              "x": 0.7368421052631579,
+              "y": 0.3357142857142857,
+              "width": 0.06578947368421052,
+              "height": 0.03214285714285714
+            },
+            "styleId": "s-label",
+            "text": "Then",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.66,
+              "y": 0.38,
+              "width": 0.07,
+              "height": 0.05
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-choose-event-input",
+            "type": "node",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.37142857142857144,
+              "width": 0.27631578947368424,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node-active",
+            "selectedStyleId": "s-node-active",
+            "text": "Choose event...",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.42,
+              "width": 0.3,
+              "height": 0.12
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-dropdown-panel",
+            "type": "panel",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.4714285714285714,
+              "width": 0.27631578947368424,
+              "height": 0.42857142857142855
+            },
+            "styleId": "s-dropdown",
+            "text": "",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.54,
+              "width": 0.3,
+              "height": 0.44
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-search-input",
+            "type": "input",
+            "rect": {
+              "x": 0.7210526315789474,
+              "y": 0.4857142857142857,
+              "width": 0.25526315789473686,
+              "height": 0.05357142857142857
+            },
+            "styleId": "s-canvas",
+            "text": "Search events",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.69,
+              "y": 0.55,
+              "width": 0.28,
+              "height": 0.07
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-li-local-baserow",
+            "type": "list-item",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.55,
+              "width": 0.27631578947368424,
+              "height": 0.060714285714285714
+            },
+            "styleId": "s-listitem",
+            "selectedStyleId": "s-listitem-hover",
+            "text": "Local Baserow",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.62,
+              "width": 0.3,
+              "height": 0.08
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-li-http",
+            "type": "list-item",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.6107142857142858,
+              "width": 0.27631578947368424,
+              "height": 0.060714285714285714
+            },
+            "styleId": "s-listitem",
+            "text": "Send an HTTP request",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.7,
+              "width": 0.3,
+              "height": 0.08
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-li-email",
+            "type": "list-item",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.6714285714285714,
+              "width": 0.27631578947368424,
+              "height": 0.060714285714285714
+            },
+            "styleId": "s-listitem",
+            "text": "Send an email",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.78,
+              "width": 0.3,
+              "height": 0.08
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-li-iterate",
+            "type": "list-item",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.7321428571428571,
+              "width": 0.27631578947368424,
+              "height": 0.060714285714285714
+            },
+            "styleId": "s-listitem",
+            "text": "Iterate on items",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.86,
+              "width": 0.3,
+              "height": 0.08
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-li-router",
+            "type": "list-item",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.7928571428571428,
+              "width": 0.27631578947368424,
+              "height": 0.060714285714285714
+            },
+            "styleId": "s-listitem",
+            "text": "Router",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.92,
+              "width": 0.3,
+              "height": 0.07
+            },
+            "initiallyVisible": true
+          },
+          {
+            "id": "el-email-node-result",
+            "type": "node",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.37142857142857144,
+              "width": 0.27631578947368424,
+              "height": 0.09285714285714286
+            },
+            "styleId": "s-node",
+            "text": "Send an email",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.42,
+              "width": 0.3,
+              "height": 0.12
+            },
+            "initiallyVisible": false
+          },
+          {
+            "id": "el-email-node-label",
+            "type": "text",
+            "rect": {
+              "x": 0.7105263157894737,
+              "y": 0.4785714285714286,
+              "width": 0.27631578947368424,
+              "height": 0.03571428571428571
+            },
+            "styleId": "s-label",
+            "text": "Send an email",
+            "textBasis": "source-ui",
+            "sourceAssetId": "product-image-0",
+            "sourceRect": {
+              "x": 0.68,
+              "y": 0.42,
+              "width": 0.3,
+              "height": 0.05
+            },
+            "initiallyVisible": false
+          }
+        ],
+        "states": [
+          {
+            "id": "state-observed",
+            "basis": "observed",
+            "sourceAssetId": "product-image-0",
+            "evidenceIds": [
+              "fact-44",
+              "fact-45"
+            ],
+            "visibleElementIds": [
+              "el-starts-when-label",
+              "el-trigger-node",
+              "el-add-branch-node",
+              "el-branch1-label",
+              "el-conditions-node",
+              "el-createrow-node",
+              "el-branch2-label",
+              "el-updaterow-node",
+              "el-slack-node",
+              "el-branch3-label",
+              "el-choose-event-input",
+              "el-dropdown-panel",
+              "el-search-input",
+              "el-li-local-baserow",
+              "el-li-http",
+              "el-li-email",
+              "el-li-iterate",
+              "el-li-router"
+            ],
+            "selectedElementIds": [
+              "el-li-local-baserow"
+            ],
+            "textValues": []
+          },
+          {
+            "id": "state-after-select",
+            "basis": "illustrative",
+            "evidenceIds": [
+              "fact-6",
+              "fact-45",
+              "fact-2"
+            ],
+            "visibleElementIds": [
+              "el-starts-when-label",
+              "el-trigger-node",
+              "el-add-branch-node",
+              "el-branch1-label",
+              "el-conditions-node",
+              "el-createrow-node",
+              "el-branch2-label",
+              "el-updaterow-node",
+              "el-slack-node",
+              "el-branch3-label",
+              "el-email-node-result",
+              "el-email-node-label"
+            ],
+            "selectedElementIds": [],
+            "textValues": [
+              {
+                "elementId": "el-email-node-result",
+                "text": "Send an email",
+                "textBasis": "source-ui"
+              },
+              {
+                "elementId": "el-email-node-label",
+                "text": "Send an email",
+                "textBasis": "source-ui"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "uiSha256": "4ed7defba2e0c43ecbe8215e9146dc0d29dbba4632b18d8ab3bcf2c0af3b89a3",
+    "audienceLabel": "For Operations teams automating row-triggered tasks"
+  },
+  "contextSha256": "fad10af27ac904577fc78631ee4bd02b9446cd1c6354ce76de9b2ffbfbaf2ab6",
+  "verdict": {
+    "contextSha256": "fad10af27ac904577fc78631ee4bd02b9446cd1c6354ce76de9b2ffbfbaf2ab6",
+    "scenes": [
+      {
+        "sceneId": "scene-3",
+        "passed": true
+      }
+    ],
+    "findings": [],
+    "version": 2,
+    "assessments": [
+      {
+        "obligationId": "scene-3-task",
+        "status": "supported",
+        "reason": "Click on el-li-email triggers state showing email node added to canvas, fulfilling 'one click' add promise."
+      },
+      {
+        "obligationId": "scene-3-content-2",
+        "status": "supported",
+        "reason": "Email node 'Send an email' appears under branch-3 'Then' label, consistent with adding an email action to the automation."
+      },
+      {
+        "obligationId": "scene-3-causal-2",
+        "status": "supported",
+        "reason": "Click on el-li-email at frame 30 causes state action-2 to remove dropdown panel and add email node, standard selection dismissal."
+      }
+    ],
+    "taskEntitlementVersion": 1,
+    "tasks": [
+      {
+        "sceneId": "scene-3",
+        "promiseExcerpt": "Add an email action in one click",
+        "requiredResult": "committed-change",
+        "resultAnswer": "visible-result",
+        "postconditionIds": [
+          "scene-3-result-2"
+        ]
+      }
+    ],
+    "passed": true,
+    "normalizations": []
+  }
+}

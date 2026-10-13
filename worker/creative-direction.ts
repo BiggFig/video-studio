@@ -135,7 +135,8 @@ export function validateDirectedStory(direction: CreativeDirection | undefined, 
   }
   if (creativeExecutionIssues(direction, scenes, research, evidence, documents).length) throw invalid("At least one shot must execute the selected creative concept with its cited product fact and supported visual primitive.");
   if (!scenes.some(scene => scene.direction?.job === "action") || !scenes.some(scene => ["result", "payoff"].includes(scene.direction?.job || ""))) throw invalid("Directed films require a concrete action and a distinct result or payoff job.");
-  if (!["hook", "context"].includes(scenes[0]?.direction?.job || "")) throw invalid("A directed film must open with its audience problem or actual product context.");
+  const first=scenes[0],actionOpener=first?.storyRole==="mechanism"&&first.direction?.job==="action"&&first.presentation?.visual?.kind==="ui-demo"&&executedFacts(first,research,evidence,documents).length>1;
+  if (!["hook", "context"].includes(first?.direction?.job || "")&&!actionOpener) throw invalid("A directed film must open with its audience problem, actual product context or a source-supported actionable UI demonstration.");
 }
 
 /** Read-only restart guard: rebind direction and scene identities to retained verified research. */

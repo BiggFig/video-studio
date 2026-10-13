@@ -6,9 +6,11 @@ import { audioMeasurements, command, ffmpeg, frameIndex, hash, probe, writeJson 
 import { validateTimeline } from "./planning";
 import { motionSampleFrames, presentation, transitionFrames } from "./motion-composition";
 import { uiActionSampleFrames } from "./ui-state";
+import { uiCameraSampleFrames } from "./ui-camera";
 import { soundCues, soundCueIssues } from "./audio-direction";
 import { motionTimingForPresentation } from "./motion-timing";
 import { motionAssetIds, motionUsage } from "./motion-assets";
+import { designedStageForScene } from "./motion-direction";
 import { buildPlanWorkflowContext, scopeWorkflowContext } from "./workflow-coherence";
 import { assertQualityRetryState, reviewWithSchemaRetry } from "./quality-review";
 import { qualityDefaultStyle, qualityOriginalSourceLabel, qualityReviewPrompt, type Providers, type QualityModelRequest, type WholeFilmProof } from "./providers";
@@ -22,6 +24,13 @@ const reviewSchema=reviewShape.superRefine((review,context)=>{
     else if(review[reviewCheckFlags[finding.check]]!==false)context.addIssue({code:"custom",path:["findings",index,"check"],message:"A blocking finding contradicts its passed or unperformed check"});
   }
 });
+
+/** Keep the original complete groups. Reconstruction evidence is usually the
+ * largest request and needs the unused allowance before lighter film beats.
+ * This is ordering only, not a promise that subsequent actual usage will fit. */
+export function orderQualityReviewRequests<T extends {hasUi:boolean}>(requests:readonly T[]):T[]{
+  return requests.map((request,index)=>({request,index})).sort((a,b)=>Number(b.request.hasUi)-Number(a.request.hasUi)||a.index-b.index).map(value=>value.request);
+}
 /** Contradictory positive flags may only become failures; raw provider artifacts stay untouched. */
 export function parseReview(value:unknown) {
   const review=reviewShape.parse(value);
@@ -48,6 +57,14 @@ export const requiresStyleReview=(plan:Pick<Plan,"renderer"|"scenes">,evidence:P
 type Sample={path:string;label:string;sceneId:string};
 /** Two complete scenes per semantic review, including every reconstruction action outcome. */
 export const expectedReviewCalls=(plan:Pick<Plan,"scenes">)=>Math.ceil(plan.scenes.length/2);
+/** Isolate expensive UI evidence only when the existing two-scene call envelope
+ * can contain every scene. Original plan order still defines seams and context. */
+export function qualitySceneGroups(plan:Pick<Plan,"scenes">):Plan["scenes"][]{
+  const pairs=(scenes:Plan["scenes"])=>Array.from({length:Math.ceil(scenes.length/2)},(_,index)=>scenes.slice(index*2,index*2+2));
+  const original=pairs(plan.scenes),ui=plan.scenes.filter(scene=>scene.presentation?.visual?.kind==="ui-demo"),other=plan.scenes.filter(scene=>scene.presentation?.visual?.kind!=="ui-demo");
+  const isolated=[...ui.map(scene=>[scene]),...pairs(other)];
+  return isolated.length<=original.length?isolated:original;
+}
 /** Planned visibility only: actual decoded proof remains mandatory in its review batch. */
 export function wholeFilmProofInventory(plan:Plan):WholeFilmProof {
   return {totalScenes:plan.scenes.length,plannedProofScenes:plan.scenes.filter(scene=>presentation(scene,plan).template==="proof").map(scene=>({sceneId:scene.id,assetId:scene.asset_id,startFrame:scene.start_frame,durationFrames:scene.duration_frames})),...(plan.story?{storyRoles:plan.scenes.map(scene=>({sceneId:scene.id,role:scene.storyRole??"unassigned"}))}:{})};
@@ -63,8 +80,8 @@ export function reviewBatch(plan:Plan,samples:Sample[]){
   if(plan.brand?.logoAssetId&&scenes.some(scene=>["brand","cta"].includes(presentation(scene,plan).template)))reviewAssetIds.add(plan.brand.logoAssetId);
   const assets=plan.assets.filter(a=>a.usage==="output"&&reviewAssetIds.has(a.id));
   const motion=scenes.map(scene=>{
-    const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan);
-    return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo"};
+    const index=plan.scenes.indexOf(scene),previous=plan.scenes[index-1],layout=presentation(scene,plan),designedStage=designedStageForScene(plan,scene,index);
+    return{sceneId:scene.id,presentation:layout,incomingTransition:{fromSceneId:previous?.id??null,kind:previous?presentation(previous,plan).transition:"none" as const,frames:previous?transitionFrames(previous,plan,index-1):0},entrySettledByFrame:scene.start_frame+(plan.renderer==="hyperframes"||scene.presentation?motionTimingForPresentation(layout,!!scene.detail).entryFrames:0),outgoingTransitionFrames:transitionFrames(scene,plan,index),realMediaVisible:layout.template==="proof"&&layout.visual?.kind!=="ui-demo",...(designedStage?{designedStage}:{})};
   });
   return{plan:{output:plan.output,product:plan.product,accent:plan.accent,background:plan.background,brand:plan.brand,story:plan.story,audienceLabel:plan.audienceLabel,creativeDirection:plan.creativeDirection,uiDocuments:plan.uiDocuments?.filter(doc=>scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo"&&scene.presentation.visual.documentId===doc.id)),scenes,assets,audio:plan.audio},motion,images:[...samples,...assets.filter(a=>assetIds.has(a.id)).map(a=>({path:a.preview||a.path,label:qualityOriginalSourceLabel(a.id,scenes.filter(s=>motionUsage(s,plan).copiedAssetIds.includes(a.id)).map(s=>s.id))}))]};
 }
@@ -72,9 +89,14 @@ export function unexpectedVoice(plan:Plan,heard:Transcript) {
   const windows=plan.scenes.filter(s=>s.preserve_audio).map(s=>({start:s.start_frame/30,end:(s.start_frame+s.duration_frames)/30}));
   return heard.words.filter(word=>(word.type==="word"||/singing|vocal|speech|voice/i.test(word.text))&&!windows.some(window=>Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.start>=window.start-0.15&&word.end<=window.end+0.15));
 }
-/** Require the exact exported hold/action inventory, not just a successful summary flag. */
+/** Require the exact exported hold/action/camera inventory, not just a successful summary flag. */
 export function motionIntegrityPassed(plan:Plan,motion:{passed?:boolean;localFontLoaded?:boolean;localImagesDecoded?:boolean;frames?:number;planSha256?:string;comparisons?:{scene:string;frame:number;passed:boolean;ssim:number}[]},seek:{deterministic?:boolean}) {
-  const expected=plan.scenes.flatMap((scene,index)=>[motionSampleFrames(scene,plan,index)[2],...uiActionSampleFrames(scene)].map(frame=>`${scene.id}:${frame}`)).sort();
+  const expected=plan.scenes.flatMap((scene,index)=>{
+    const camera=scene.shotDirection&&scene.presentation?.visual?.kind==="ui-demo"?uiCameraSampleFrames(scene.shotDirection.camera,scene.duration_frames).map(frame=>frame+scene.start_frame):[];
+    // Match motion-render: the hold is compared independently, while an action
+    // and a camera sample at the same frame share one additional comparison.
+    return [motionSampleFrames(scene,plan,index)[2],...new Set([...uiActionSampleFrames(scene),...camera])].map(frame=>`${scene.id}:${frame}`);
+  }).sort();
   const actual=motion.comparisons;
   return motion.passed===true&&motion.localFontLoaded===true&&motion.localImagesDecoded===true&&seek.deterministic===true&&motion.frames===plan.output.duration_frames&&motion.planSha256===createHash("sha256").update(JSON.stringify(plan)).digest("hex")&&Array.isArray(actual)&&actual.length===expected.length&&actual.every(c=>c.passed===true&&Number.isFinite(c.ssim)&&c.ssim>=.97)&&actual.map(c=>`${c.scene}:${c.frame}`).sort().every((key,index)=>key===expected[index]);
 }
@@ -93,7 +115,7 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
   if(hasMotion){
     const motion=JSON.parse(await readFile(join(workspace,"analysis/motion.json"),"utf8")),seek=JSON.parse(await readFile(join(workspace,motion.composition,"seek-check.json"),"utf8"));
     const passed=motionIntegrityPassed(plan,motion,seek);
-    checks.motion_integrity={passed,performed:true,evidence:"Paused local HTML/GSAP clock, exact repeated seek pixel hash, required local font/image loading, hold bounds/overlaps, and every decoded output hold and UI action sample compared with its independently seeked HTML frame (SSIM >=0.97), bound to this exact plan. Semantic readability/style still independently reviewed below."};
+    checks.motion_integrity={passed,performed:true,evidence:"Paused local HTML/GSAP clock, exact repeated seek pixel hash, required local font/image loading, hold bounds/overlaps, and every decoded output hold, UI action and directed camera sample compared with its independently seeked HTML frame (SSIM >=0.97), bound to this exact plan. Semantic readability/style still independently reviewed below."};
     if(!passed)findings.push({severity:"critical",message:"The actual HTML motion capture verification did not pass."});
   }
   const referenceHashes=await Promise.all(plan.assets.filter(a=>a.usage==="reference").map(a=>hash(join(workspace,a.path))));
@@ -123,17 +145,19 @@ export async function quality(plan:Plan,evidence:Evidence,video:string,workspace
       const out=`analysis/qc-${scene.id}-${i}.jpg`;await frameIndex(path,join(workspace,out),index,1600);samples.push({path:out,sceneId:scene.id,label:`ACTUAL RENDER ${scene.id}, frame ${index} / nominal ${(index/30).toFixed(3)} seconds (${label})`});
     }
   }
-  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
-  for(let i=0;i<plan.scenes.length;i+=2) {
-    const sceneIds=new Set(plan.scenes.slice(i,i+2).map(scene=>scene.id));
+  const reviews:z.infer<typeof reviewSchema>[]=[],uiReviews:z.infer<typeof reviewSchema>[]=[],wholeFilmProof=wholeFilmProofInventory(plan),requests:(QualityModelRequest&{hasUi:boolean;groupId:string;sceneIds:string[]})[]=[],workflowContext=plan.production?.workflowCoherence?buildPlanWorkflowContext(plan):undefined;
+  for(const [groupIndex,scenes] of qualitySceneGroups(plan).entries()) {
+    const sceneIds=new Set(scenes.map(scene=>scene.id));
     const batch=reviewBatch(plan,samples.filter(sample=>sceneIds.has(sample.sceneId)));
     const defaultStyle=qualityDefaultStyle(plan);
     if(batch.images.length>32)throw new Error("Required reconstruction review exceeds the complete image allowance");
-    requests.push({prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
+    requests.push({groupId:`group-${groupIndex+1}`,sceneIds:[...sceneIds],prompt:qualityReviewPrompt({plan:batch.plan,motion:batch.motion,wholeFilmProof,evidence,defaultStyle,measurements,heard,...(workflowContext?{workflowContext:scopeWorkflowContext(workflowContext,[...sceneIds])}:{}),sourceSpeech:speechScenes.map(s=>({scene:s.id,transcript:plan.assets.find(a=>a.id===s.asset_id)?.transcript}))}),images:batch.images,hasUi:batch.plan.scenes.some(scene=>scene.presentation?.visual?.kind==="ui-demo")});
   }
-  for(const [index,request]of requests.entries()){
+  const ordered=orderQualityReviewRequests(requests),orderPath=`analysis/quality-review-order-after-model-${providers.ledger.modelCalls}.json`;
+  await writeJson(join(workspace,orderPath),{version:2,reason:"Complete UI evidence first; UI scenes isolated only within the existing two-scene call envelope; all scenes and samples retained",batches:ordered.map((request,index)=>({reviewOrder:index+1,groupId:request.groupId,sceneIds:request.sceneIds,promptSha256:createHash("sha256").update(request.prompt).digest("hex"),images:request.images}))});await hooks.persist([orderPath]);
+  for(const [index,request]of ordered.entries()){
     const raw=await providers.claude("review",request.prompt,request.images,{policy:"quality-review-v1"});
-    const review=await reviewWithSchemaRetry(raw,{workspace,jobId:plan.job_id,prompt:request.prompt,images:request.images,hooks,parse:parseReview,prepareRetry:async(prompt,images)=>providers.prepareClaude("review",prompt,images,{policy:"quality-review-v1",reserve:await providers.qualityRemainderReserve(requests.slice(index+1))})});
+    const review=await reviewWithSchemaRetry(raw,{workspace,jobId:plan.job_id,prompt:request.prompt,images:request.images,hooks,parse:parseReview,prepareRetry:async(prompt,images)=>providers.prepareClaude("review",prompt,images,{policy:"quality-review-v1",reserve:await providers.qualityRemainderReserve(ordered.slice(index+1))})});
     reviews.push(review);if(request.hasUi)uiReviews.push(review);findings.push(...review.findings);
   }
   const all=(key:"readabilityPassed"|"claimsPassed"|"realVisualsPassed"|"renderIntegrityPassed"|"audioTranscriptPassed")=>reviews.length>0&&reviews.every(r=>r[key]);

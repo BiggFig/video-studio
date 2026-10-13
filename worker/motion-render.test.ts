@@ -44,7 +44,7 @@ test("generated seek API stays in the intended source frame after browser micros
  const video={readyState:2,muted:true,pause(){},addEventListener(type:string,callback:()=>void){if(type==="seeked")listeners.push(callback);},get currentTime(){return current;},set currentTime(value:number){current=Math.floor(value*1e6)/1e6;queueMicrotask(()=>listeners.splice(0).forEach(fn=>fn()));}};
  const timeline={set(){return this;},fromTo(){return this;},pause(){return this;},seek(){return this;}};
  const browser:{__studioReady?:Promise<unknown>;__studio?:{seekFrame(frame:number):Promise<void>}}={};
- runInNewContext(script,{window:browser,document:{fonts:{load:async()=>[{}],ready:Promise.resolve(),check:()=>true},images:[],getElementById:(id:string)=>id==="video-2"?video:null},gsap:{timeline:()=>timeline},setTimeout,clearTimeout});
+ runInNewContext(script,{window:browser,document:{fonts:{load:async()=>[{}],ready:Promise.resolve(),check:()=>true},images:[],getElementById:(id:string)=>id==="video-2"?video:null},gsap:{timeline:()=>timeline},setTimeout,clearTimeout,requestAnimationFrame:(callback:()=>void)=>setTimeout(callback,0),cancelAnimationFrame:clearTimeout});
  await browser.__studioReady;await browser.__studio!.seekFrame(350);
  assert.ok(current>=140/30&&current<141/30,`Expected source frame140, got ${current}`);
  await browser.__studio!.seekFrame(270);assert.ok(current>=2&&current<2+1/30);

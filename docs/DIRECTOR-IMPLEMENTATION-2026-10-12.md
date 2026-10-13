@@ -2,6 +2,8 @@
 
 Working record for the approved 12-item task list. This document separates prepared artifacts, implementation, technical verification and external audience evidence. Status is provisional until supporting checks are recorded.
 
+**Automatic acceptance: 0 passes.** V23 passed 792 tests, TypeScript and the production build, but all three fresh jobs stopped during UI validation. Source capture and request transport are improved; model output still fails specific presentation and workflow contracts. Source checkpoint `262636a` records the verified code. V24 work targets exact presentation choices and distinct source-bound demo compositions. The public alias remains on the earlier release, and the six authored Tally exports remain separate. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md) and [acceptance record](DIRECTOR-AUTOMATIC-TESTS-2026-10-12.md).
+
 ## Reviewable pilot
 
 `/direction-lab` presents a source-grounded Tally storyboard with eight selectable views, three placement sketches, six verified exports, earlier Tally comparators, implementation status, reference mechanisms and an experiment plan. The user approved the storyboard before final rendering on October 12. The new treatment and matched control are available in all three placements. All available players start muted and pause when their component is replaced.
@@ -23,10 +25,10 @@ The director pilot is budgeted at 24 seconds: hook 0–3; editor 3–10 (Publish
 | 5. Persistent objects | Complete | Exact semantic state matching preserves objects; state replacement, hidden future controls and duplicate ghosts have regression coverage. |
 | 6. Independent tracks | Complete | Camera, cursor, copy, UI and materials have separate timing on one clock; replay checks preserve DOM/state and render tolerance. |
 | 7. Visual systems | Partial | Brand-based materials and layouts implemented. Tally uses paper, ink and observed blue controls with Geist fallback typography; richer source-media treatments remain unverified. |
-| 8. URL integration | Implemented; end-to-end acceptance incomplete | OpenRouter access verified. Research reaches UI documentation; source/behavior validation stops invalid demonstrations. |
+| 8. URL integration | Implemented; end-to-end acceptance incomplete | V23 source capture and lossless requests passed technical checks; fresh jobs still stopped at UI validation. V22 Resend remains a rendered draft with only its first visual-review batch passed. |
 | 9. Three placements | Complete | Separate 1920×1080, 1080×1350 and 1080×1920 treatment/control exports, 720 frames each. |
 | 10. Review the pilot | Technical/visual checks complete; external evidence pending | Subjective listening and five distinct unfamiliar viewer responses still required. |
-| 11. Generalization | Incomplete | Plausible, Resend and Baserow reached UI documentation but failed source/behavior checks. Zero automatic passes; see OpenRouter recovery report. |
+| 11. Generalization | Incomplete | Zero automatic passes. V23 Resend chose an out-of-range color; Plausible merged required source slots; Tally proposed a control absent from its starting state. All failures are retained without changed-code resumes. |
 | 12. Publish and test | Pilot gallery live; audience test pending | Six approved exports and viewer form deployed. Audience outcomes remain pending; paid budget must be agreed before spend. |
 
 ## Comprehension collection
@@ -58,4 +60,6 @@ Review interface animations are avoided; films require explicit play and include
 
 ## Provider recovery follow-up
 
-The [OpenRouter recovery report](OPENROUTER-RECOVERY-2026-10-12.md) supersedes the provider-access block above. Real research and UI requests succeeded, compact research was verified, and the final suite passed 504 tests with 35 optional skips. All three automatic tests still fail UI fidelity/behavior checks before audio and rendering; these failures remain visible in the live checklist.
+The [OpenRouter recovery report](OPENROUTER-RECOVERY-2026-10-12.md) supersedes the original provider-access block. Real research and UI requests succeeded, compact research was verified, and that revision's suite passed 504 tests with 35 optional skips. Those earlier acceptance failures remain retained.
+
+The [workflow reconstruction report](WORKFLOW-RECONSTRUCTION-2026-10-12.md) records the subsequent capture, planning and state-contract work. The completed v7 batch produced no audio or automatic video: Plausible reconstructed an unsupported empty starting screen, Baserow exceeded the guide explanation metadata bound, and Resend reached scripting but failed both bounded workflow reviews because its revised company name contradicted the retained sign-off. The explanation bound was corrected without truncating source data or increasing the 768-token selector cap. Fresh v8 Plausible and Baserow runs also stopped before rendering; the reconstruction report records their actual outcomes and the subsequent corrections. No automatic pass is inferred from unit tests, a completed intermediate stage or the six authored Tally exports.
