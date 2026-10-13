@@ -326,3 +326,166 @@ test("delayed scroll-end settles before observation while continuously mutating 
     }
   } finally { await browser.close(); }
 });
+
+async function geometryOnlyPanel(page: Page, mode: "size" | "position" | "continuous" | "slow") {
+  await animatedPanel(page);
+  // CSSOM edits change actual layout without mutating DOM attributes/text.
+  // Trigger them when production pauses the first animation, so scheduling the
+  // test process cannot move this fixture outside the quiet interval.
+  await page.evaluate(`(() => {
+    const root=document.querySelector('#editor'),sheet=document.styleSheets[0];
+    const bodyRule=Array.from(sheet.cssRules).find(rule=>rule.selectorText==='body');
+    const rootRule=Array.from(sheet.cssRules).find(rule=>rule.selectorText==='#editor');
+    bodyRule.style.overflowAnchor='none';
+    const state={changedAt:0,changes:0,mutations:0,reads:0,frames:new Set(),observers:new Set(),interval:null};
+    window.geometryFixture=state;
+    const NativeObserver=window.MutationObserver,monitor=new NativeObserver(records=>{state.mutations+=records.length;});
+    monitor.observe(document.body,{subtree:true,attributes:true,childList:true,characterData:true});state.monitor=monitor;
+    window.MutationObserver=class extends NativeObserver{
+      observe(...args){super.observe(...args);state.observers.add(this);}
+      disconnect(){super.disconnect();state.observers.delete(this);}
+    };
+    const nativeFrame=window.requestAnimationFrame.bind(window),nativeCancel=window.cancelAnimationFrame.bind(window);
+    window.requestAnimationFrame=callback=>{const id=nativeFrame(time=>{state.frames.delete(id);callback(time);});state.frames.add(id);return id;};
+    window.cancelAnimationFrame=id=>{state.frames.delete(id);nativeCancel(id);};
+    const nativeRect=root.getBoundingClientRect.bind(root);root.getBoundingClientRect=()=>{state.reads++;return nativeRect();};
+    const mode=${JSON.stringify(mode)},animation=window.captureFixture.finite,nativePause=animation.pause.bind(animation);
+    animation.pause=()=>{
+      nativePause();
+      const change=()=>{state.changes++;state.changedAt=performance.now();if(mode==='position')bodyRule.style.paddingTop=(1000+state.changes*100)+'px';else if(mode==='slow')rootRule.style.left=(state.changes*.06)+'px';else rootRule.style.height=(400+(state.changes%2?80:60))+'px';};
+      if(mode==='continuous'||mode==='slow')state.interval=setInterval(change,40);
+      else{setTimeout(change,100);setTimeout(change,250);}
+    };
+  })()`);
+}
+
+test("geometry-only size and ancestor position changes restart the bounded panel quiet interval", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 30000 }, async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "video-studio-panel-geometry-")), browser = await chromium.launch({ headless: true });
+  try {
+    for (const mode of ["size", "position"] as const) {
+      const page = await browser.newPage({ viewport: { width: 1000, height: 700 } }); await geometryOnlyPanel(page, mode);
+      const screenshot = page.screenshot.bind(page); let shots = 0;
+      page.screenshot = async options => {
+        shots++;
+        const observed = await page.evaluate(() => { const state=(window as any).geometryFixture,box=document.querySelector("#editor")!.getBoundingClientRect();return { quiet:performance.now()-state.changedAt,changes:state.changes,mutations:state.mutations,x:box.x+scrollX,y:box.y+scrollY,width:box.width,height:box.height }; });
+        assert.equal(observed.changes, 2); assert.equal(observed.mutations, 0, "readiness cannot rely on MutationObserver for this real CSSOM layout change");
+        assert.ok(observed.quiet >= 295, `capture began only ${observed.quiet}ms after the last geometry change`);
+        assert.deepEqual(options!.clip, { x: observed.x, y: observed.y, width: observed.width, height: observed.height });
+        assert.ok(options!.timeout! > 0 && options!.timeout! < 2700, "quiet time is deducted from the unchanged three-second capture allowance");
+        return screenshot(options);
+      };
+      const path = join(workspace, `${mode}.jpg`), captured = await captureProductPanelState(page, animatedAsset, "#editor", path, 3000);
+      assert.equal(shots, 1); assert.equal(captured.pausedAnimations, 3); assert.equal(captured.source.height, mode === "size" ? 460 : 400);
+      const marker=captured.source.elements.find(element=>element.text==="Preview")!;
+      const pixel=await fixturePixel(page,path,Math.floor((marker.rect.x+marker.rect.width*.8)*captured.source.width),Math.floor((marker.rect.y+marker.rect.height*.8)*captured.source.height));
+      assert.ok(pixel[0]>190&&pixel[1]<80&&pixel[2]<80,"decoded pixels still match the final measured source coordinates");
+      const cleanup=await page.evaluate(()=>{const state=(window as any).geometryFixture;return {frames:state.frames.size,observers:state.observers.size,reads:state.reads,running:(window as any).captureFixture.moving.playState};});
+      assert.deepEqual({frames:cleanup.frames,observers:cleanup.observers,running:cleanup.running},{frames:0,observers:0,running:"running"});
+      await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,80)));
+      assert.equal(await page.evaluate(()=>(window as any).geometryFixture.reads),cleanup.reads,"geometry sampling ends after successful capture");
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("continuous geometry changes exhaust the same quiet limit and clean up without capturing", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 15000 }, async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "video-studio-panel-geometry-limit-")), browser = await chromium.launch({ headless: true });
+  try {
+    for(const mode of ["continuous","slow"] as const){
+    const page=await browser.newPage({viewport:{width:1000,height:700}});await geometryOnlyPanel(page,mode);let shots=0;
+    page.screenshot=async()=>{shots++;throw Error("An unstable panel must never reach screenshot capture");};
+    await assert.rejects(captureProductPanelState(page,animatedAsset,"#editor",join(workspace,"unstable.jpg"),3000),/did not settle within its bounded capture allowance/);
+    const cleanup=await page.evaluate(()=>{const state=(window as any).geometryFixture;clearInterval(state.interval);return {frames:state.frames.size,observers:state.observers.size,mutations:state.mutations,changes:state.changes,reads:state.reads,running:(window as any).captureFixture.moving.playState};});
+    assert.equal(shots,0);assert.equal(cleanup.mutations,0);assert.ok(cleanup.changes>=10);
+    assert.deepEqual({frames:cleanup.frames,observers:cleanup.observers,running:cleanup.running},{frames:0,observers:0,running:"running"});
+    await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,80)));
+    assert.equal(await page.evaluate(()=>(window as any).geometryFixture.reads),cleanup.reads,"geometry sampling ends after timeout too");
+    await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("geometry-only movement during the screenshot remains a rejected paired capture", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 15000 }, async () => {
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-panel-geometry-verify-")),browser=await chromium.launch({headless:true});
+  try {
+    const page=await browser.newPage({viewport:{width:1000,height:700}});await animatedPanel(page);
+    const screenshot=page.screenshot.bind(page);
+    page.screenshot=async options=>{const bytes=await screenshot(options);await page.evaluate(()=>{const rule=Array.from(document.styleSheets[0].cssRules).find(rule=>(rule as CSSStyleRule).selectorText==="#editor") as CSSStyleRule;rule.style.height="460px";});return bytes;};
+    await assert.rejects(captureProductPanelState(page,animatedAsset,"#editor",join(workspace,"changed.jpg"),3000),/geometry changed during paired capture/);
+    assert.equal(await page.evaluate(()=>(window as any).captureFixture.moving.playState),"running");
+  } finally { await browser.close(); }
+});
+
+async function rasterAlternativeFixture(page: Page, variant: "valid" | "neighbor" | "ambiguous" | "hidden" | "editable" = "valid") {
+  const encoded=await page.evaluate(()=>{const canvas=document.createElement("canvas");canvas.width=1000;canvas.height=600;const ctx=canvas.getContext("2d")!;ctx.fillStyle="#ffffff";ctx.fillRect(0,0,1000,600);ctx.fillStyle="#111111";ctx.font="32px Arial";ctx.fillText("Your contact details",40,60);ctx.fillText("Ada",40,160);ctx.fillText("Contact me",40,260);return canvas.toDataURL("image/png").split(",")[1];});
+  const bytes=Buffer.from(encoded,"base64");
+  await page.route("https://example.com/**",route=>route.fulfill({status:200,contentType:"image/png",body:bytes}));
+  const image='<img src="https://example.com/product-demo.png" alt="Product form screenshot" style="width:100%;height:100%">';
+  const vector='<svg width="100%" height="100%"><rect width="100%" height="100%" fill="#eeddcc"/><text x="40" y="60">Another product view</text></svg>';
+  const primary=variant==="neighbor"?vector:variant==="hidden"?vector+image.replace('style="','style="display:none;'):variant==="ambiguous"?image.replace("width:100%","width:50%")+image.replace("product-demo.png","other-demo.png").replace("width:100%","width:50%"):image;
+  await page.setContent(`<style>body{margin:0}#primary{position:relative;width:1000px;height:600px}#secondary{width:900px;height:550px}#third{width:800px;height:500px}section{margin:20px}img{vertical-align:top}input{position:absolute;top:100px;left:50px}</style><section id="primary" class="workspace-preview">${primary}${variant==="editable"?'<input aria-label="Message">':""}</section><section id="secondary" class="workspace-preview">${vector}</section><section id="third" class="workspace-preview">${vector}</section>${variant==="neighbor"?`<div id="primary-other">${image}</div>`:""}`);
+  await page.evaluate(()=>Promise.all(Array.from(document.images).map(image=>image.decode())));
+  const screenshot=page.screenshot.bind(page),events:string[]=[];
+  page.screenshot=async options=>{
+    const first=options!.clip!.width===1000;events.push(first?"primary-screenshot":"later-screenshot");
+    const result=await screenshot(options);
+    if(first)await page.evaluate(()=>{const rule=Array.from(document.styleSheets[0].cssRules).find(rule=>(rule as CSSStyleRule).selectorText==="#primary") as CSSStyleRule;rule.style.height="602px";});
+    return result;
+  };
+  return {bytes,events};
+}
+
+test("an unstable image-based panel uses its exact observed raster before later panels fill the same two slots", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 30000 }, async () => {
+  const workspace=await mkdtemp(join(tmpdir(),"video-studio-panel-raster-")),browser=await chromium.launch({headless:true});
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:960}}),fixture=await rasterAlternativeFixture(page),uiSources=new UiSourceBudget();
+    const result=await extractProductVisuals(page,workspace,"https://example.com/",{maxPanels:2,maxAssets:2,maxAttempts:1,maxFileBytes:1_000_000,maxTotalBytes:1_000_000,uiSources,download:async(url,maximum)=>{fixture.events.push("raster-download");assert.equal(url,"https://example.com/product-demo.png");assert.equal(maximum,1_000_000);return {bytes:fixture.bytes,contentType:"image/png",url};}});
+    assert.deepEqual(fixture.events,["primary-screenshot","raster-download","later-screenshot"]);
+    assert.equal(result.assets.length,2);assert.deepEqual(result.assets.map(asset=>asset.provenance?.method),["source-image","element"]);
+    assert.equal(result.assets[1].provenance?.selector,"#secondary");assert.equal(result.diagnostics.attempts,1);
+    assert.equal(result.diagnostics.reservedBytes,fixture.bytes.length);assert.equal(result.diagnostics.downloadedBytes,fixture.bytes.length);
+    assert.match(result.diagnostics.sources[0].reason!,/geometry changed during paired/);assert.equal(result.diagnostics.sources[0].status,"skipped");
+    const alternate=result.diagnostics.sources[1];assert.equal(alternate.fallbackPanelSelector,"#primary");assert.equal(alternate.status,"accepted");assert.equal(alternate.method,"source-image");
+    assert.equal(uiSources.sources[0].basis,"pixels");assert.deepEqual(uiSources.sources[0].elements,[],"a standalone source raster never acquires fabricated captured DOM controls");
+    assert.equal(uiSources.sources.length,2);assert.equal(result.assets[0].rights,"Complete image linked by a public product page; a visual candidate, not an authenticated application recording.");
+  }finally{await browser.close();}
+});
+
+test("raster alternatives require true containment, a unique image and no missing live controls", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 45000 }, async () => {
+  const browser=await chromium.launch({headless:true});
+  try{
+    for(const variant of ["neighbor","ambiguous","hidden","editable","replaced","unrelated"] as const){
+      const workspace=await mkdtemp(join(tmpdir(),"video-studio-panel-raster-binding-")),page=await browser.newPage({viewport:{width:1440,height:960}});
+      const fixture=await rasterAlternativeFixture(page,variant==="replaced"||variant==="unrelated"?"valid":variant);
+      if(variant==="replaced"){
+        const evaluate=page.evaluate.bind(page);
+        page.evaluate=((fn:any,arg:any)=>{if(arg?.panels&&arg?.images)return evaluate(async()=>{const image=document.querySelector("#primary img") as HTMLImageElement;image.src="https://example.com/replaced-demo.png";await image.decode();}).then(()=>evaluate(fn,arg));return evaluate(fn,arg);}) as Page["evaluate"];
+      }
+      if(variant==="unrelated"){
+        const screenshot=page.screenshot.bind(page);page.screenshot=async options=>{if(options!.clip!.width===1000)throw Error("Fixture unrelated screenshot error");return screenshot(options);};
+      }
+      let downloads=0;
+      const result=await extractProductVisuals(page,workspace,"https://example.com/",{maxPanels:2,maxAssets:2,download:async(url)=>{downloads++;return {bytes:fixture.bytes,contentType:"image/png",url};}});
+      assert.equal(downloads,0,variant);assert.equal(result.diagnostics.attempts,0,variant);
+      assert.deepEqual(result.assets.map(asset=>asset.provenance?.selector),["#secondary","#third"],variant);
+      assert.ok(!result.diagnostics.sources.some(source=>source.fallbackPanelSelector),variant);
+      await page.close();
+    }
+  }finally{await browser.close();}
+});
+
+test("a failed raster alternative retains its byte reservation and cannot retry in the trailing image pass", { skip: process.env.STUDIO_RESEARCH_CAPTURE_INTEGRATION !== "1", timeout: 30000 }, async () => {
+  const browser=await chromium.launch({headless:true});
+  try{
+    for(const failure of ["network","mime"] as const){
+      const workspace=await mkdtemp(join(tmpdir(),"video-studio-panel-raster-failure-")),page=await browser.newPage({viewport:{width:1440,height:960}});await rasterAlternativeFixture(page);let downloads=0;
+      const result=await extractProductVisuals(page,workspace,"https://example.com/",{maxPanels:2,maxAssets:3,maxAttempts:3,maxFileBytes:100,maxTotalBytes:300,download:async url=>{downloads++;if(failure==="network")throw Error("Fixture download failed");return {bytes:Buffer.from("<html>not a raster</html>"),contentType:"text/html",url};}});
+      assert.equal(downloads,1,"the same URL cannot repeat even with unused attempt, byte and asset capacity");assert.equal(result.diagnostics.attempts,1);assert.equal(result.assets.length,2);
+      assert.ok(result.assets.every(asset=>asset.provenance?.method==="element"));
+      assert.equal(result.diagnostics.reservedBytes,failure==="network"?100:25);
+      assert.equal(result.diagnostics.sources.filter(source=>source.method==="source-image").length,1);
+      assert.equal(result.diagnostics.sources.find(source=>source.fallbackPanelSelector)?.status,"skipped");
+      await page.close();
+    }
+  }finally{await browser.close();}
+});

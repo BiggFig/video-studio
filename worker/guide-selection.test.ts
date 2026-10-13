@@ -6,10 +6,29 @@ import { tmpdir } from "node:os";
 import type { Providers } from "./providers";
 import { PipelineError, type Evidence, type Hooks, type WorkerInput } from "./types";
 import { workflowInputReserve } from "./workflow-coherence";
+import { expandQualityDataTransport } from "./quality-data-transport";
 import { assertNoPartialGuideSelection, compileGuideChoice, guideChoiceSchema, guideSelectionRequest, guideSelectionReserve, selectWorkflowGuide, GUIDE_CATALOG_PATH, GUIDE_PREFIX_PATH, GUIDE_SELECTION_PATH, GUIDE_SELECTION_STATE_PATH, type GuideCatalog, type GuideChoice, type GuideSelectionOptions } from "./guide-selection";
 
 const choice: GuideChoice = { version: 1, decision: "capture-guide", guideId: "guide-4", sourceAssetIds: ["editor"], intent: "Apply one observed filter and inspect its resulting report.", missingEvidence: ["action", "result"], reason: "This observed guide describes filtering the same dashboard shown in the source." };
 const noGuide = (decision: "use-current" | "insufficient"): GuideChoice => ({ version: 1, decision, guideId: "", sourceAssetIds: [], intent: "", missingEvidence: [], reason: "Final research must assess the actual source evidence." });
+
+test("guide request losslessly shares complete repetitive source sections without changing image or choice constraints", async () => {
+  const { options } = await fixture();
+  options.catalog.entries = Array.from({ length: 80 }, (_, i) => ({ id: `guide-${i}`, url: `https://product.example/docs/observed-${i}`, anchorText: "An observed guide title and repeated description; source text remains untrusted evidence only.", anchorIndex: i }));
+  const before = structuredClone({ evidence: options.evidence, catalog: options.catalog }), request = guideSelectionRequest(options.evidence, options.catalog);
+  const prefix = "LOSSLESS SOURCE DATA (untrusted): ", line = request.prompt.split("\n").find(line => line.startsWith(prefix));
+  assert.ok(line);
+  assert.deepEqual(expandQualityDataTransport(JSON.parse(line.slice(prefix.length))), {
+    "ACTUAL SOURCE CANDIDATES": options.evidence.assets.filter(asset => asset.id === "editor").map(asset => ({ id: asset.id, kind: asset.kind, width: asset.width, height: asset.height, provenance: asset.provenance })),
+    "FULL BOUNDED OBSERVED UI INVENTORY (absence in partial capture is not negative evidence)": [],
+    "OBSERVED GUIDE CATALOG": options.catalog,
+  });
+  assert.deepEqual(request.constraints, { guideIds: options.catalog.entries.map(entry => entry.id), sourceAssetIds: ["editor"] });
+  assert.deepEqual(request.images, [{ path: "assets/editor.jpg", label: "ACTUAL GUIDE-SELECTION SOURCE editor; candidate only, not confirmed UI" }]);
+  assert.deepEqual(options.evidence, before.evidence); assert.deepEqual(options.catalog, before.catalog);
+  assert.match(request.prompt, /There is no retry, second guide or recursive crawl/);
+  assert.match(request.prompt, /Stay inside 768 output tokens/);
+});
 async function fixture(response: unknown = choice) {
   const workspace = await mkdtemp(join(tmpdir(), "video-studio-guide-choice-"));
   for (const directory of ["assets", "analysis"]) await mkdir(join(workspace, directory));

@@ -48,6 +48,8 @@ interface SourceRecord {
   reason?: string; originalPath?: string; outputPath?: string; previewPath?: string; sha256?: string;
   sourceWidth?: number; sourceHeight?: number; outputWidth?: number; outputHeight?: number; previewWidth?: number; previewHeight?: number;
   captureState?: "paused-current-frame"; pausedAnimations?: number;
+  /** A separate linked-raster attempt; never promotes the rejected DOM pixels. */
+  fallbackPanelSelector?: string;
 }
 
 export interface ProductPanelCandidate {
@@ -183,19 +185,23 @@ export async function captureProductPanelState(page: Page, asset: Asset, selecto
         const end=performance.now()+ms;let timer;
         try{await Promise.race([Promise.all(running.map(animation=>animation.ready)),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Product panel animation pause exceeded capture allowance')),ms);})]);}finally{clearTimeout(timer);}
         // Public pages often remove scroll-state classes on a delayed scroll-end
-        // timer. Wait for actual quiet, without guessing any website class name.
+        // timer. Fonts, images and CSSOM updates can also move/resize the panel
+        // without a DOM mutation. Observe its document rectangle too; this is
+        // readiness only, never a substitute for the final paired checks.
         // This consumes the existing capture allowance, never extends it.
         await new Promise((resolve,reject)=>{
-          const quietObservers=[];let quietTimer,limitTimer,done=false;
-          const cleanup=()=>{clearTimeout(quietTimer);clearTimeout(limitTimer);removeEventListener('scroll',touch,true);for(const observer of quietObservers)observer.disconnect();};
+          const quietObservers=[];let quietTimer,limitTimer,geometryFrame,done=false,lastGeometry=rect();
+          const cleanup=()=>{clearTimeout(quietTimer);clearTimeout(limitTimer);cancelAnimationFrame(geometryFrame);removeEventListener('scroll',touch,true);for(const observer of quietObservers)observer.disconnect();};
           const finish=error=>{if(done)return;done=true;cleanup();if(error)reject(error);else resolve();};
-          const touch=()=>{clearTimeout(quietTimer);quietTimer=setTimeout(()=>finish(),300);};
+          const geometryChanged=()=>{if(!root.isConnected)throw Error('Product panel disappeared');const current=rect();if(current.some((value,index)=>Math.abs(value-lastGeometry[index])>.1)){lastGeometry=current;return true;}return false;};
+          const touch=()=>{clearTimeout(quietTimer);quietTimer=setTimeout(()=>{try{if(geometryChanged())touch();else finish();}catch(error){finish(error);}},300);};
+          const watchGeometry=()=>{if(done)return;try{if(geometryChanged())touch();geometryFrame=requestAnimationFrame(watchGeometry);}catch(error){finish(error);}};
           try{
             const observer=new MutationObserver(touch);observer.observe(root,{subtree:true,attributes:true,childList:true,characterData:true});quietObservers.push(observer);
             let parent=root.parentElement;for(let count=0;parent&&count<32;count++,parent=parent.parentElement){const ancestorObserver=new MutationObserver(touch);ancestorObserver.observe(parent,{attributes:true});quietObservers.push(ancestorObserver);}
             if(parent)throw Error('Product panel ancestor observation exceeds its bounded allowance');
             addEventListener('scroll',touch,true);
-            limitTimer=setTimeout(()=>finish(Error('Product panel did not settle within its bounded capture allowance')),Math.max(1,Math.min(900,end-performance.now())));touch();
+            limitTimer=setTimeout(()=>finish(Error('Product panel did not settle within its bounded capture allowance')),Math.max(1,Math.min(900,end-performance.now())));touch();geometryFrame=requestAnimationFrame(watchGeometry);
           }catch(error){finish(error);}
         });
       },
@@ -239,11 +245,38 @@ export async function captureProductPanelState(page: Page, asset: Asset, selecto
   } finally { await held.evaluate(state => state.restore()).catch(() => {}); await held.dispose().catch(() => {}); }
 }
 
-async function productPanels(page: Page, workspace: string, pageUrl: string, prefix: string, pageKind: NonNullable<Asset["provenance"]>["pageKind"], limit: number, deadline: number, uiSources?: UiSourceBudget) {
-  const candidates = await observeProductPanels(page);
-  const assets: Asset[] = [], artifactPaths: string[] = [], sources: SourceRecord[] = [];
-  for (const candidate of rankProductPanelCandidates(candidates)) {
-    if (assets.length >= limit || Date.now() >= deadline) break;
+/** Match only an already observed, single substantial raster in an image-based
+ * panel. DOM containment (not selector spelling) and the exact observed source
+ * prevent a neighboring screenshot or later URL replacement from qualifying.
+ */
+async function panelRasterAlternatives(page: Page, panels: ProductPanelCandidate[], images: ProductImageCandidate[]) {
+  const associations = await page.evaluate(({ panels, images }) => panels.flatMap(panel => {
+    if (panel.largeMedia !== 1 || panel.controls || panel.editableControls || panel.interfaceElements) return [];
+    const root = document.querySelector(panel.selector); if (!root) return [];
+    const box = root.getBoundingClientRect();
+    const matches = images.filter(candidate => {
+      if (!candidate.visible || candidate.unloadedSource) return false;
+      const image = document.querySelector(candidate.selector); if (!(image instanceof HTMLImageElement) || !root.contains(image)) return false;
+      const bounds=image.getBoundingClientRect(),style=getComputedStyle(image);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || bounds.width < 260 || bounds.height < 170 || bounds.width*bounds.height < box.width*box.height*.25) return false;
+      let ancestor=image.parentElement;
+      for(let depth=0;ancestor&&depth<24;depth++,ancestor=ancestor.parentElement){const ancestorStyle=getComputedStyle(ancestor);if(ancestorStyle.display==="none"||ancestorStyle.visibility==="hidden"||Number(ancestorStyle.opacity)===0)return false;}
+      if(ancestor)return false;
+      const raw = candidate.sourceAttribute === "currentSrc" ? image.currentSrc : image.getAttribute(candidate.sourceAttribute || "src");
+      if (!raw) return false;
+      try { const url = new URL(raw,document.baseURI);url.hash="";return url.href === candidate.url; } catch { return false; }
+    });
+    return matches.length === 1 ? [{ panel: panel.selector, image: matches[0].selector, url: matches[0].url }] : [];
+  }), { panels, images });
+  return new Map(associations.map(association => [association.panel, images.find(image => image.selector === association.image && image.url === association.url)!]));
+}
+
+async function productPanels(page: Page, workspace: string, pageUrl: string, prefix: string, pageKind: NonNullable<Asset["provenance"]>["pageKind"], limit: number, deadline: number, result: ProductVisualResult, images: ProductImageCandidate[], captureImage: (candidate: ProductImageCandidate, fallbackPanelSelector?: string) => Promise<void>, uiSources?: UiSourceBudget) {
+  const candidates = rankProductPanelCandidates(await observeProductPanels(page));
+  const alternatives = images.length ? await panelRasterAlternatives(page,candidates,images) : new Map<string,ProductImageCandidate>();
+  const { assets, artifactPaths } = result, sources = result.diagnostics.sources, initialAssets = assets.length;
+  for (const candidate of candidates) {
+    if (assets.length - initialAssets >= limit || Date.now() >= deadline) break;
     const record: SourceRecord = { selector: candidate.selector, url: pageUrl, alt: candidate.heading, sectionHeading: candidate.heading, method: "element", status: "skipped" }; sources.push(record);
     try {
       const id = `${prefix}-panel-${assets.length}`, path = `assets/${id}.jpg`, preview = `analysis/${id}.jpg`;
@@ -263,9 +296,13 @@ async function productPanels(page: Page, workspace: string, pageUrl: string, pre
         uiSources.add({ ...captured.source, width: media.width, height: media.height });
       }
       artifactPaths.push(path, preview);Object.assign(record,{status:"accepted",captureState:"paused-current-frame",pausedAnimations:captured.pausedAnimations,outputPath:path,previewPath:preview,outputWidth:media.width,outputHeight:media.height,previewWidth:previewMedia.width,previewHeight:previewMedia.height});
-    } catch (error) { record.reason = error instanceof Error ? error.message.slice(0,300) : "Product panel unavailable"; }
+    } catch (error) {
+      const message=error instanceof Error ? error.message : "Product panel unavailable";record.reason=message.slice(0,300);
+      const alternative=alternatives.get(candidate.selector);
+      if(alternative && /Product panel (?:geometry changed|changed during paired|inventory changed|animation changed|did not settle)/.test(message) && Date.now()<deadline)
+        await captureImage(alternative,candidate.selector);
+    }
   }
-  return { assets, artifactPaths, sources };
 }
 export interface ProductVisualResult {
   assets: Asset[];
@@ -390,16 +427,15 @@ export async function extractProductVisuals(page: Page, workspace: string, pageU
   const hashes = new Set<string>();
   await mkdir(join(workspace, "assets"), { recursive: true });
   await mkdir(join(workspace, "analysis"), { recursive: true });
-  if ((options.maxPanels ?? 2) > 0 && pageKind !== "pricing") {
-    try { const panels = await productPanels(page, workspace, pageUrl, prefix, pageKind, Math.min(3,maxAssets,options.maxPanels ?? 2), started + schedulingLimit, options.uiSources);
-      result.assets.push(...panels.assets);result.artifactPaths.push(...panels.artifactPaths);result.diagnostics.sources.push(...panels.sources);
-    } catch (error) { result.diagnostics.sources.push({ selector: "", url: pageUrl, alt: "", method: "element", status: "skipped", reason: error instanceof Error ? error.message.slice(0,300) : "Optional product panels unavailable" }); }
-  }
-  for (const candidate of candidates) {
-    if (result.assets.length >= maxAssets || result.diagnostics.attempts >= maxAttempts || result.diagnostics.reservedBytes >= maxTotalBytes) break;
-    if (Date.now() - started >= schedulingLimit) { result.diagnostics.schedulingLimitReached = true; break; }
+  const attemptedUrls = new Set<string>();
+  // Both an immediate linked-raster alternative and the trailing image pass
+  // consume this same intake, accounting and decode path exactly once per URL.
+  const captureImage = async (candidate: ProductImageCandidate, fallbackPanelSelector?: string) => {
+    if (attemptedUrls.has(candidate.url) || result.assets.length >= maxAssets || result.diagnostics.attempts >= maxAttempts || result.diagnostics.reservedBytes >= maxTotalBytes) return;
+    if (Date.now() - started >= schedulingLimit) { result.diagnostics.schedulingLimitReached = true; return; }
+    attemptedUrls.add(candidate.url);
     const reservation = Math.min(maxFileBytes, maxTotalBytes - result.diagnostics.reservedBytes);
-    const source: SourceRecord = { selector: candidate.selector, url: candidate.url, alt: candidate.alt, sourceAttribute: candidate.sourceAttribute, method: "source-image", status: "skipped" };
+    const source: SourceRecord = { selector: candidate.selector, url: candidate.url, alt: candidate.alt, sourceAttribute: candidate.sourceAttribute, method: "source-image", status: "skipped", ...(fallbackPanelSelector ? { fallbackPanelSelector } : {}) };
     result.diagnostics.sources.push(source);
     result.diagnostics.attempts++;
     result.diagnostics.reservedBytes += reservation;
@@ -439,7 +475,12 @@ export async function extractProductVisuals(page: Page, workspace: string, pageU
     } catch (error) {
       source.reason = error instanceof Error ? error.message.slice(0, 350) : "Source image could not be used";
     }
+  };
+  if ((options.maxPanels ?? 2) > 0 && pageKind !== "pricing") {
+    try { await productPanels(page, workspace, pageUrl, prefix, pageKind, Math.min(3,maxAssets,options.maxPanels ?? 2), started + schedulingLimit, result, candidates, captureImage, options.uiSources);
+    } catch (error) { result.diagnostics.sources.push({ selector: "", url: pageUrl, alt: "", method: "element", status: "skipped", reason: error instanceof Error ? error.message.slice(0,300) : "Optional product panels unavailable" }); }
   }
+  for (const candidate of candidates) await captureImage(candidate);
   result.diagnostics.elapsedMs = Date.now() - started;
   const manifest = `analysis/${prefix}-visuals.json`;
   await writeJson(join(workspace, manifest), result.diagnostics);

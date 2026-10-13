@@ -1,6 +1,6 @@
 # Automatic director acceptance — 2026-10-12
 
-**Current result: 0 automatic passes.** Fresh v21 Resend passed research, source-bound UI and workflow review, but stopped before audio/render when its first-scene audience/headline overlapped the UI viewport by 3.86 pixels. Its canonical 14.6-second plan starts typing at 1.40 seconds, changes the result at 2.83 seconds and names Resend in the first headline. Plausible stopped during research after its one correction still selected an unsupported filter result despite capturing usable row-count evidence. Neither run produced a new video. Existing older drafts and the six authored Tally exports are not automatic URL passes. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md) for exact evidence.
+**Current result: 0 automatic passes.** Fresh v22 Resend rendered a 14.4-second draft and passed its product-demonstration visual review, but the remaining outcome/CTA review exceeded its remaining conservative reservation. Plausible chose a valid row-count demonstration but retained an unsupported timing claim. Tally invented an unseen starting state and was rejected during UI validation. All three outcomes are retained; no draft or authored pilot is counted as a complete automatic pass. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md).
 
 ## Retained three-product batch: v7
 

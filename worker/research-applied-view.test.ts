@@ -143,10 +143,16 @@ test("fresh selection guidance makes the flat witness affordance explicit withou
   const prompt = researchRequest(input, fixture.evidence).prompt;
   assert.match(prompt, /Check the result evidence BEFORE choosing a filter task/);
   assert.match(prompt, /emit the flat target field valueDerivations:\[\{/);
+  assert.match(prompt, /TIMING CLAIM AUDIT:.*check summary, reason, every claim, mechanism step, target goal, result change and visual description together/);
+  assert.match(prompt, /Never move an unsupported promise to another field/);
+  assert.match(prompt, /Marking a claim basis:'inferred' or acknowledging missing timing evidence in limitations does not authorize that claim/);
+  assert.match(prompt, /exact visible site\/date\/filter labels/);
+  assert.match(prompt, /Do not include current-visitor counts, other summary values, rates or chart data as context/);
   assert.doesNotMatch(prompt, /declare result\.valueDerivation:\{/);
   const legacy = researchRequest(input, fixture.evidence, { flatTransport: false }).prompt;
   assert.match(legacy, /declare result\.valueDerivation:\{/);
   assert.doesNotMatch(legacy, /APPLIED VIEW FEASIBILITY/);
+  assert.doesNotMatch(legacy, /TIMING CLAIM AUDIT:/);
   // Generic guidance must not choose values or a product for another source.
   const clean = researchRequest({ ...input, productUrl: "https://example.com/" }, { text: "A different source", assets: [] }).prompt;
   for (const sourceSpecific of ["Google", "73.4k", "952k", "Plausible", "Last 91 days"]) assert.ok(!clean.includes(sourceSpecific));
@@ -166,4 +172,68 @@ test("actionable missing-result correction still refuses an unsupported repeat o
     await assert.rejects(compileResearchWithRetry(response, options), /already consumed/);
     assert.equal(calls, 1, "guidance adds no third attempt or hidden provider call");
   }
+});
+
+test("a corrected row proof cannot migrate unsupported speed from the mechanism into summary or reason", async t => {
+  const temporalCode = "unsupported_research_temporal_qualifier";
+  const originalEvidence = JSON.stringify(fixture.evidence);
+  const qualityCalls = Math.ceil(workflowSceneLimit() / 2), reserve = { calls: 3 + qualityCalls, inputTokens: workflowInputReserve(), outputTokens: 11000 + qualityCalls * 3000 + workflowOutputLimit() };
+  for (const migration of [undefined, "summary", "reason"] as const) {
+    const root = await workspace(t), response = raw() as ReturnType<typeof flatProposal>, correctedResearch = google();
+    response.claims.find(claim => claim.role === "mechanism")!.text = "Click Apply filter to instantly segment the dashboard.";
+    correctedResearch.reason = "The source row and corresponding summary support an illustrative count change.";
+    correctedResearch.summary = "Select a traffic source to inspect its visitor count.";
+    if (migration) correctedResearch[migration] = "Select a traffic source to instantly segment the dashboard.";
+    const corrected = flatProposal(correctedResearch), rejectedJson = JSON.stringify(response), correctedJson = JSON.stringify(corrected);
+    const usage = { modelCalls: 1, inputTokens: 15000, outputTokens: 1200, reservedInputTokens: 0, reservedOutputTokens: 0, audioGenerations: 0, asrSeconds: 0, providerRequests: [], audio: {} };
+    let calls = 0, checkpoints = 0;
+    const options = { input, evidence: fixture.evidence, evidenceSha256: fixture.state.binding, workspace: root, hooks: { persist: async () => { checkpoints++; } }, ...researchRequest(input, fixture.evidence), ...fresh, sourceTemporalClaims: true as const, providers: {
+      ledger: usage,
+      prepareClaude: async <T>(_purpose: string, prompt: string, _images: unknown, callOptions: unknown) => {
+        assert.deepEqual(callOptions, { policy: "research-v2", reserve });
+        assert.match(prompt, /workflow_applied_view_proof_required/);
+        assert.match(prompt, /unsupported_research_temporal_qualifier/);
+        assert.ok(prompt.includes('"path":["story","mechanism","text"]'));
+        assert.ok(prompt.indexOf("TIMING CLAIM CORRECTION:") > prompt.indexOf("END UNTRUSTED INVALID DRAFT"));
+        assert.match(prompt, /Audit the ENTIRE returned response, not only the reported path: summary, reason/);
+        assert.match(prompt, /do not move them to summary\/reason or replace them with another timing promise/);
+        assert.match(prompt, /context is 1–4 unchanged site\/date\/filter labels, never unrelated metrics/);
+        assert.ok(prompt.includes(rejectedJson), "the complete rejected data remains quoted, never locally rewritten");
+        return async () => { calls++; usage.modelCalls++; return corrected as T; };
+      },
+    } };
+    if (migration) {
+      await assert.rejects(compileResearchWithRetry(response, options), rejected(temporalCode));
+      let error: unknown;
+      try { compileResearch(input, fixture.evidence, corrected, fixture.state.binding, { ...fresh, sourceTemporalClaims: true }); } catch (caught) { error = caught; }
+      assert.ok(error instanceof PipelineError);
+      assert.deepEqual(researchResponseDiagnostics(corrected, fixture.evidence, error, true, true, true, true, true), [{ code: temporalCode, path: [migration] }]);
+    } else {
+      const result = await compileResearchWithRetry(response, options);
+      assert.equal(result.summary, corrected.summary); assert.equal(result.reason, corrected.reason);
+      assert.deepEqual(result.documentTargets![0].workflow, correctedResearch.documentTargets![0].workflow);
+    }
+    const marker = JSON.parse(await readFile(join(root, RESEARCH_RETRY_PATH), "utf8"));
+    assert.equal(marker.status, "completed"); assert.equal(marker.outcome, migration ? "invalid" : "valid");
+    const digest = (text: string) => createHash("sha256").update(text).digest("hex");
+    assert.equal(marker.rejectedValueSha256, digest(rejectedJson)); assert.equal(marker.correctedValueSha256, digest(correctedJson));
+    assert.equal(JSON.stringify(response), rejectedJson); assert.equal(JSON.stringify(corrected), correctedJson);
+    assert.equal(checkpoints, 2); assert.equal(usage.modelCalls, 2);
+    await assert.rejects(compileResearchWithRetry(response, options), /already consumed/);
+    assert.equal(calls, 1, "valid or invalid correction consumes the same sole allowance");
+  }
+  assert.equal(JSON.stringify(fixture.evidence), originalEvidence);
+});
+
+test("an inferred outcome and an honest timing limitation do not authorize unsupported speed", () => {
+  const proposal = google();
+  proposal.story!.outcome = { text: "The visitor summary updates instantly.", basis: "inferred", evidenceIds: ["fact-61"] };
+  proposal.limitations = ["The selected canonical passages describe filtering but do not establish instant or live updates."];
+  const response = flatProposal(proposal), original = JSON.stringify(response);
+  let error: unknown;
+  try { compileResearch(input, fixture.evidence, response, fixture.state.binding, { ...fresh, sourceTemporalClaims: true }); } catch (caught) { error = caught; }
+  assert.ok(rejected("unsupported_research_temporal_qualifier")(error));
+  assert.ok(error instanceof PipelineError);
+  assert.deepEqual(researchResponseDiagnostics(response, fixture.evidence, error, true, true, true, true, true), [{ code: "unsupported_research_temporal_qualifier", path: ["story", "outcome", "text"] }]);
+  assert.equal(JSON.stringify(response), original, "the contradictory returned claim is rejected, never rewritten locally");
 });
