@@ -362,12 +362,12 @@
     {
       "title": "Plausible",
       "status": "Needs reconstruction review",
-      "detail": "Fresh research now selects a source-supported row-count demonstration. Its corrected summary still added an unsupported timing claim, so validation stopped before UI or video generation. The whole-response correction is being improved."
+      "detail": "Fresh research selected a supported row-count demonstration without the earlier timing claim. UI generation merged the source label/count and retained unrelated rows, so validation stopped before scripting or video generation."
     },
     {
       "title": "Resend",
       "status": "Automatic reconstruction under test",
-      "detail": "The latest 14.4-second draft starts its edit at 1.5 seconds and changes the preview at 2.9 seconds. Layout, motion and the product-demonstration visual review passed. The remaining outcome/CTA review exceeded the existing reservation budget, so the complete video is still unapproved."
+      "detail": "The earlier 14.4-second draft passed layout, motion and its product-demonstration review; its remaining review exceeded the reservation budget. The latest fresh run stopped on an out-of-range UI color before rendering. No complete automatic pass yet."
     },
     {
       "title": "Baserow",

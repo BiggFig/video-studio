@@ -1,6 +1,6 @@
 # Automatic director acceptance — 2026-10-12
 
-**Current result: 0 automatic passes.** Fresh v22 Resend rendered a 14.4-second draft and passed its product-demonstration visual review, but the remaining outcome/CTA review exceeded its remaining conservative reservation. Plausible chose a valid row-count demonstration but retained an unsupported timing claim. Tally invented an unseen starting state and was rejected during UI validation. All three outcomes are retained; no draft or authored pilot is counted as a complete automatic pass. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md).
+**Current result: 0 automatic passes.** All three fresh v23 jobs stopped during UI validation. Resend selected an out-of-range presentation color; Plausible merged distinct label/count slots and retained unrelated rows; Tally proposed a control missing from its starting state. V22 remains the latest rendered automatic draft, with only its first visual-review batch passed. No draft or authored pilot is counted as a complete automatic pass. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md).
 
 ## Retained three-product batch: v7
 

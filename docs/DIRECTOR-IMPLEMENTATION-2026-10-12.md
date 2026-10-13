@@ -2,7 +2,7 @@
 
 Working record for the approved 12-item task list. This document separates prepared artifacts, implementation, technical verification and external audience evidence. Status is provisional until supporting checks are recorded.
 
-**Automatic acceptance: 0 passes.** V22 passed 778 tests, TypeScript and the production build. Its fresh Resend draft passed layout, motion and the first product-action visual review; the remaining review was stopped by the existing budget. Plausible and Tally stopped at source/claim validation. Source commit `5d0efe4` is pushed to draft PR #26; the public alias remains on the earlier release. V23 work addresses whole-response timing corrections and the observed source-capture issue. The six authored Tally exports remain separate. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md) and [acceptance record](DIRECTOR-AUTOMATIC-TESTS-2026-10-12.md).
+**Automatic acceptance: 0 passes.** V23 passed 792 tests, TypeScript and the production build, but all three fresh jobs stopped during UI validation. Source capture and request transport are improved; model output still fails specific presentation and workflow contracts. Source checkpoint `262636a` records the verified code. V24 work targets exact presentation choices and distinct source-bound demo compositions. The public alias remains on the earlier release, and the six authored Tally exports remain separate. See the [workflow report](WORKFLOW-RECONSTRUCTION-2026-10-12.md) and [acceptance record](DIRECTOR-AUTOMATIC-TESTS-2026-10-12.md).
 
 ## Reviewable pilot
 
@@ -25,10 +25,10 @@ The director pilot is budgeted at 24 seconds: hook 0–3; editor 3–10 (Publish
 | 5. Persistent objects | Complete | Exact semantic state matching preserves objects; state replacement, hidden future controls and duplicate ghosts have regression coverage. |
 | 6. Independent tracks | Complete | Camera, cursor, copy, UI and materials have separate timing on one clock; replay checks preserve DOM/state and render tolerance. |
 | 7. Visual systems | Partial | Brand-based materials and layouts implemented. Tally uses paper, ink and observed blue controls with Geist fallback typography; richer source-media treatments remain unverified. |
-| 8. URL integration | Implemented; end-to-end acceptance incomplete | OpenRouter access, bounded guide selection and source-bound reactive previews are implemented. Resend v22 rendered and passed its product-demonstration review, but the complete review still exceeded its reservation budget. |
+| 8. URL integration | Implemented; end-to-end acceptance incomplete | V23 source capture and lossless requests passed technical checks; fresh jobs still stopped at UI validation. V22 Resend remains a rendered draft with only its first visual-review batch passed. |
 | 9. Three placements | Complete | Separate 1920×1080, 1080×1350 and 1080×1920 treatment/control exports, 720 frames each. |
 | 10. Review the pilot | Technical/visual checks complete; external evidence pending | Subjective listening and five distinct unfamiliar viewer responses still required. |
-| 11. Generalization | Incomplete | Zero automatic passes. Resend v22 passed source, layout, motion and its first visual-review batch; the second batch could not start. Plausible v22 chose a valid row-count result but retained an unsupported timing claim. Tally v22 invented an unseen starting state and stopped at UI validation. See the workflow reconstruction report. |
+| 11. Generalization | Incomplete | Zero automatic passes. V23 Resend chose an out-of-range color; Plausible merged required source slots; Tally proposed a control absent from its starting state. All failures are retained without changed-code resumes. |
 | 12. Publish and test | Pilot gallery live; audience test pending | Six approved exports and viewer form deployed. Audience outcomes remain pending; paid budget must be agreed before spend. |
 
 ## Comprehension collection

@@ -319,6 +319,18 @@ A public Tally capture through the unchanged adaptive two-source boundary recove
 
 Final v23 verification passed **792 tests, 19 intentional skips, zero failures** (811 total), with all four browser integration flags and concurrency four, in 84.17 seconds. TypeScript and the webpack production build passed. All 109 bundled files match source; bundle SHA-256 `f3631fad4d13f5f56253759345da61c4aefd3a1487fc0aa474daf45f4f7bd21d`. Frozen runtime `.local/director-openrouter-v23` contains 112 files, SHA-256 `01398aa32ad3fb49a4260f7308540a23b8ded843bb6816ed4ca53b89d3fe3bf5`, created at 00:27:24 UTC on October 13. Fresh Resend acceptance has started with the existing model and limits. These checks do not establish an automatic acceptance pass.
 
+### V23 fresh results
+
+Resend ran from 00:27:40 to 00:29:10 UTC on October 13. Its single research correction removed an unsupported mechanism timing claim. UI review then returned the correct seed hash and slot IDs, but selected foreground `#EBEBED` (235,235,237) where the observed green-channel minimum was 236. The range check rejected that one-channel mismatch; no color was clamped or substituted. Usage was four calls, 73,654 input / 2,767 output tokens, zero audio and zero unresolved reservations. No script or video was produced.
+
+Plausible ran from 00:28:59 to 00:30:17 UTC. Research selected an evidenced Google/73.4k row-count demonstration without the earlier timing claim. UI generation merged the separate row label and count into a single list item and included unrelated rows in its proposed filtered state. Exact derived-UI binding rejected the response before scripting. Usage was three calls, 50,425 input / 3,668 output tokens, zero audio and zero unresolved reservations.
+
+Tally ran from 00:29:45 to 00:31:20 UTC. The improved capture included the contact-form raster, but research again chose the already-configured conditional-rule panel. The proposed UI required a `then-page` trigger absent from its `state-typed` before state. Terminal-result validation stopped the job; no script or video was produced. Usage was three calls, 49,964 input / 4,575 output tokens, zero audio and zero unresolved reservations.
+
+All three v23 jobs remain immutable. Source checkpoint `262636a` contains the verified code; the 14-file staged scan checked 15 configured secret values and found zero leaks. A read-only account check at 00:31:38 UTC reported $11.18582862 remaining (account total credit $1,385). No credit purchase was made by this task. Automatic passes remain zero and public production has not been promoted.
+
+A separate visual audit of the v22 draft found that every settled input/result camera transform from frame 30 through 230 was identical because the entire two-pane UI was mandatory context. At frame 231 the demonstrated object disappeared into outcome/CTA text cards for the remaining 6.7 seconds. These are creative deficits, not failures of the passed UI correctness check. V24 will test actual composition contrast while preserving every required source element; continuity into the payoff and the opening treatment remain separate work.
+
 ## Completion criteria
 
 An automatic pass requires fresh URL capture, evidence-bound research and UI, script, rendered export and all mandatory quality checks from one retained runtime. Technical capture and unit tests cannot substitute for it. External comprehension testing still requires five unfamiliar people; no agent-generated responses count. Subjective listening and measured advertising outcomes remain separate from technical export verification.
